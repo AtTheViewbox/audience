@@ -29,7 +29,7 @@ function DialogPage() {
         </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="tools">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="">
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="sharing">Share</TabsTrigger>
         </TabsList>

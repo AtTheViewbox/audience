@@ -24,12 +24,10 @@ const ShareSessionState = {
 function ShareTab() {
 
   const { dispatch } = useContext(DataDispatchContext);
-  const { supabaseClient, user_data } = useContext(DataContext).data;
+  const { supabaseClient, userData } = useContext(DataContext).data;
 
   const queryParams = new URLSearchParams(window.location.search);
   queryParams.delete('s');
-
-  console.log(supabaseClient, user_data)
   
   const [shareSessionState, setShareSessionState] = useState(ShareSessionState.LOADING);
   const [shareLink, setShareLink] = useState(null);
@@ -41,19 +39,18 @@ function ShareTab() {
       try {
         const { data, error } = await supabaseClient
           .from('viewbox').select('user, url_params, session_id')
-          .eq('user', user_data.user.id)
+          .eq('user', userData.id)
         
         if (error) throw error;
-          // .select('user_id, url_params')
-          // .eq('name', user_data.user.id)
+
         if (data.length > 1) { console.log("BIG ERROR") };
-        console.log(data)
+        
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
           queryParams.set('s', data[0].session_id);
-          setShareLink(`http://localhost:5173/?${queryParams.toString()}`)
+          setShareLink(`${window.location.origin}/?${queryParams.toString()}`)
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
@@ -62,9 +59,9 @@ function ShareTab() {
       }
     };
 
-    if (user_data) checkWhetherUserIsSharing();
+    if (userData && !userData.is_anonymous) checkWhetherUserIsSharing();
 
-  }, [user_data]);
+  }, [userData]);
 
   async function handleLogin() {
 
@@ -93,7 +90,7 @@ function ShareTab() {
       const { _, delete_error } = await supabaseClient
         .from('viewbox')
         .delete()
-        .eq('user', user_data.user.id);
+        .eq('user', userData.id);
 
       if (delete_error) throw delete_error;
 
@@ -110,15 +107,13 @@ function ShareTab() {
       dispatch({type: 'connect_to_sharing_session', payload: {sessionId: data[0].session_id}})
       
       queryParams.set('s', data[0].session_id);
-      setShareLink(`http://localhost:5173/?${queryParams.toString()}`)
-      //set state
+      setShareLink(`${window.location.origin}/?${queryParams.toString()}`)
       
     } catch (error) {
       console.log(error.code)
       if (error.code === '23505') {
         setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION)
       } 
-      //setLoginError(error.message);
     }
   }
 
@@ -234,15 +229,8 @@ function ShareTab() {
     );
   }
 
-  if (!user_data) return <NotLoggedInView />;
+  if (!userData || userData.is_anonymous) return <NotLoggedInView />;
 
-  // if there are no sessions open by the user
-  // if the same session is opened by the user
-  // if a different session is open by the user
-
-
-
-  console.log(shareSessionState)
   switch (shareSessionState) {
     case ShareSessionState.LOGGED_OUT:
       return <NotLoggedInView />;

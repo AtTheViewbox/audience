@@ -36,7 +36,7 @@ import { Label } from "@/components/ui/label"
 
 function fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  const { sharing } = useContext(DataContext).data;
+  const { userData, sharingUser } = useContext(DataContext).data;
   // get mode from state
 
   const { dispatch } = useContext(DataDispatchContext);
@@ -49,29 +49,26 @@ function fab() {
   });
 
   let { pressProps } = usePress({
-    onPress: (e) => {
-      console.log("open dialog")
-      setDialogIsOpen(true);
-    }
+    onPress: (e) => { setDialogIsOpen(true); }
   });
 
-return (
-  <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
-    <Button 
-        size={"icon"}
-        {...mergeProps(pressProps, longPressProps)}
-        style={{
-          backgroundColor: sharing ? 'red' : 'green', 
-          position: 'fixed', left: '10px', bottom: '10px'
-        }}
-    >
-        {"-"}
-    </Button>
-    <DialogContent>
-      <DialogPage/>
-    </DialogContent>
-  </Dialog>
-)
+  // guard against there being no userData
+  return (!userData ? null :
+    (<Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
+      <Button 
+          size={"icon"}
+          {...mergeProps(pressProps, longPressProps)}
+          style={{
+            backgroundColor: sharingUser == userData.id ? 'red' : 'green', 
+            position: 'fixed', left: '10px', bottom: '10px'
+          }}
+      >
+          {"-"}
+      </Button>
+      <DialogContent>
+        <DialogPage/>
+      </DialogContent>
+  </Dialog>))
 }
 
 export default fab;
