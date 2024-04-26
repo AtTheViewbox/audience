@@ -27,6 +27,7 @@ initialData.vd.forEach((vdItem) => {
 });
 initialData.userData = null;
 initialData.sharingUser = null;
+initialData.activeUsers = null;
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
@@ -181,23 +182,22 @@ export function dataReducer(data, action) {
 
         // Initialization events
         case 'cornerstone_initialized':
-            
             new_data = {...data, ...action.payload};
             break;
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
             break;
 
-        case 'export_layout_to_link':
-            let vp_dt = [];
-            data.renderingEngine.getViewports().forEach((vp) => {
-                const {imageIds, voiRange, currentImageIdIndex} = vp;
-                const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
-                vp_dt.push({imageIds, ww: window.windowWidth, wc: window.windowCenter, currentImageIdIndex})
-            })
-            // print the query string to the console so it can be copied and pasted into the URL bar
-            console.log(new URLSearchParams(flatten({layout_data: data.layout_data, viewport_data: vp_dt})).toString());
-            break;
+        // case 'export_layout_to_link':
+        //     let vp_dt = [];
+        //     data.renderingEngine.getViewports().forEach((vp) => {
+        //         const {imageIds, voiRange, currentImageIdIndex} = vp;
+        //         const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
+        //         vp_dt.push({imageIds, ww: window.windowWidth, wc: window.windowCenter, currentImageIdIndex})
+        //     })
+        //     // print the query string to the console so it can be copied and pasted into the URL bar
+        //     console.log(new URLSearchParams(flatten({layout_data: data.layout_data, viewport_data: vp_dt})).toString());
+        //     break;
         
         case 'sharing_controller_initialized':
             new_data = {...data, ...action.payload}
@@ -207,24 +207,26 @@ export function dataReducer(data, action) {
             new_data = {...data, sessionId: sessionId}
             break;
         case 'sharer_status_changed':
+            // This can become more elegant for sure. This function should really just write globalSharingStatus to state
+            // and the components that care should make updates as necessary
+
             let { globalSharingStatus } = action.payload;
-            globalSharingStatus = globalSharingStatus.filter(sharer => sharer.timeOfLastShareStatusUpdated !== null)
-            if (globalSharingStatus.length > 0) {
-                const mostRecentUpdate = globalSharingStatus
+
+            const usersWhoHaveShared = globalSharingStatus.filter(sharer => sharer.timeOfLastShareStatusUpdated !== null)
+            if (usersWhoHaveShared.length > 0) {
+                const mostRecentUpdate = usersWhoHaveShared
                     .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
                 console.log(mostRecentUpdate.shareStatus, mostRecentUpdate.user, data.userData.id)
                 if (mostRecentUpdate.shareStatus == true) {
                     if (mostRecentUpdate.user !== data.userData.id) {
                         toast(`"${mostRecentUpdate.user} has taken control`);
                     }
-                    new_data = {...data, sharingUser: mostRecentUpdate.user};
+                    new_data = {...data, sharingUser: mostRecentUpdate.user, activeUsers: globalSharingStatus};
                 } else {
-                    new_data = {...data, sharingUser: null};
+                    new_data = {...data, sharingUser: null, activeUsers: globalSharingStatus};
                 }
-                console.log(globalSharingStatus)
-                console.log(mostRecentUpdate)
             } else {
-                new_data = {...data, sharingUser: null};
+                new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
             }
 
             break;
