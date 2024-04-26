@@ -152,7 +152,31 @@ export const DataProvider = ({ children }) => {
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
             })
 
-            dispatch({type: 'sharing_controller_initialized', payload: {shareController: share_controller}})
+            const interaction_channel = data.supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
+                config: {
+                    broadcast: { self: false },
+                }
+            })
+
+            interaction_channel.subscribe((status) => {
+                console.log(status)
+                if (status === 'SUBSCRIBED') {
+                    console.log("I think I'm subscribed?");
+                    return null
+                }
+            })
+
+            interaction_channel.on(
+                'broadcast',
+                { event: 'frame-changed' },
+                (payload) => {
+                    console.log(payload)
+                    data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
+                    data.renderingEngine.getViewport(payload.payload.viewport).render()
+                }
+            )
+
+            dispatch({type: 'sharing_controller_initialized', payload: {shareController: share_controller, interactionChannel: interaction_channel}})
             
         }
 
@@ -164,6 +188,25 @@ export const DataProvider = ({ children }) => {
             console.log("share_controller unsubscribed");
         }
     }, [data.sessionId, data.supabaseClient]);
+
+    useEffect(() => {
+        if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
+
+            data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
+                console.log(vp)
+                data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
+                    console.log(event.detail.imageIdIndex)
+                    data.interactionChannel.send({
+                        type: 'broadcast',
+                        event: 'frame-changed',
+                        payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                    })
+                })
+            })
+
+        }
+    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
+
 
     return (
         <DataContext.Provider value={{ data }}>
@@ -229,10 +272,13 @@ export function dataReducer(data, action) {
                 new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
             }
 
+            if (new_data.sharingUser !== data.userData.id) { 
+                data.eventListenerManager.reset()
+            }
+
             break;
 
         case 'toggle_sharing':
-            console.log("toggle sharing")
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
