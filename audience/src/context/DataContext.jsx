@@ -254,26 +254,33 @@ export function dataReducer(data, action) {
             // and the components that care should make updates as necessary
 
             let { globalSharingStatus } = action.payload;
-
-            const usersWhoHaveShared = globalSharingStatus.filter(sharer => sharer.timeOfLastShareStatusUpdated !== null)
-            if (usersWhoHaveShared.length > 0) {
-                const mostRecentUpdate = usersWhoHaveShared
+            console.log(globalSharingStatus);
+            const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
+            if (usersWhoAreSharing.length > 0) {
+                const mostRecentShare = usersWhoAreSharing
                     .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
-                console.log(mostRecentUpdate.shareStatus, mostRecentUpdate.user, data.userData.id)
-                if (mostRecentUpdate.shareStatus == true) {
-                    if (mostRecentUpdate.user !== data.userData.id) {
-                        toast(`"${mostRecentUpdate.user} has taken control`);
-                    }
-                    new_data = {...data, sharingUser: mostRecentUpdate.user, activeUsers: globalSharingStatus};
+                
+                const nonRecentSharers = usersWhoAreSharing
+                    .filter(sharer => sharer.user !== mostRecentShare.user)
+                    .map(sharer => sharer.user);
+                
+                // if the current user is sharing, and someone else has requested
+                // reset the listeners and update the presence state
+                if (nonRecentSharers.includes(data.userData.id)) {
+                    data.eventListenerManager.reset()
+                    data.shareController.track({ share: false, lastShareRequest: new Date().toISOString() });
+                }
+
+                if (nonRecentSharers.length !== 0) {
+                    toast(`"${mostRecentShare.user} has requested control`);
+                    new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
                 } else {
-                    new_data = {...data, sharingUser: null, activeUsers: globalSharingStatus};
+                    toast(`"${mostRecentShare.user} has taken control`);
+                    new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
                 }
             } else {
-                new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
-            }
-
-            if (new_data.sharingUser !== data.userData.id) { 
                 data.eventListenerManager.reset()
+                new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
             }
 
             break;
@@ -283,6 +290,11 @@ export function dataReducer(data, action) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
                 data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString() });
+                // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
+                // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date
+                // so if you try to cancel while it is processing, it will try to create a new request rather than cancelling the request
+
+                // the right thing to do is to remove interaction with the share button while in the transitioning state
             }
             break;
         case 'viewport_ready':

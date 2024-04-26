@@ -59,7 +59,7 @@ function fab() {
           size={"icon"}
           {...mergeProps(pressProps, longPressProps)}
           style={{
-            backgroundColor: sharingUser == userData.id ? 'red' : 'green', 
+            backgroundColor: sharingUser == userData.id ? 'red' : 'white', 
             position: 'fixed', left: '10px', bottom: '10px'
           }}
       >
