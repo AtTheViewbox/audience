@@ -1,6 +1,7 @@
 import './App.css';
 import Layout from './layout/layout';
 import Fab from './components/fab'
+import ToolsTab from './components/ToolsTab';
 import SessionUsers from './components/SessionUsers'
 import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
@@ -18,6 +19,7 @@ function App() {
       <DataProvider>
         <Layout />
         <Fab />
+        <ToolsTab/>
         <SessionUsers />
         <Toaster />
       </DataProvider>

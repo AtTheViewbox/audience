@@ -1,4 +1,4 @@
-import React, { useRef, useContext, useEffect } from 'react';
+import React, { useRef, useContext, useEffect, useState } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
 
 import * as cornerstone from '@cornerstonejs/core';
@@ -10,11 +10,52 @@ import dicomParser from 'dicom-parser';
 export default function Viewport(props) {
   const elementRef = useRef(null);
 
-  const { vd, channels, sharing } = useContext(DataContext).data;
+  const { vd, channels, sharing,toolSelected } = useContext(DataContext).data;
+
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
+  const [isloading,setIsLoading] = useState(true);
 
   const { dispatch } = useContext(DataDispatchContext);
+
+  useEffect(()=>{
+    if (isloading) return;
+    
+    const {
+      PanTool,
+      WindowLevelTool,
+      StackScrollTool,
+      StackScrollMouseWheelTool,
+      ZoomTool,
+      PlanarRotateTool,
+      ToolGroupManager,
+      Enums: csToolsEnums,
+    } = cornerstoneTools;
+    
+    const { MouseBindings } = csToolsEnums;
+    const toolGroupId = `${viewport_idx}-tl`;
+
+    const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
+
+    switch(toolSelected){
+      case "pan":
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
+      case "window":
+        toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
+      case "zoom":
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
+    }
+
+  },[toolSelected])
 
   useEffect(() => {
 
@@ -138,6 +179,7 @@ export default function Viewport(props) {
     if (viewport_data) {
       loadImagesAndDisplay().then(() => {
         addCornerstoneTools();
+        setIsLoading(false)
       });
     }
     return () => { console.log("unmounting viewport"); };

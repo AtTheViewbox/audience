@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 
 import { utilities } from '@cornerstonejs/core'; 
 import { toast } from "sonner"
-import { DiscordSDK,patchUrlMappings } from "@discord/embedded-app-sdk";
+import { patchUrlMappings } from "@discord/embedded-app-sdk";
 
 
 export const DataContext = createContext({});    
@@ -35,6 +35,7 @@ if (initialData.vd) {
 initialData.userData = null;
 initialData.sharingUser = null;
 initialData.activeUsers = null;
+initialData.toolSelected = "window";
 
 
 
@@ -368,6 +369,9 @@ export function dataReducer(data, action) {
                 // the right thing to do is to remove interaction with the share button while in the transitioning state
             }
             break;
+        case 'select_tool':
+                new_data = {...data, toolSelected: action.payload}
+                break;
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
 
