@@ -8,14 +8,24 @@ import { Input } from "@/components/ui/input"
 function OpenTab() {
     const { dispatch } = useContext(DataDispatchContext);
     const { userData } = useContext(DataContext).data;
+    const [link,setLink] = useState("");
+
+    
+    const submit = () => {
+        const link = document.getElementById('link').value;
+        setLink(link)
+        console.log(link)
+    }
    
-    return (!userData ? null :(
+    return (
 
         <div className="flex w-full max-w-sm items-center space-x-2">
-        <Input type="email" placeholder="Email" />
-        <Button type="submit">Subscribe</Button>
+        <Input type="link" placeholder="AtTheViewBox Link" id="link"/>
+        <Button type="submit" onClick={submit}>Submit</Button>
       </div>
-    ));
+
+
+    );
 }
 
 export default OpenTab;

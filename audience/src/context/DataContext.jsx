@@ -44,18 +44,10 @@ export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
     const [discordUser, setDiscordUser] = useState()
   
-    //const discordSdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
-    //const [participants, setParticipants] = useState([]);
-    
     useEffect(() => {
         
         const setupDiscord = async () => {
-            patchUrlMappings([
-                { prefix: '/supabase', target: 'vnepxfkzfswqwmyvbyug.supabase.co' },
-                { prefix: '/cornerstone', target: 'unpkg.com' },
-                { prefix: '/amazon', target: "s3.amazonaws.com" },
-            ]);
- 
+
             await discordSdk.ready();
             const { enabled } = await discordSdk.commands.encourageHardwareAcceleration();
             console.log(`Hardware Acceleration is ${enabled === true ? 'enabled' : 'disabled'}`);
