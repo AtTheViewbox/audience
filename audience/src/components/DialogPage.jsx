@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/tabs"
 
 import ShareTab from "./ShareTab.jsx";
+import OpenTab from "./OpenTab.jsx";
 
 function DialogPage() {
 
@@ -32,12 +33,17 @@ function DialogPage() {
         <TabsList className="">
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="sharing">Share</TabsTrigger>
+            <TabsTrigger value="open">New Image</TabsTrigger>
         </TabsList>
         <TabsContent value="tools">
 
         </TabsContent>
         <TabsContent value="sharing">
             <ShareTab/>
+        </TabsContent>
+
+        <TabsContent value="open">
+            <OpenTab/>
         </TabsContent>
       </Tabs>
     </>

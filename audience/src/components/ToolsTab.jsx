@@ -14,11 +14,7 @@ import {
 function ToolsTab() {
     const { dispatch } = useContext(DataDispatchContext);
     const { userData } = useContext(DataContext).data;
-    useEffect(() => {
-        console.log("viewport",)
 
-
-    }, [])
     const [position, setPosition] = useState("window")
 
     const selectTool = (value) => {
