@@ -20,6 +20,7 @@ cloudflared tunnel --url http://localhost:5173
 ```
 
 
+## Run in Discord
 Navigate to server and run 
 ```
 cd server 
@@ -28,7 +29,6 @@ npm run dev
 ```
 
 
-## Run in Discord
 Navigate to [discord](https://discord.com/developers/applications) and URl Mapping
 
 Use 
