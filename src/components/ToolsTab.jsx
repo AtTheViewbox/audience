@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import {ZoomIn, Contrast, Move, Bolt } from "lucide-react";
+import {ZoomIn, Contrast, Move, Bolt, Flag } from "lucide-react";
 import { useEffect, useContext,useState } from "react";
 import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
 import {
@@ -29,7 +29,7 @@ function ToolsTab() {
                     size={"icon"}
                     variant="ghost"
                     style={{
-                        //backgroundColor:  'transparent', 
+                        //backgroundColor:  'transparent',
                         position: 'fixed', left: '10px', top: '10px',
                     }}
                 >
@@ -39,6 +39,10 @@ function ToolsTab() {
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
                 <DropdownMenuRadioGroup value={position} onValueChange={selectTool}>
+                    <DropdownMenuRadioItem value="flag">
+                        <Flag strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                        <span>Flag</span>
+                    </DropdownMenuRadioItem>
                     <DropdownMenuRadioItem value="window">
                         <Contrast strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>Window/Level</span>
