@@ -137,7 +137,6 @@ export default function Viewport(props) {
         StackScrollTool,
         StackScrollMouseWheelTool,
         ZoomTool,
-        PlanarRotateTool,
         ToolGroupManager,
         Enums: csToolsEnums,
       } = cornerstoneTools;
@@ -154,7 +153,7 @@ export default function Viewport(props) {
       if (mobile) {
         toolGroup.addTool(WindowLevelTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
-        toolGroup.addTool(StackScrollTool.toolName);
+        toolGroup.addTool(StackScrollTool.toolName, { loop: false });
 
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
@@ -164,7 +163,7 @@ export default function Viewport(props) {
         toolGroup.addTool(WindowLevelTool.toolName);
         toolGroup.addTool(PanTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
-        toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: true });
+        toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
 
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
