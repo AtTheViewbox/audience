@@ -186,8 +186,6 @@ export const DataProvider = ({ children }) => {
                 (payload) => {
                     console.log("change stack",payload)
                     dispatch({type: 'load_image', payload: payload.payload})
-                    
-  
                 }
             )
 
@@ -202,39 +200,41 @@ export const DataProvider = ({ children }) => {
             }
             console.log("share_controller unsubscribed");
         }
-    }, [data.sessionId, data.supabaseClient,data.ld]);
+    }, [data.sessionId, data.supabaseClient]);
 
     useEffect(() => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
             console.log( data.renderingEngine.getViewports())
+
+            //.getViewports get scrambled the order so viewport_idx does always work
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
                     console.log(vp,viewport_idx)
-
+                    
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                        console.log(event.detail.imageIdIndex)
+                        console.log(event.detail)
                         data.interactionChannel.send({
                             type: 'broadcast',
                             event: 'frame-changed',
-                            payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                            
+                            //This fix work but there might be a better way
+                            payload: { frame: event.detail.imageIdIndex, viewport: vp.id },
                         })
                     })
                 
             })
 
         }
-    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData,data.ld]);
+    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
 
     useEffect(() => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {   
-                console.log(data)
+                
                 data.interactionChannel.send({
                     type: 'broadcast',
                     event: 'stack-changed',
                     payload: { vd: data.vd,ld:data.ld},
                 })
-              
-            
-
+               
         }
     }, [data.vd,data.ld, data.sharingUser]);
 
@@ -342,13 +342,11 @@ export function dataReducer(data, action) {
 
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
-
+            
             break;
         case 'load_image':
+                data.eventListenerManager.reset()
                 new_data = { ...data, ld: action.payload.ld,vd: action.payload.vd};
-                break;
-        case 'set_layout':
-                new_data = { ...data, ld: action.payload.ld};
                 break;
         case 'clean_up_supabase':
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
