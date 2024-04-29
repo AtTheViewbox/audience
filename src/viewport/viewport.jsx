@@ -39,22 +39,30 @@ export default function Viewport(props) {
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
 
-    toolGroup.setToolPassive(FlagTool.toolName);
-    toolGroup.setToolPassive(WindowLevelTool.toolName);
-    toolGroup.setToolPassive(ZoomTool.toolName);
-    toolGroup.setToolPassive(PanTool.toolName);
-
     switch(toolSelected){
       case "flag":
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolActive(FlagTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "pan":
+        toolGroup.setToolPassive(FlagTool.toolName);
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "window":
+        toolGroup.setToolPassive(FlagTool.toolName);
+        toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "zoom":
+        toolGroup.setToolPassive(FlagTool.toolName);
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
+
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
     }
@@ -114,7 +122,6 @@ export default function Viewport(props) {
         ToolGroupManager,
         Enums: csToolsEnums,
       } = cornerstoneTools;
-
 
       const { MouseBindings } = csToolsEnums;
 

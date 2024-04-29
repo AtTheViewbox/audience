@@ -177,7 +177,6 @@ class FlagTool extends AnnotationTool {
       },
     };
 
-    addAnnotation(annotation, element);
 
     const viewportIdsToRender = getViewportIdsWithToolToRender(
       element,
@@ -193,6 +192,8 @@ class FlagTool extends AnnotationTool {
     evt.preventDefault();
 
     this._calculateCachedStats(annotation, renderingEngine, enabledElement);
+
+    addAnnotation(annotation, element);
 
     triggerAnnotationCompleted(annotation);
     triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
