@@ -21,13 +21,14 @@ export default function Layout() {
             window.removeEventListener('resize', handleResize);
         };
     
-    }, [renderingEngine]);
-
+    }, [renderingEngine,ld]);
+ 
     const items = Array.from({ length: r * c }).map((_, idx) => (
         <div key={idx} className="grid-item">
             <Viewport viewport_idx={idx} rendering_engine={renderingEngine} />
         </div>
-    ));
+    )); 
+   
 
     return renderingEngine ? (
         <div className="grid-container" style={{ gridTemplateColumns: `repeat(${c}, 1fr)`, gridTemplateRows: `repeat(${r}, 1fr)` }}>{items}</div>
