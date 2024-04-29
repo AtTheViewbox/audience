@@ -147,7 +147,7 @@ class FlagTool extends AnnotationTool {
     const enabledElement = getEnabledElement(element);
     const { viewport, renderingEngine } = enabledElement;
 
-    this.isDrawing = true;
+    this.isDrawing = false;
     const camera = viewport.getCamera();
     const { viewPlaneNormal, viewUp } = camera;
 
@@ -189,19 +189,18 @@ class FlagTool extends AnnotationTool {
       newAnnotation: true,
       viewportIdsToRender,
     };
-    this._activateModify(element);
-
-    hideElementCursor(element);
 
     evt.preventDefault();
 
-    triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
+    this._calculateCachedStats(annotation, renderingEngine, enabledElement);
 
+    triggerAnnotationCompleted(annotation);
+    triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
     return annotation;
   };
 
   /**
-   * It checks if the mouse click is near ProveTool, it overwrites the baseAnnotationTool
+   * It checks if the mouse click is near FlagTool, it overwrites the baseAnnotationTool
    * getHandleNearImagePoint method.
    *
    * @param element - The element that the tool is attached to.
@@ -254,124 +253,19 @@ class FlagTool extends AnnotationTool {
       annotation,
       viewportIdsToRender,
     };
-    this._activateModify(element);
-
-    hideElementCursor(element);
 
     const enabledElement = getEnabledElement(element);
     const { renderingEngine } = enabledElement;
+
+    console.log("test", "ianto");
 
     triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
 
     evt.preventDefault();
   }
 
-  _endCallback = (evt: EventTypes.InteractionEventType): void => {
-    const eventDetail = evt.detail;
-    const { element } = eventDetail;
-
-    const { annotation, viewportIdsToRender, newAnnotation } = this.editData;
-
-    const { viewportId, renderingEngine } = getEnabledElement(element);
-    this.eventDispatchDetail = {
-      viewportId,
-      renderingEngineId: renderingEngine.id,
-    };
-
-    this._deactivateModify(element);
-
-    resetElementCursor(element);
-
-    this.editData = null;
-    this.isDrawing = false;
-
-    if (
-      this.isHandleOutsideImage &&
-      this.configuration.preventHandleOutsideImage
-    ) {
-      removeAnnotation(annotation.annotationUID);
-    }
-
-    triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
-
-    if (newAnnotation) {
-      triggerAnnotationCompleted(annotation);
-    }
-  };
-
-  _dragCallback = (evt) => {
-    this.isDrawing = true;
-    const eventDetail = evt.detail;
-    const { currentPoints, element } = eventDetail;
-    const worldPos = currentPoints.world;
-
-    const { annotation, viewportIdsToRender } = this.editData;
-    const { data } = annotation;
-
-    data.handles.points[0] = [...worldPos];
-    annotation.invalidated = true;
-
-    const enabledElement = getEnabledElement(element);
-    const { renderingEngine } = enabledElement;
-
-    triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
-  };
-
-  cancel = (element: HTMLDivElement) => {
-    // If it is mid-draw or mid-modify
-    if (this.isDrawing) {
-      this.isDrawing = false;
-      this._deactivateModify(element);
-      resetElementCursor(element);
-
-      const { annotation, viewportIdsToRender, newAnnotation } = this.editData;
-      const { data } = annotation;
-
-      annotation.highlighted = false;
-      data.handles.activeHandleIndex = null;
-
-      const { renderingEngine } = getEnabledElement(element);
-
-      triggerAnnotationRenderForViewportIds(
-        renderingEngine,
-        viewportIdsToRender
-      );
-
-      if (newAnnotation) {
-        triggerAnnotationCompleted(annotation);
-      }
-
-      this.editData = null;
-      return annotation.annotationUID;
-    }
-  };
-
-  _activateModify = (element) => {
-    state.isInteractingWithTool = true;
-
-    element.addEventListener(Events.MOUSE_UP, this._endCallback);
-    element.addEventListener(Events.MOUSE_DRAG, this._dragCallback);
-    element.addEventListener(Events.MOUSE_CLICK, this._endCallback);
-
-    element.addEventListener(Events.TOUCH_END, this._endCallback);
-    element.addEventListener(Events.TOUCH_DRAG, this._dragCallback);
-    element.addEventListener(Events.TOUCH_TAP, this._endCallback);
-  };
-
-  _deactivateModify = (element) => {
-    state.isInteractingWithTool = false;
-
-    element.removeEventListener(Events.MOUSE_UP, this._endCallback);
-    element.removeEventListener(Events.MOUSE_DRAG, this._dragCallback);
-    element.removeEventListener(Events.MOUSE_CLICK, this._endCallback);
-
-    element.removeEventListener(Events.TOUCH_END, this._endCallback);
-    element.removeEventListener(Events.TOUCH_DRAG, this._dragCallback);
-    element.removeEventListener(Events.TOUCH_TAP, this._endCallback);
-  };
-
   /**
-   * it is used to draw the probe annotation in each
+   * it is used to draw the flag annotation in each
    * request animation frame. It calculates the updated cached statistics if
    * data is invalidated and cache it.
    *
@@ -387,6 +281,7 @@ class FlagTool extends AnnotationTool {
     const { element } = viewport;
 
     let annotations = getAnnotations(this.getToolName(), element);
+    console.log(annotations);
 
     if (!annotations?.length) {
       return renderStatus;
