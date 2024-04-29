@@ -32,41 +32,7 @@ initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
-    const setupCornerstone = async () => {
-        window.cornerstone = cornerstone;
-        window.cornerstoneTools = cornerstoneTools;
-        cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
-        cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
-        await cornerstone.init();
-        await cornerstoneTools.init();
-
-        const renderingEngineId = 'myRenderingEngine';
-        const re = new cornerstone.RenderingEngine(renderingEngineId);
-
-        const {
-            PanTool,
-            WindowLevelTool,
-            StackScrollTool,
-            StackScrollMouseWheelTool,
-            ZoomTool,
-            PlanarRotateTool,
-        } = cornerstoneTools;
-
-        cornerstoneTools.addTool(PanTool);
-        cornerstoneTools.addTool(WindowLevelTool);
-        cornerstoneTools.addTool(StackScrollTool);
-        cornerstoneTools.addTool(StackScrollMouseWheelTool);
-        cornerstoneTools.addTool(ZoomTool);
-        cornerstoneTools.addTool(PlanarRotateTool);
-
-        const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
-
-        dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
-    };
-    useEffect(()=>{
-
-        setupCornerstone();
-    },[])
+    
 
     useEffect(() => {
         // use effect to do basic house keeping on initial start
@@ -76,6 +42,38 @@ export const DataProvider = ({ children }) => {
         // 3. If a sharing key is on URL at startup, place that into state after the above 
         //    are initialized as handling of the sharing key requires supabase client and
         //    auth to be initialized.
+        const setupCornerstone = async () => {
+            window.cornerstone = cornerstone;
+            window.cornerstoneTools = cornerstoneTools;
+            cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
+            cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
+            await cornerstone.init();
+            await cornerstoneTools.init();
+    
+            const renderingEngineId = 'myRenderingEngine';
+            const re = new cornerstone.RenderingEngine(renderingEngineId);
+    
+            const {
+                PanTool,
+                WindowLevelTool,
+                StackScrollTool,
+                StackScrollMouseWheelTool,
+                ZoomTool,
+                PlanarRotateTool,
+            } = cornerstoneTools;
+    
+            cornerstoneTools.addTool(PanTool);
+            cornerstoneTools.addTool(WindowLevelTool);
+            cornerstoneTools.addTool(StackScrollTool);
+            cornerstoneTools.addTool(StackScrollMouseWheelTool);
+            cornerstoneTools.addTool(ZoomTool);
+            cornerstoneTools.addTool(PlanarRotateTool);
+    
+            const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
+    
+            dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
+        };
+    
 
         const setupSupabase = async () => {
             const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
@@ -99,7 +97,7 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
         }
 
-    
+        setupCornerstone();
         setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
             console.log("Supabase setup completed");
             // if there is already a sharing key embedded in the url on start, connect to the sharing session
