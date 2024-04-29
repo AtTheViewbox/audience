@@ -206,7 +206,7 @@ export const DataProvider = ({ children }) => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
             console.log( data.renderingEngine.getViewports())
 
-            //.getViewports get scrambled the order so viewport_idx does always work
+            //.getViewports get scrambled the order so viewport_idx doesn't always line up
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
                     console.log(vp,viewport_idx)
                     
@@ -215,7 +215,7 @@ export const DataProvider = ({ children }) => {
                         data.interactionChannel.send({
                             type: 'broadcast',
                             event: 'frame-changed',
-                            
+
                             //This fix work but there might be a better way
                             payload: { frame: event.detail.imageIdIndex, viewport: vp.id },
                         })
@@ -330,7 +330,6 @@ export function dataReducer(data, action) {
             break;
         case 'select_tool':
                 new_data = {...data, toolSelected: action.payload}
-                console.log(new_data)
                 break;
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
@@ -342,7 +341,6 @@ export function dataReducer(data, action) {
 
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
-            
             break;
         case 'load_image':
                 data.eventListenerManager.reset()
