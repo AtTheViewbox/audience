@@ -23,7 +23,7 @@ app.post('/api/token', async (req: Request, res: Response) => {
     },
     body: new URLSearchParams({
       client_id: process.env.VITE_DISCORD_CLIENT_ID||"",
-      client_secret: process.env.VDISCORD_CLIENT_SECRET||"",
+      client_secret: process.env.DISCORD_CLIENT_SECRET||"",
       grant_type: 'authorization_code',
       code: req.body.code,
     }),
@@ -32,7 +32,7 @@ app.post('/api/token', async (req: Request, res: Response) => {
   const {access_token} = (await response.json()) as {
     access_token: string;
   };
-  console.log("test")
+
   res.send({access_token});
 });
 
