@@ -25,9 +25,11 @@ initialData.vd.forEach((vdItem) => {
         vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e);
     }
 });
+
 initialData.userData = null;
 initialData.sharingUser = null;
-initialData.activeUsers = null;
+initialData.sessionUserState = null;
+initialData.sessionLayoutState = null;
 initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
@@ -146,12 +148,8 @@ export const DataProvider = ({ children }) => {
                 const presenceState = share_controller.presenceState();
                 console.log(presenceState)
 
-                const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
-                    const { lastShareRequest, share } = info[0];
-                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest };
-                });
-                
-                dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
+                dispatch({type: "presence_update", payload: { presenceState }}) // sessionUserState: globalSharingStatus, sessionLayoutState: layoutURL}})
+                //dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus, sessionLayout: layoutURL}})
             })
 
             const interaction_channel = data.supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
@@ -270,13 +268,27 @@ export function dataReducer(data, action) {
             let sessionId = action.payload.sessionId;
             new_data = {...data, sessionId: sessionId}
             break;
-        case 'sharer_status_changed':
-            // This can become more elegant for sure. This function should really just write globalSharingStatus to state
-            // and the components that care should make updates as necessary
+        case 'presence_update':
 
-            let { globalSharingStatus } = action.payload;
-            console.log(globalSharingStatus);
-            const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
+            let { presenceState } = action.payload;
+
+
+
+            let sessionLayoutState = ""
+            let sessionUserState = {}
+
+            const userStateArray = Object.entries(presenceState).map(([user, info]) => {
+                const { lastShareRequest, share, sessionLayout } = info[0];
+                if (sessionLayout) { sessionLayoutState = sessionLayout };
+                sessionUserState[user] = { shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest };
+                return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest };
+            });
+            
+            new_data = { ...data, sessionLayoutState, sessionUserState }
+
+            // This can become more elegant for sure. This function should really just write sessionUserState to state
+            // and the components that care should make updates as necessary
+            const usersWhoAreSharing = userStateArray.filter(sharer => sharer.shareStatus === true)
             if (usersWhoAreSharing.length > 0) {
                 const mostRecentShare = usersWhoAreSharing
                     .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
@@ -294,14 +306,14 @@ export function dataReducer(data, action) {
 
                 if (nonRecentSharers.length !== 0) {
                     toast(`"${mostRecentShare.user} has requested control`);
-                    new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
+                    new_data = { ...new_data, sharingUser: null };
                 } else {
                     toast(`"${mostRecentShare.user} has taken control`);
-                    new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
+                    new_data = { ...new_data, sharingUser: mostRecentShare.user };
                 }
             } else {
                 data.eventListenerManager.reset()
-                new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
+                new_data = { ...new_data, sharingUser: null };
             }
 
             break;
@@ -332,10 +344,15 @@ export function dataReducer(data, action) {
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
             break;
-        case 'load_image':
-               
-                new_data = { ...data, ld: action.payload.ld,vd: action.payload.vd};
-                break;
+
+        case 'push_new_layout_to_session':   
+            // If the owner of the session has set a new layout (as defined by the presence state)
+            if (data.shareController) { // && in the future confirm that it's the same user who owns the session
+                data.shareController.track({ ...data.sessionUserState[data.userData.id], sessionLayout: action.payload.url });
+            }
+            
+            //new_data = { ...data, ld: action.payload.ld,vd: action.payload.vd};
+            break;
         case 'clean_up_supabase':
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
             data.supabaseClient.removeAllChannels();

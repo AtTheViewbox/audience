@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 function SessionUsers() {
-  const { userData, sharingUser, activeUsers } = useContext(DataContext).data;
+  const { userData, sharingUser, sessionUserState } = useContext(DataContext).data;
 
   function createAvatarsFromJson(jsonData) {
     return jsonData.map(item => (
@@ -20,14 +20,14 @@ function SessionUsers() {
     ));
   }
   
-  return (!activeUsers ? null :
+  return (!sessionUserState ? null :
     (<div
       style={{
         position: 'fixed', right: '10px', bottom: '10px'
       }}
     >
       <div className="flex items-center -space-x-2 *:ring *:ring-white">
-        {createAvatarsFromJson(activeUsers)}
+        {createAvatarsFromJson(sessionUserState)}
       </div>
     </div>)
   )

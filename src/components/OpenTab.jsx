@@ -32,31 +32,34 @@ function OpenTab() {
   const submit = () => {
     const link = document.getElementById("link").value;
     setLink(link);
-    var inputData = unflatten(Object.fromEntries(new URLSearchParams(link)));
+    // var inputData = unflatten(Object.fromEntries(new URLSearchParams(link)));
+    // console.log(inputData)
 
-    if (inputData.vd) {
-        inputData.vd.forEach((vdItem) => {
-        if (
-          vdItem.s &&
-          vdItem.s.pf &&
-          vdItem.s.sf &&
-          vdItem.s.s &&
-          vdItem.s.e
-        ) {
-          vdItem.s = recreateList(
-            vdItem.s.pf,
-            vdItem.s.sf,
-            vdItem.s.s,
-            vdItem.s.e
-          );
-        }
-      });
-    }
-    if(inputData.ld==undefined||inputData.vd==undefined){
-        setErrorFlag(true)
-    }else{
-        dispatch({type: 'load_image', payload: {vd:inputData.vd,ld:inputData.ld}})
-    }
+    // if (inputData.vd) {
+    //     inputData.vd.forEach((vdItem) => {
+    //     if (
+    //       vdItem.s &&
+    //       vdItem.s.pf &&
+    //       vdItem.s.sf &&
+    //       vdItem.s.s &&
+    //       vdItem.s.e
+    //     ) {
+    //       vdItem.s = recreateList(
+    //         vdItem.s.pf,
+    //         vdItem.s.sf,
+    //         vdItem.s.s,
+    //         vdItem.s.e
+    //       );
+    //     }
+    //   });
+    // }
+    // replace with better data sanitizing in the future
+    // additionally, only send queryStrings in the future
+    // if(inputData.ld==undefined||inputData.vd==undefined){
+    //     setErrorFlag(true)
+    // }else{
+    dispatch({type: 'push_new_layout_to_session', payload: {url: link}})
+    // }
   };
 
   return (
