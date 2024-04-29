@@ -3,7 +3,7 @@ import express, {Application, Request, Response} from "express";
 
 import dotenv from 'dotenv';
 import {fetchAndRetry} from './utils';
-dotenv.config({path: '../../.env'});
+dotenv.config({path: '../.env'});
 
 const app: Application = express();
 const port: number = Number(process.env.PORT) || 3001;
@@ -23,7 +23,7 @@ app.post('/api/token', async (req: Request, res: Response) => {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
-      client_id: process.env.VITE_CLIENT_ID||"",
+      client_id: process.env.VITE_DISCORD_CLIENT_ID||"",
       client_secret: process.env.DISCORD_CLIENT_SECRET||"",
       grant_type: 'authorization_code',
       code: req.body.code,

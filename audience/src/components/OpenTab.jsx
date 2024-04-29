@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button"
 
 import { useEffect, useContext,useState } from "react";
 import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
+import { recreateList } from '../lib/inputParser.ts';
+import { unflatten, flatten } from "flat";
 import { Input } from "@/components/ui/input"
 
 
@@ -15,6 +17,17 @@ function OpenTab() {
         const link = document.getElementById('link').value;
         setLink(link)
         console.log(link)
+
+        var initialData = unflatten(Object.fromEntries(new URLSearchParams(link)));
+
+if (initialData.vd) {
+    initialData.vd.forEach((vdItem) => {
+        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e) {
+            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e);
+        }
+    })
+} 
+console.log(initialData)
     }
    
     return (
