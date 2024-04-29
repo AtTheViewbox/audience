@@ -13,8 +13,6 @@ export default function Viewport(props) {
   const { vd, channels, sharing,toolSelected } = useContext(DataContext).data;
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
-
-  console.log(vd,viewport_idx)
   const { dispatch } = useContext(DataDispatchContext);
   const [isloading,setIsLoading] = useState(true);
 

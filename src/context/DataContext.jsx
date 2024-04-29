@@ -174,7 +174,6 @@ export const DataProvider = ({ children }) => {
                 'broadcast',
                 { event: 'frame-changed' },
                 (payload) => {
-                    console.log(payload)
                     data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
                     data.renderingEngine.getViewport(payload.payload.viewport).render()
                 }
@@ -184,7 +183,6 @@ export const DataProvider = ({ children }) => {
                 'broadcast',
                 { event: 'stack-changed' },
                 (payload) => {
-                    console.log("change stack",payload)
                     dispatch({type: 'load_image', payload: payload.payload})
                 }
             )
@@ -204,19 +202,13 @@ export const DataProvider = ({ children }) => {
 
     useEffect(() => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
-            console.log( data.renderingEngine.getViewports())
 
-            //.getViewports get scrambled the order so viewport_idx doesn't always line up
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
-                    console.log(vp,viewport_idx)
                     
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                        console.log(event.detail)
                         data.interactionChannel.send({
                             type: 'broadcast',
                             event: 'frame-changed',
-
-                            //This fix work but there might be a better way
                             payload: { frame: event.detail.imageIdIndex, viewport: vp.id },
                         })
                     })
@@ -343,7 +335,7 @@ export function dataReducer(data, action) {
             new_data = { ...data, userData: action.payload.session.user };
             break;
         case 'load_image':
-                data.eventListenerManager.reset()
+               
                 new_data = { ...data, ld: action.payload.ld,vd: action.payload.vd};
                 break;
         case 'clean_up_supabase':
