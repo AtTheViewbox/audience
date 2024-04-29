@@ -28,6 +28,7 @@ initialData.vd.forEach((vdItem) => {
 initialData.userData = null;
 initialData.sharingUser = null;
 initialData.activeUsers = null;
+initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
@@ -297,6 +298,9 @@ export function dataReducer(data, action) {
                 // the right thing to do is to remove interaction with the share button while in the transitioning state
             }
             break;
+        case 'select_tool':
+                new_data = {...data, toolSelected: action.payload}
+                break;
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
 
