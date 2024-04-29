@@ -14,6 +14,7 @@ export default function Viewport(props) {
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
 
+  console.log(vd,viewport_idx)
   const { dispatch } = useContext(DataDispatchContext);
   const [isloading,setIsLoading] = useState(true);
 
@@ -35,8 +36,7 @@ export default function Viewport(props) {
     const toolGroupId = `${viewport_idx}-tl`;
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
-    console.log('ere')
-
+  
     switch(toolSelected){
       case "pan":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
@@ -183,7 +183,7 @@ export default function Viewport(props) {
       });
     }
     return () => { console.log("unmounting viewport"); };
-  }, []);
+  }, [vd]);
 
 
   return (

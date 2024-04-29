@@ -32,6 +32,41 @@ initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
+    const setupCornerstone = async () => {
+        window.cornerstone = cornerstone;
+        window.cornerstoneTools = cornerstoneTools;
+        cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
+        cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
+        await cornerstone.init();
+        await cornerstoneTools.init();
+
+        const renderingEngineId = 'myRenderingEngine';
+        const re = new cornerstone.RenderingEngine(renderingEngineId);
+
+        const {
+            PanTool,
+            WindowLevelTool,
+            StackScrollTool,
+            StackScrollMouseWheelTool,
+            ZoomTool,
+            PlanarRotateTool,
+        } = cornerstoneTools;
+
+        cornerstoneTools.addTool(PanTool);
+        cornerstoneTools.addTool(WindowLevelTool);
+        cornerstoneTools.addTool(StackScrollTool);
+        cornerstoneTools.addTool(StackScrollMouseWheelTool);
+        cornerstoneTools.addTool(ZoomTool);
+        cornerstoneTools.addTool(PlanarRotateTool);
+
+        const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
+
+        dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
+    };
+    useEffect(()=>{
+
+        setupCornerstone();
+    },[])
 
     useEffect(() => {
         // use effect to do basic house keeping on initial start
@@ -41,38 +76,6 @@ export const DataProvider = ({ children }) => {
         // 3. If a sharing key is on URL at startup, place that into state after the above 
         //    are initialized as handling of the sharing key requires supabase client and
         //    auth to be initialized.
-
-        const setupCornerstone = async () => {
-            window.cornerstone = cornerstone;
-            window.cornerstoneTools = cornerstoneTools;
-            cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
-            cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
-            await cornerstone.init();
-            await cornerstoneTools.init();
-
-            const renderingEngineId = 'myRenderingEngine';
-            const re = new cornerstone.RenderingEngine(renderingEngineId);
-
-            const {
-                PanTool,
-                WindowLevelTool,
-                StackScrollTool,
-                StackScrollMouseWheelTool,
-                ZoomTool,
-                PlanarRotateTool,
-            } = cornerstoneTools;
-
-            cornerstoneTools.addTool(PanTool);
-            cornerstoneTools.addTool(WindowLevelTool);
-            cornerstoneTools.addTool(StackScrollTool);
-            cornerstoneTools.addTool(StackScrollMouseWheelTool);
-            cornerstoneTools.addTool(ZoomTool);
-            cornerstoneTools.addTool(PlanarRotateTool);
-
-            const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
-
-            dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
-        };
 
         const setupSupabase = async () => {
             const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
@@ -96,7 +99,7 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
         }
 
-        setupCornerstone();
+    
         setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
             console.log("Supabase setup completed");
             // if there is already a sharing key embedded in the url on start, connect to the sharing session
@@ -177,6 +180,17 @@ export const DataProvider = ({ children }) => {
                 }
             )
 
+            interaction_channel.on(
+                'broadcast',
+                { event: 'stack-changed' },
+                (payload) => {
+                    console.log("change stack",payload)
+                    dispatch({type: 'load_image', payload: payload.payload})
+                    
+  
+                }
+            )
+
             dispatch({type: 'sharing_controller_initialized', payload: {shareController: share_controller, interactionChannel: interaction_channel}})
             
         }
@@ -188,25 +202,41 @@ export const DataProvider = ({ children }) => {
             }
             console.log("share_controller unsubscribed");
         }
-    }, [data.sessionId, data.supabaseClient]);
+    }, [data.sessionId, data.supabaseClient,data.ld]);
 
     useEffect(() => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
-
+            console.log( data.renderingEngine.getViewports())
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
-                console.log(vp)
-                data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                    console.log(event.detail.imageIdIndex)
-                    data.interactionChannel.send({
-                        type: 'broadcast',
-                        event: 'frame-changed',
-                        payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                    console.log(vp,viewport_idx)
+
+                    data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
+                        console.log(event.detail.imageIdIndex)
+                        data.interactionChannel.send({
+                            type: 'broadcast',
+                            event: 'frame-changed',
+                            payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                        })
                     })
-                })
+                
             })
 
         }
-    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
+    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData,data.ld]);
+
+    useEffect(() => {
+        if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {   
+                console.log(data)
+                data.interactionChannel.send({
+                    type: 'broadcast',
+                    event: 'stack-changed',
+                    payload: { vd: data.vd,ld:data.ld},
+                })
+              
+            
+
+        }
+    }, [data.vd,data.ld, data.sharingUser]);
 
 
     return (
@@ -300,6 +330,7 @@ export function dataReducer(data, action) {
             break;
         case 'select_tool':
                 new_data = {...data, toolSelected: action.payload}
+                console.log(new_data)
                 break;
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
@@ -311,7 +342,14 @@ export function dataReducer(data, action) {
 
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
+
             break;
+        case 'load_image':
+                new_data = { ...data, ld: action.payload.ld,vd: action.payload.vd};
+                break;
+        case 'set_layout':
+                new_data = { ...data, ld: action.payload.ld};
+                break;
         case 'clean_up_supabase':
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
             data.supabaseClient.removeAllChannels();
