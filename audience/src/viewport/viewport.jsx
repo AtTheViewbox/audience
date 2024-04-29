@@ -5,7 +5,9 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
-
+import FlagTool from '../components/FlagTool.ts';
+//import { ProbeTool as FlagTool } from '@cornerstonejs/tools';
+cornerstoneTools.addTool(FlagTool)
 
 export default function Viewport(props) {
   const elementRef = useRef(null);
@@ -14,12 +16,13 @@ export default function Viewport(props) {
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
 
+
   const { dispatch } = useContext(DataDispatchContext);
   const [isloading,setIsLoading] = useState(true);
 
   useEffect(()=>{
     if (isloading) return;
-    
+
     const {
       PanTool,
       WindowLevelTool,
@@ -30,43 +33,37 @@ export default function Viewport(props) {
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
-    
+
     const { MouseBindings } = csToolsEnums;
     const toolGroupId = `${viewport_idx}-tl`;
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
-    console.log('ere')
+
+    toolGroup.setToolPassive(FlagTool.toolName);
+    toolGroup.setToolPassive(WindowLevelTool.toolName);
+    toolGroup.setToolPassive(ZoomTool.toolName);
+    toolGroup.setToolPassive(PanTool.toolName);
 
     switch(toolSelected){
+      case "flag":
+        toolGroup.setToolActive(FlagTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
       case "pan":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "window":
-        toolGroup.setToolPassive(ZoomTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "zoom":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
     }
 
-  },[toolSelected])
+    // TODO: should at some point consolidate tool handling with how they are initialized below...
+
+  }, [toolSelected])
 
   useEffect(() => {
-
-    // channels[viewport_idx].subscribe((status) => {
-    //   // Wait for successful connection
-    //   console.log(status)
-    //   if (status === 'SUBSCRIBED') {
-    //     console.log(viewport_idx, "channel subscribed")
-    //     return null
-    //   }
-    // })
 
     const loadImagesAndDisplay = async () => {
 
@@ -76,7 +73,6 @@ export default function Viewport(props) {
         type: cornerstone.Enums.ViewportType.STACK,
         element: elementRef.current,
         defaultOptions: {
-
         },
       };
 
@@ -101,28 +97,6 @@ export default function Viewport(props) {
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
         isComputedVOI: false,
       });
-
-      // elementRef.current.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-      //   channels[viewport_idx].send({
-      //     type: 'broadcast',
-      //     event: 'master',
-      //     payload: { message: event.detail.imageIdIndex, viewport: viewportId },
-      //   })
-      // })
-
-      // channels[viewport_idx].on(
-      //   'broadcast',
-      //   { event: 'master' },
-      //   (payload) => {
-      //     console.log(payload)
-      //     // if (m == 'false') {
-      //       if (payload.payload.viewport == viewportId) {
-      //         viewport.setImageIdIndex(payload.payload.message);
-      //       }
-      //     // } 
-      //   }
-      // )
-
       viewport.render();
     };
 
@@ -140,9 +114,10 @@ export default function Viewport(props) {
         ToolGroupManager,
         Enums: csToolsEnums,
       } = cornerstoneTools;
-      
+
+
       const { MouseBindings } = csToolsEnums;
-      
+
       const toolGroupId = `${viewport_idx}-tl`;
 
       // Define a tool group, which defines how mouse events map to tool commands for
@@ -151,6 +126,7 @@ export default function Viewport(props) {
       const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
 
       if (mobile) {
+        toolGroup.addTool(FlagTool.toolName);
         toolGroup.addTool(WindowLevelTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
         toolGroup.addTool(StackScrollTool.toolName, { loop: false });
@@ -160,10 +136,11 @@ export default function Viewport(props) {
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
 
       } else {
+        toolGroup.addTool(FlagTool.toolName);
         toolGroup.addTool(WindowLevelTool.toolName);
-        toolGroup.addTool(PanTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
         toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
+        toolGroup.addTool(PanTool.toolName);
 
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
