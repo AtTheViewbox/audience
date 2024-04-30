@@ -152,22 +152,36 @@ export const DataProvider = ({ children }) => {
 
             dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
         }
+        
+            
 
-        setupCornerstone();
-        setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
-            console.log("Supabase setup completed");
-            // if there is already a sharing key embedded in the url on start, connect to the sharing session
-            if (initialData.s) {
-                dispatch({type: 'connect_to_sharing_session', payload: {sessionId: initialData.s}})
+            if(!isEmbedded){
+                setupCornerstone();
+                setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
+                    console.log("Supabase setup completed");
+                    if (initialData.s) {
+                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
+                    }
+                })
+                console.log("here")
             }
-        });
-
+            else if(discordUser){
+                setupCornerstone();
+                console.log("here")
+                setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
+                    console.log("Supabase setup completed");
+                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId:discordSdk.instanceId  } })
+                })
+            }
+        
         return () => {
+            if(!isEmbedded || discordUser){
             console.log("cleaning up supabase")
-            dispatch({type: 'clean_up_supabase'})   
+            dispatch({ type: 'clean_up_supabase' })
+            }
         }
-    
-    }, []);
+
+    }, [discordUser]);
 
     useEffect(() => {
         // This useEffect is to handle changes to sessionId and create the consequent
@@ -191,7 +205,7 @@ export const DataProvider = ({ children }) => {
                 console.log(status)
                 if (status === 'SUBSCRIBED') {
                     console.log("share-controller subscribed")
-                    share_controller.track({ share: false, lastShareRequest: null });
+                    share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser  });
                     return null
                 }
             })
@@ -203,8 +217,8 @@ export const DataProvider = ({ children }) => {
                 console.log(presenceState)
 
                 const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
-                    const { lastShareRequest, share } = info[0];
-                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest };
+                    const { lastShareRequest, share,discordData } = info[0];
+                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData };
                 });
                 
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
@@ -326,14 +340,16 @@ export function dataReducer(data, action) {
                 // reset the listeners and update the presence state
                 if (nonRecentSharers.includes(data.userData.id)) {
                     data.eventListenerManager.reset()
-                    data.shareController.track({ share: false, lastShareRequest: new Date().toISOString() });
+                    data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
                 }
 
                 if (nonRecentSharers.length !== 0) {
-                    toast(`"${mostRecentShare.user} has requested control`);
+                    //toast(`"${mostRecentShare.user} has requested control`);
+                    toast(`${mostRecentShare.discordData.username?mostRecentShare.discordData.username:mostRecentShare.user} has requested control`);
                     new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
                 } else {
-                    toast(`"${mostRecentShare.user} has taken control`);
+                    //toast(`"${mostRecentShare.user} has taken control`);
+                    toast(`${mostRecentShare.discordData.username?mostRecentShare.discordData.username:mostRecentShare.user} has taken control`);
                     new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
                 }
             } else {
@@ -347,7 +363,7 @@ export function dataReducer(data, action) {
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
-                data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString() });
+                data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
                 // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
                 // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date
                 // so if you try to cancel while it is processing, it will try to create a new request rather than cancelling the request

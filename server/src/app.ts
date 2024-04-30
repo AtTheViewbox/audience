@@ -32,7 +32,7 @@ app.post('/api/token', async (req: Request, res: Response) => {
   const {access_token} = (await response.json()) as {
     access_token: string;
   };
-
+ 
   res.send({access_token});
 });
 
