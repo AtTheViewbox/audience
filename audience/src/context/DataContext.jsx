@@ -155,24 +155,18 @@ export const DataProvider = ({ children }) => {
         
             
 
-            if(!isEmbedded){
+            if(!isEmbedded || discordUser){
                 setupCornerstone();
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                     console.log("Supabase setup completed");
                     if (initialData.s) {
                         dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
+                    }else{
+                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId:discordSdk.instanceId  } })
                     }
                 })
-                console.log("here")
             }
-            else if(discordUser){
-                setupCornerstone();
-                console.log("here")
-                setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
-                    console.log("Supabase setup completed");
-                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId:discordSdk.instanceId  } })
-                })
-            }
+    
         
         return () => {
             if(!isEmbedded || discordUser){
