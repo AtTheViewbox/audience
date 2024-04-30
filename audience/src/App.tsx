@@ -7,7 +7,9 @@ import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/sonner"
 
+import { attach } from './context/AnnotationContext.js'
 
+attach()
 
 function App() {
 

@@ -5,8 +5,8 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
-import FlagTool from '../components/FlagTool.ts';
-//import { ProbeTool as FlagTool } from '@cornerstonejs/tools';
+//import FlagTool from '../components/FlagTool.ts';
+import { ProbeTool as FlagTool } from '@cornerstonejs/tools';
 cornerstoneTools.addTool(FlagTool)
 
 export default function Viewport(props) {

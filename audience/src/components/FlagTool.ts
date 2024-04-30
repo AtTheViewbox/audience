@@ -10,7 +10,7 @@ import type { Types } from '@cornerstonejs/core';
 
 import {
   AnnotationTool,
-} from '@cornerstonejs/tools';
+} from '@cornerstonejs/tools/src/tools/base';
 
 import {
   addAnnotation,
@@ -48,6 +48,11 @@ import {
 } from '@cornerstonejs/tools/src/types';
 import { ProbeAnnotation } from '@cornerstonejs/tools/src/types/ToolSpecificAnnotationTypes';
 import { StyleSpecifier } from '@cornerstonejs/tools/src/types/AnnotationStyle';
+import {
+  ModalityUnitOptions,
+  getModalityUnit,
+} from '@cornerstonejs/tools/src/utilities/getModalityUnit';
+
 import { isViewportPreScaled } from '@cornerstonejs/tools/src/utilities/viewport/isViewportPreScaled';
 
 const { transformWorldToIndex } = csUtils;
@@ -92,7 +97,6 @@ const { transformWorldToIndex } = csUtils;
 
 class FlagTool extends AnnotationTool {
   static toolName;
-
   touchDragCallback: any;
   mouseDragCallback: any;
   editData: {
@@ -195,6 +199,7 @@ class FlagTool extends AnnotationTool {
 
     evt.preventDefault();
 
+    console.log("ianto", renderingEngine, viewportIdsToRender);
     triggerAnnotationRenderForViewportIds(renderingEngine, viewportIdsToRender);
 
     return annotation;
@@ -598,10 +603,34 @@ class FlagTool extends AnnotationTool {
           index[2] = viewport.getCurrentImageIdIndex();
         }
 
+        let modalityUnit;
+
+        if (modality === 'US') {
+          const calibratedResults = getCalibratedProbeUnitsAndValue(image, [
+            index,
+          ]);
+
+          const hasEnhancedRegionValues = calibratedResults.values.every(
+            (value) => value !== null
+          );
+
+          value = hasEnhancedRegionValues ? calibratedResults.values : value;
+          modalityUnit = hasEnhancedRegionValues
+            ? calibratedResults.units
+            : 'raw';
+        } else {
+          modalityUnit = getModalityUnit(
+            modality,
+            annotation.metadata.referencedImageId,
+            modalityUnitOptions
+          );
+        }
+
         cachedStats[targetId] = {
           index,
           value,
           Modality: modality,
+          modalityUnit,
         };
       } else {
         this.isHandleOutsideImage = true;
@@ -623,15 +652,27 @@ class FlagTool extends AnnotationTool {
 
 function defaultGetTextLines(data, targetId): string[] {
   const cachedVolumeStats = data.cachedStats[targetId];
-  const { index, value } = cachedVolumeStats;
+  const { index, value, modalityUnit } = cachedVolumeStats;
 
   if (value === undefined) {
     return;
   }
 
   const textLines = [];
+
+  textLines.push(`(${index[0]}, ${index[1]}, ${index[2]})`);
+
+  if (value instanceof Array && modalityUnit instanceof Array) {
+    for (let i = 0; i < value.length; i++) {
+      textLines.push(`${roundNumber(value[i])} ${modalityUnit[i]}`);
+    }
+  } else {
+    textLines.push(`${roundNumber(value)} ${modalityUnit}`);
+  }
+
   return textLines;
 }
+
 
 FlagTool.toolName = 'Flag';
 export default FlagTool;
