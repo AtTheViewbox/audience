@@ -8,8 +8,12 @@ import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/sonner"
 
 import { defaultAnnotationManager } from './context/AnnotationManager.ts'
+import { attach } from './context/AnnotationContext.ts'
 import { annotation } from '@cornerstonejs/tools';
+import { setAnnotationManager } from '@cornerstonejs/tools/src/stateManagement/annotation/annotationState';
+attach(defaultAnnotationManager)
 annotation.state.setAnnotationManager(defaultAnnotationManager);
+setAnnotationManager(defaultAnnotationManager);
 
 function App() {
 

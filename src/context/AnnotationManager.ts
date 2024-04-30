@@ -1,5 +1,4 @@
 import { FrameOfReferenceSpecificAnnotationManager } from '@cornerstonejs/tools/src/stateManagement/annotation'
-import onChange from 'on-change';
 
 import {
   Enums,
@@ -16,27 +15,10 @@ class AnnotationManager extends FrameOfReferenceSpecificAnnotationManager {
    */
   constructor(uid?: string) {
     super(uid);
-    this.annotations = onChange(this.annotations, (path, value, previousValue, applyData) => {
-      	console.log('this:', this);
-        console.log('path:', path);
-        console.log('value:', value);
-        console.log('previousValue:', previousValue);
-        console.log('applyData:', applyData);
-    })
   }
-
-  getAllAnnotations = (): Annotations => {
-    console.log("ianto", Object.values(this.annotations))
-    return Object.values(this.annotations)
-      .map((frameOfReferenceSpecificAnnotations) =>
-        Object.values(frameOfReferenceSpecificAnnotations)
-      )
-      .flat(2);
-  };
-
 }
 
 const defaultAnnotationManager =
-  new AnnotationManager('DEFAULT1');
+  new AnnotationManager('AtTheViewBox');
 
 export { defaultAnnotationManager };
