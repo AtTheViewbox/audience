@@ -7,7 +7,9 @@ import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/sonner"
 
-
+import { defaultAnnotationManager } from './context/AnnotationManager.ts'
+import { annotation } from '@cornerstonejs/tools';
+annotation.state.setAnnotationManager(defaultAnnotationManager);
 
 function App() {
 
