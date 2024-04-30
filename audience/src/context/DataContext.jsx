@@ -13,18 +13,26 @@ import { createClient } from '@supabase/supabase-js'
 import { utilities } from '@cornerstonejs/core'; 
 import { toast } from "sonner"
 
-
+import defaultData from "./defaultData.jsx";
+import discordSdk from '../discordSdk.tsx'
 
 export const DataContext = createContext({});    
 export const DataDispatchContext = createContext({});
 
+const queryParams = new URLSearchParams(window.location.search);
+const isEmbedded = queryParams.get('frame_id') != null;
+
 // create initial data object from URL query string
-const initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
-initialData.vd.forEach((vdItem) => {
-    if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e) {
-        vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e);
-    }
-});
+var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
+if (initialData.vd) {
+    initialData.vd.forEach((vdItem) => {
+        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e) {
+            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e);
+        }
+    })
+} else {
+    initialData = defaultData.defaultData;
+}
 initialData.userData = null;
 initialData.sharingUser = null;
 initialData.activeUsers = null;
@@ -32,6 +40,55 @@ initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
+    const [discordUser, setDiscordUser] = useState()
+    
+    useEffect(() => {
+        
+        const setupDiscord = async () => {
+
+            await discordSdk.ready();
+            const { enabled } = await discordSdk.commands.encourageHardwareAcceleration();
+            console.log(`Hardware Acceleration is ${enabled === true ? 'enabled' : 'disabled'}`);
+
+            const { code } = await discordSdk.commands.authorize({
+                client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
+                response_type: "code",
+                state: "",
+                prompt: "none",
+                scope: [
+                    'identify',
+                    'guilds',
+                    'guilds.members.read',
+                    'rpc.activities.write',
+                    'rpc.voice.write',
+                    'rpc.voice.read',
+                ],
+            });
+         
+            const response = await fetch("api/token", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    code,
+                }),
+            });
+
+            const { access_token } = await response.json();
+            // Authenticate with Discord client (using the access_token)
+            const newAuth = await discordSdk.commands.authenticate({
+                access_token,
+            });
+            setDiscordUser(newAuth.user)
+            console.log(newAuth.user)
+  
+        }
+        if (isEmbedded){
+            setupDiscord()
+        }
+
+    },[])
 
     useEffect(() => {
         // use effect to do basic house keeping on initial start

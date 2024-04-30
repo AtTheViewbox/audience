@@ -6,6 +6,21 @@ import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
   plugins: [react(), wasm(), topLevelAwait()],
+  envDir: '../',
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+        // rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+    hmr: {
+      clientPort: 443,
+    },
+  },
   worker: {
     // Not needed with vite-plugin-top-level-await >= 1.3.0
     // format: "es",
