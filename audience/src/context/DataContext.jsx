@@ -339,11 +339,11 @@ export function dataReducer(data, action) {
 
                 if (nonRecentSharers.length !== 0) {
                     //toast(`"${mostRecentShare.user} has requested control`);
-                    toast(`${mostRecentShare.discordData.username?mostRecentShare.discordData.username:mostRecentShare.user} has requested control`);
+                    toast(`${mostRecentShare.discordData?mostRecentShare.discordData.username:mostRecentShare.user} has requested control`);
                     new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
                 } else {
                     //toast(`"${mostRecentShare.user} has taken control`);
-                    toast(`${mostRecentShare.discordData.username?mostRecentShare.discordData.username:mostRecentShare.user} has taken control`);
+                    toast(`${mostRecentShare.discordData?mostRecentShare.discordData.username:mostRecentShare.user} has taken control`);
                     new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
                 }
             } else {
