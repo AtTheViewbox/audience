@@ -2,6 +2,7 @@ import { mergeProps, useLongPress, usePress } from 'react-aria';
 import { Button } from "@/components/ui/button"
 import { useState, useContext } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
+import { Eye, EyeOff } from "lucide-react";
 
 import DialogPage from "./DialogPage.jsx";
 
@@ -44,12 +45,12 @@ function fab() {
   let { longPressProps } = useLongPress({
     accessibilityDescription: 'Long press to toggle sharing interactions',
     onLongPress: (e) => {
-      dispatch({type: 'toggle_sharing'})
+      
     }
   });
 
   let { pressProps } = usePress({
-    onPress: (e) => { setDialogIsOpen(true); }
+    onPress: (e) => { dispatch({type: 'toggle_sharing'}) }
   });
 
   // guard against there being no userData
@@ -63,7 +64,7 @@ function fab() {
             position: 'fixed', left: '10px', bottom: '10px'
           }}
       >
-          {"-"}
+          { sharingUser == userData.id ? <EyeOff strokeWidth={1.5} color="#000000"/> : <Eye strokeWidth={1.5} color="#000000"/> }
       </Button>
       <DialogContent>
         <DialogPage/>
