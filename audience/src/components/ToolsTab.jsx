@@ -20,7 +20,6 @@ function ToolsTab() {
     const selectTool = (value) => {
         setPosition(value)
         dispatch({ type: 'select_tool', payload: value })
-        console.log("ianto dispatched tools");
     }
     return (!userData ? null :(
 
