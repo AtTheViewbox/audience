@@ -10,7 +10,7 @@ import dicomParser from 'dicom-parser';
 export default function Viewport(props) {
   const elementRef = useRef(null);
 
-  const { vd, channels, sharing,toolSelected } = useContext(DataContext).data;
+  const { vd, channels, sharing, toolSelected } = useContext(DataContext).data;
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
 
@@ -41,17 +41,26 @@ export default function Viewport(props) {
       case "pan":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolPassive(StackScrollTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "window":
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolPassive(StackScrollTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "zoom":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolPassive(StackScrollTool.toolName);
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
+      case "scroll":
+        toolGroup.setToolPassive(WindowLevelTool.toolName);
+        toolGroup.setToolPassive(ZoomTool.toolName);
+        toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
     }
 
@@ -163,6 +172,7 @@ export default function Viewport(props) {
         toolGroup.addTool(WindowLevelTool.toolName);
         toolGroup.addTool(PanTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
+        toolGroup.addTool(StackScrollTool.toolName, { loop: false });
         toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
 
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
