@@ -2,7 +2,7 @@ import { mergeProps, useLongPress, usePress } from 'react-aria';
 import { Button } from "@/components/ui/button"
 import { useState, useContext } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
-import { Eye, EyeOff } from "lucide-react";
+import { LocateFixed, LocateOff } from "lucide-react";
 
 import DialogPage from "./DialogPage.jsx";
 
@@ -64,7 +64,7 @@ function fab() {
             position: 'fixed', left: '10px', bottom: '10px'
           }}
       >
-          { sharingUser == userData.id ? <EyeOff strokeWidth={1.5} color="#000000"/> : <Eye strokeWidth={1.5} color="#000000"/> }
+          { sharingUser == userData.id ? <LocateFixed strokeWidth={1.5} color="#000000"/> : <LocateFixed strokeWidth={1.5} color="#000000"/> }
       </Button>
       <DialogContent>
         <DialogPage/>
