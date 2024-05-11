@@ -35,7 +35,7 @@ if (initialData.vd) {
 }
 initialData.userData = null;
 initialData.sharingUser = null;
-initialData.activeUsers = null;
+initialData.activeUsers = [];
 initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import {ZoomIn, Contrast, Move, Bolt } from "lucide-react";
+import {ZoomIn, Contrast, Move, ArrowDownUp, Bolt } from "lucide-react";
 import { useEffect, useContext,useState } from "react";
 import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
 import {
@@ -49,7 +49,12 @@ function ToolsTab() {
                     </DropdownMenuRadioItem>
                     <DropdownMenuRadioItem value="pan">
                         <Move strokeWidth={0.75} className="mr-2 h-4 w-4" />
-                        <span>&nbsp;Pan</span></DropdownMenuRadioItem>
+                        <span>&nbsp;Pan</span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="scroll">
+                        <ArrowDownUp strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                        <span>&nbsp;Scroll</span>
+                    </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>
         </DropdownMenu>

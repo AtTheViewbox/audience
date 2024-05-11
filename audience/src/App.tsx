@@ -22,7 +22,7 @@ function App() {
         <ToolsTab/>
         <Fab />
         <SessionUsers />
-        <Toaster />
+        <Toaster position="top-right"/>
       </DataProvider>
     </div>
   );
