@@ -20,11 +20,14 @@ function SessionUsers() {
       const defaultAvatarIndex = (BigInt(user.discordData.id) >> 22n) % 6n;
       return `${CDN}/embed/avatars/${defaultAvatarIndex}.png?size=${SIZE}`;
     }
-
   }
+
   function createAvatarsFromJson(activeUsers) {
     return activeUsers.map(user => (
-      <Avatar className="">
+      <Avatar className="" style={{ transition: "all 0.2s", 
+                                    filter: user.user === sharingUser ? 'brightness(100%)' : 'brightness(50%)',
+                                    marginLeft: user.user === sharingUser ? '0.6rem' : '-0.3rem',
+                                    marginRight: user.user === sharingUser ? '0.6rem' : '-0.3rem' }}>
         {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback>?</AvatarFallback>}
       </Avatar>
     ));
@@ -36,9 +39,8 @@ function SessionUsers() {
         position: 'fixed', right: '10px', bottom: '10px'
       }}
     >
-      <div className="flex items-center -space-x-2 *:ring *:ring-white">
+      <div className="flex items-center">
         {createAvatarsFromJson(activeUsers)}
-
       </div>
     </div>)
   )
