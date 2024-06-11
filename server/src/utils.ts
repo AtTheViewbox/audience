@@ -1,4 +1,4 @@
-import fetch from 'cross-fetch';
+//import fetch from 'cross-fetch';
 
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
