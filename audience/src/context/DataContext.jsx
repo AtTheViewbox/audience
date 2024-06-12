@@ -58,6 +58,7 @@ export const DataProvider = ({ children }) => {
                 scope: [
                     'identify',
                     'guilds',
+                    'applications.commands',
                     'guilds.members.read',
                     'rpc.activities.write',
                     'rpc.voice.write',
