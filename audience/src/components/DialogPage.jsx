@@ -33,7 +33,6 @@ function DialogPage() {
         <TabsList className="">
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="sharing">Share</TabsTrigger>
-            <TabsTrigger value="open">New Image</TabsTrigger>
         </TabsList>
         <TabsContent value="tools">
         </TabsContent>
