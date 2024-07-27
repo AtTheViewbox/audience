@@ -30,14 +30,15 @@ function variableStringsInTheMiddle(strs, prefix, suffix) {
     return strs.map(str => str.slice(prefix.length, str.length - suffix.length));
 }
 
-function recreateVariableStringList(start_str, end_str) {
+function recreateVariableStringList(start_str, end_str,delta_str) {
     const start = parseInt(start_str, 10);
     const end = parseInt(end_str, 10);
+    const delta = parseInt(delta_str, 10);
     const length = start_str.length;
 
     // Generate the list programmatically
     const generatedList = [];
-    for (let i = start; i <= end; i++) {
+    for (let i = start; i <= end; i+=delta) {
         let numStr = i.toString();
         while (numStr.length < length) {
             numStr = '0' + numStr;
@@ -48,8 +49,8 @@ function recreateVariableStringList(start_str, end_str) {
     return generatedList;
 }
 
-function recreateUriStringList(prefix, suffix, start_str, end_str) {
-    const variableStringList = recreateVariableStringList(start_str, end_str);
+function recreateUriStringList(prefix, suffix, start_str, end_str,delta_str) {
+    const variableStringList = recreateVariableStringList(start_str, end_str,delta_str);
     return variableStringList.map(str => prefix + str + suffix);
 }
 
@@ -62,14 +63,14 @@ function decomposeList(strs) {
     return { prefix, suffix, start, end };
 }
 
-export function recreateList(prefix, suffix, start_str, end_str) {
-    const generatedList = recreateUriStringList(prefix, suffix, start_str, end_str);
+export function recreateList(prefix, suffix, start_str, end_str,delta_str) {
+    const generatedList = recreateUriStringList(prefix, suffix, start_str, end_str,delta_str);
     return generatedList;
 }
 
 function recreateListFromList(strs) {
     const { prefix, suffix, start, end } = decomposeList(strs);
-    const generatedList = recreateList(prefix, suffix, start, end);
+    const generatedList = recreateList(prefix, suffix, start, end, delta);
 
     // Compare the generated list with the input list
     if (generatedList.length !== strs.length) return false;

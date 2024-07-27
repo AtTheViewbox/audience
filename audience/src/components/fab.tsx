@@ -45,7 +45,8 @@ function fab() {
   let { longPressProps } = useLongPress({
     accessibilityDescription: 'Long press to toggle sharing interactions',
     onLongPress: (e) => {
-      
+      //switch long and short press
+      setDialogIsOpen(true);
     }
   });
 

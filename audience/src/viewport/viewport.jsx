@@ -35,8 +35,6 @@ export default function Viewport(props) {
     const toolGroupId = `${viewport_idx}-tl`;
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
-    console.log('ere')
-
     switch(toolSelected){
       case "pan":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
