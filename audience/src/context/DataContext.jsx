@@ -26,8 +26,8 @@ const isEmbedded = queryParams.get('frame_id') != null;
 var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
 if (initialData.vd) {
     initialData.vd.forEach((vdItem) => {
-        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e) {
-            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e);
+        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
         }
     })
 } else {
@@ -82,7 +82,6 @@ export const DataProvider = ({ children }) => {
                 access_token,
             });
             setDiscordUser(newAuth.user)
-            console.log(newAuth.user)
   
         }
         if (isEmbedded){
@@ -146,7 +145,6 @@ export const DataProvider = ({ children }) => {
 
             const ss = cl.auth.onAuthStateChange(
                 (event, session) => {
-                    console.log(event, session)
                     dispatch({type: 'auth_update', payload: {session}})
                 }
             )
@@ -155,9 +153,9 @@ export const DataProvider = ({ children }) => {
         }
         
             
-
-            if(!isEmbedded || discordUser){
-                setupCornerstone();
+            setupCornerstone()
+            if((!isEmbedded && initialData.s) || discordUser){
+                
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                     console.log("Supabase setup completed");
                     if (initialData.s) {
@@ -183,7 +181,6 @@ export const DataProvider = ({ children }) => {
         // Supabase realtime rooms as necessary. It relies on supabaseClient to not
         // be null so the if statement just guards against that
         if (data.sessionId && data.supabaseClient) {
-            console.log(data.userData)
             // configure presence room -- should this be in every client or just the initializing client??
             const share_controller = data.supabaseClient.channel(`${data.sessionId}-share-controller`, {
                 config: {
@@ -197,7 +194,6 @@ export const DataProvider = ({ children }) => {
             // initialize presence with data
             share_controller.subscribe((status) => {
                 // Wait for successful connection
-                console.log(status)
                 if (status === 'SUBSCRIBED') {
                     console.log("share-controller subscribed")
                     share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser  });
@@ -209,7 +205,6 @@ export const DataProvider = ({ children }) => {
             share_controller.on('presence', { event: 'sync'}, () => {
 
                 const presenceState = share_controller.presenceState();
-                console.log(presenceState)
 
                 const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
                     const { lastShareRequest, share,discordData } = info[0];
@@ -226,7 +221,6 @@ export const DataProvider = ({ children }) => {
             })
 
             interaction_channel.subscribe((status) => {
-                console.log(status)
                 if (status === 'SUBSCRIBED') {
                     console.log("I think I'm subscribed?");
                     return null
@@ -237,7 +231,6 @@ export const DataProvider = ({ children }) => {
                 'broadcast',
                 { event: 'frame-changed' },
                 (payload) => {
-                    console.log(payload)
                     data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
                     data.renderingEngine.getViewport(payload.payload.viewport).render()
                 }
@@ -260,7 +253,6 @@ export const DataProvider = ({ children }) => {
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
 
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
-                console.log(vp)
                 data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
                     console.log(event.detail.imageIdIndex)
                     data.interactionChannel.send({
@@ -287,7 +279,6 @@ export const DataProvider = ({ children }) => {
 export function dataReducer(data, action) {
     let new_data = {...data};
    
-    console.log(action, data)
     switch (action.type) {
 
         // Initialization events
@@ -321,7 +312,7 @@ export function dataReducer(data, action) {
             // and the components that care should make updates as necessary
 
             let { globalSharingStatus } = action.payload;
-            console.log(globalSharingStatus);
+  
             const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
             if (usersWhoAreSharing.length > 0) {
                 const mostRecentShare = usersWhoAreSharing

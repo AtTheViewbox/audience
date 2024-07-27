@@ -21,8 +21,8 @@ function ToolsTab() {
         setPosition(value)
         dispatch({ type: 'select_tool', payload: value })
     }
-    return (!userData ? null :(
-
+    return (
+        
         <DropdownMenu open modal={false}>
             <DropdownMenuTrigger asChild style={{display: "none"}}>
                 <Button
@@ -59,7 +59,7 @@ function ToolsTab() {
             </DropdownMenuContent>
         </DropdownMenu>
 
-    ));
+    );
 }
 
 export default ToolsTab;

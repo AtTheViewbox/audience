@@ -24,11 +24,11 @@ function SessionUsers() {
 
   function createAvatarsFromJson(activeUsers) {
     return activeUsers.map(user => (
-      <Avatar className="" style={{ transition: "all 0.2s", 
+      <Avatar  key={user.user} className="" style={{ transition: "all 0.2s", 
                                     filter: user.user === sharingUser ? 'brightness(100%)' : 'brightness(50%)',
                                     marginLeft: user.user === sharingUser ? '0.6rem' : '-0.3rem',
                                     marginRight: user.user === sharingUser ? '0.6rem' : '-0.3rem' }}>
-        {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback>?</AvatarFallback>}
+        {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback >?</AvatarFallback>}
       </Avatar>
     ));
   }
