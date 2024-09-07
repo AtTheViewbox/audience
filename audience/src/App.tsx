@@ -1,6 +1,6 @@
 import './App.css';
 import Layout from './layout/layout';
-import Fab from './components/fab'
+import Fab from './components/Fab'
 import ToolsTab from './components/ToolsTab'
 import SessionUsers from './components/SessionUsers'
 import { DataProvider } from './context/DataContext';

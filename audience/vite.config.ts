@@ -17,9 +17,9 @@ export default defineConfig({
         // rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
-    hmr: {
-      clientPort: 443,
-    },
+    //hmr: {
+    //  clientPort: 443,
+    //},
   },
   worker: {
     // Not needed with vite-plugin-top-level-await >= 1.3.0

@@ -132,20 +132,28 @@ export const DataProvider = ({ children }) => {
         };
 
         const setupSupabase = async () => {
-            const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
+            //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
+            const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
             
             // if there is a user logged in, store that as user
             let { data: { user }, error } = await cl.auth.getUser();
+           
             if (!user) {
                 // otherwise, use anonymous login
                 ({ data: { user }, error } = await cl.auth.signInAnonymously());
+                
             }
-
+            console.log(user)
             // TODO: error handling for auth
 
             const ss = cl.auth.onAuthStateChange(
                 (event, session) => {
-                    dispatch({type: 'auth_update', payload: {session}})
+                    console.log(session)
+                        if (event === 'SIGNED_IN') {
+                        dispatch({type: 'auth_update', payload: {session}})
+                      } else if (event === 'SIGNED_OUT') {
+                        dispatch({type: 'log_out', payload: {session}})
+                      }
                 }
             )
 
@@ -154,15 +162,18 @@ export const DataProvider = ({ children }) => {
         
             
             setupCornerstone()
-            if((!isEmbedded && initialData.s) || discordUser){
+            if((!isEmbedded) || discordUser){
                 
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                     console.log("Supabase setup completed");
                     if (initialData.s) {
                         dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
-                    }else{
-                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId:discordSdk.instanceId  } })
                     }
+                    
+                    //TODO: fix discord later
+                    //else{
+                    //   dispatch({ type: 'connect_to_sharing_session', payload: { sessionId:discordSdk.instanceId  } })
+                    //}
                 })
             }
     
@@ -250,7 +261,7 @@ export const DataProvider = ({ children }) => {
     }, [data.sessionId, data.supabaseClient]);
 
     useEffect(() => {
-        if (data.shareController && data.renderingEngine && data.sharingUser === data.userData.id) {
+        if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
 
             data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
                 data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
@@ -370,6 +381,9 @@ export function dataReducer(data, action) {
 
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
+            break;
+        case 'log_out':
+            new_data = { ...data, userData:null };
             break;
         case 'clean_up_supabase':
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
