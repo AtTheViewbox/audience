@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
-import { ClipboardCopy, MailIcon, Mail, AlertCircle} from "lucide-react";
+import { ClipboardCopy, Globe, Lock, Users, Plus, X } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { LoginTab } from "./LoginTab.jsx";
 import {
   Card,
@@ -12,12 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SignUpTab } from "./SignUpTab.jsx";
-
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -30,6 +29,21 @@ function ShareTab() {
   const { dispatch } = useContext(DataDispatchContext);
 
   const { supabaseClient, userData } = useContext(DataContext).data;
+
+  const [visibility, setVisibility] = useState("public")
+  const [emails, setEmails] = useState([])
+  const [currentEmail, setCurrentEmail] = useState("")
+
+  const addEmail = () => {
+    if (currentEmail && !emails.includes(currentEmail)) {
+      setEmails([...emails, currentEmail])
+      setCurrentEmail("")
+    }
+  }
+
+  const removeEmail = (email) => {
+    setEmails(emails.filter(e => e !== email))
+  }
 
   const queryParams = new URLSearchParams(window.location.search);
   queryParams.delete("s");
@@ -124,6 +138,7 @@ function ShareTab() {
 
   function SameExistingShareView() {
     return (
+      <ScrollArea  className="h-[500px]">   
       <Card>
         <CardHeader>
           <CardTitle>
@@ -134,7 +149,79 @@ function ShareTab() {
             share it with more people.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
+        
+        <CardContent className="space-y-1.5">
+        <RadioGroup defaultValue="public" value={visibility} onValueChange={setVisibility}>
+        <div className="flex items-center space-x-2 mb-4">
+          <RadioGroupItem value="public" id="public" />
+          <Label htmlFor="public" className="flex items-center cursor-pointer">
+            <Globe className="h-5 w-5 mr-2 text-blue-500" />
+            <div>
+              <p className="font-medium">Public</p>
+              <p className="text-sm text-muted-foreground">Anyone on the internet can see this</p>
+            </div>
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2 mb-4">
+          <RadioGroupItem value="org" id="org" />
+          <Label htmlFor="org" className="flex items-center cursor-pointer">
+            <Users className="h-5 w-5 mr-2 text-green-500" />
+            <div>
+              <p className="font-medium">Within my organization</p>
+              <p className="text-sm text-muted-foreground">Only members of your organization can access this</p>
+            </div>
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2 mb-4">
+          <RadioGroupItem value="private" id="private" />
+          <Label htmlFor="private" className="flex items-center cursor-pointer">
+            <Lock className="h-5 w-5 mr-2 text-red-500" />
+            <div>
+              <p className="font-medium">Private</p>
+              <p className="text-sm text-muted-foreground">You and shared users can access this</p>
+            </div>
+          </Label>
+        </div>
+        
+      </RadioGroup>
+
+      {visibility === "private" && (
+        <div className="mt-4 space-y-4">
+          <Label htmlFor="email-input">Add email addresses to share with:</Label>
+          <div className="flex space-x-2">
+            <Input
+              id="email-input"
+              type="email"
+              value={currentEmail}
+              onChange={(e) => setCurrentEmail(e.target.value)}
+              placeholder="Enter email address"
+              className="flex-grow"
+            />
+            <Button onClick={addEmail} size="icon">
+              <Plus className="h-4 w-4" />
+              <span className="sr-only">Add email</span>
+            </Button>
+          </div>
+          {emails.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold mb-2">Added Emails:</h3>
+              <ScrollArea className="h-[200px] w-full rounded-md border">
+                <div className="p-4 space-y-2">
+                  {emails.map((email) => (
+                    <div key={email} className="flex items-center justify-between bg-gray-100 p-2 rounded">
+                      <span className="text-sm">{email}</span>
+                      <Button onClick={() => removeEmail(email)} variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">Remove {email}</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </div>
+      )}
           <div className="flex w-full max-w-sm items-center space-x-2">
             <Input disabled placeholder={shareLink} />
             <Button
@@ -151,14 +238,21 @@ function ShareTab() {
             If you would like to inactivate the previous session and create a
             new shared session for this study, click the generate shared session
             button below:
-          </CardDescription>
+          </CardDescription> 
+   
+      
+
         </CardContent>
+   
+    
+
         <CardFooter>
           <Button onClick={generateSharedSession}>
             Generate New Shared Session
           </Button>
         </CardFooter>
       </Card>
+ </ScrollArea>
     );
   }
 
