@@ -187,11 +187,36 @@ export const DataProvider = ({ children }) => {
 
     }, [discordUser]);
 
+    async function getSession(session_id){
+        const { row, error } = await data.supabaseClient
+        .from("viewbox")
+        .select("user, url_params, session_id")
+        .eq("session_id", session_id);
+
+      if (error) throw error;
+      console.log(row)
+    }
+
     useEffect(() => {
         // This useEffect is to handle changes to sessionId and create the consequent
         // Supabase realtime rooms as necessary. It relies on supabaseClient to not
         // be null so the if statement just guards against that
         if (data.sessionId && data.supabaseClient) {
+            const allChanges = data.supabaseClient
+                .channel('schema-db-changes')
+                .on(
+                    'postgres_changes',
+                    {
+                    event: '*',
+                    schema: 'public',
+                    table:'viewbox'
+                    },
+                    (payload) => {
+                        getSession(data.sessionId)
+                    }
+                )
+                .subscribe()
+           
             // configure presence room -- should this be in every client or just the initializing client??
             const share_controller = data.supabaseClient.channel(`${data.sessionId}-share-controller`, {
                 config: {
@@ -386,6 +411,7 @@ export function dataReducer(data, action) {
             new_data = { ...data, userData:null };
             break;
         case 'clean_up_supabase':
+            new_data = {...data, sessionId: null}
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
             data.supabaseClient.removeAllChannels();
             break;

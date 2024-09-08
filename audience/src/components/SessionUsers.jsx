@@ -11,7 +11,7 @@ const queryParams = new URLSearchParams(window.location.search);
 const isEmbedded = queryParams.get('frame_id') != null;
 
 function SessionUsers() {
-  const { userData, sharingUser, activeUsers } = useContext(DataContext).data;
+  const { userData, sharingUser, activeUsers,sessionId } = useContext(DataContext).data;
 
   function getAvatarUrl(user) {
     if (user.discordData.avatar != null) {
@@ -33,7 +33,7 @@ function SessionUsers() {
     ));
   }
 
-  return (!activeUsers ? null :
+  return ((activeUsers&&sessionId)  ? 
     (<div
       style={{
         position: 'fixed', right: '10px', bottom: '10px'
@@ -42,7 +42,7 @@ function SessionUsers() {
       <div className="flex items-center">
         {createAvatarsFromJson(activeUsers)}
       </div>
-    </div>)
+    </div>):null
   )
 }
 

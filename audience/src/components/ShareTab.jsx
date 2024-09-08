@@ -3,6 +3,7 @@ import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { ClipboardCopy, Globe, Lock, Users, Plus, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { QRCodeSVG } from 'qrcode.react'
 import { LoginTab } from "./LoginTab.jsx";
 import {
   Card,
@@ -33,6 +34,9 @@ function ShareTab() {
   const [visibility, setVisibility] = useState("public")
   const [emails, setEmails] = useState([])
   const [currentEmail, setCurrentEmail] = useState("")
+  const [qrCodeValue, setQRCodeValue] = useState('')
+
+
 
   const addEmail = () => {
     if (currentEmail && !emails.includes(currentEmail)) {
@@ -84,6 +88,21 @@ function ShareTab() {
     if (userData && !userData.is_anonymous) checkWhetherUserIsSharing();
   }, [userData]);
 
+  async function stopSharedSession() {
+    try {
+      const { _, delete_error } = await supabaseClient
+        .from("viewbox")
+        .delete()
+        .eq("user", userData.id);
+
+      if (delete_error) throw delete_error;
+      dispatch({type: "clean_up_supabase"});
+      setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+    } catch (error) {
+      console.log(error.code);
+    }
+  }
+
   async function generateSharedSession() {
     try {
       const { _, delete_error } = await supabaseClient
@@ -108,6 +127,8 @@ function ShareTab() {
 
       queryParams.set("s", data[0].session_id);
       setShareLink(`${window.location.origin}/?${queryParams.toString()}`);
+      setQRCodeValue(shareLink)
+      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
     } catch (error) {
       console.log(error.code);
       if (error.code === "23505") {
@@ -165,7 +186,7 @@ function ShareTab() {
         <div className="flex items-center space-x-2 mb-4">
           <RadioGroupItem value="org" id="org" />
           <Label htmlFor="org" className="flex items-center cursor-pointer">
-            <Users className="h-5 w-5 mr-2 text-green-500" />
+          <Users className="h-5 w-5 mr-2 text-green-500" />
             <div>
               <p className="font-medium">Within my organization</p>
               <p className="text-sm text-muted-foreground">Only members of your organization can access this</p>
@@ -175,7 +196,7 @@ function ShareTab() {
         <div className="flex items-center space-x-2 mb-4">
           <RadioGroupItem value="private" id="private" />
           <Label htmlFor="private" className="flex items-center cursor-pointer">
-            <Lock className="h-5 w-5 mr-2 text-red-500" />
+          <Lock className="h-5 w-5 mr-2 text-red-500" />
             <div>
               <p className="font-medium">Private</p>
               <p className="text-sm text-muted-foreground">You and shared users can access this</p>
@@ -222,6 +243,14 @@ function ShareTab() {
           )}
         </div>
       )}
+
+<div className="space-y-1">
+          {qrCodeValue && (
+              <div className="flex justify-center mt-4">
+                <QRCodeSVG value={qrCodeValue} size={200} />
+              </div>
+            )}
+          </div>
           <div className="flex w-full max-w-sm items-center space-x-2">
             <Input disabled placeholder={shareLink} />
             <Button
@@ -231,25 +260,22 @@ function ShareTab() {
               <ClipboardCopy className="h-4 w-4" />
             </Button>
           </div>
-          <div className="space-y-1">
-            <Label>QR to go here</Label>
-          </div>
+          
           <CardDescription>
             If you would like to inactivate the previous session and create a
             new shared session for this study, click the generate shared session
             button below:
           </CardDescription> 
-   
-      
-
         </CardContent>
-   
-    
-
-        <CardFooter>
+        <CardFooter className="flex justify-between">
+        
           <Button onClick={generateSharedSession}>
             Generate New Shared Session
           </Button>
+          <Button variant="outline" onClick={stopSharedSession}>
+            Stop Session
+          </Button>
+        
         </CardFooter>
       </Card>
  </ScrollArea>
