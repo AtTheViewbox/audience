@@ -41,7 +41,11 @@ initialData.toolSelected = "window";
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
     const [discordUser, setDiscordUser] = useState()
-    
+    const [updateSession, setUpdateSession] = useState(null)
+
+
+
+   
     useEffect(() => {
         
         const setupDiscord = async () => {
@@ -90,6 +94,26 @@ export const DataProvider = ({ children }) => {
 
     },[])
 
+    useEffect(()=>{
+        if(updateSession){
+            const getSession = async (cl, session_id)=>{
+                const { data, error } = await cl
+                .from("viewbox")
+                .select("session_id")
+                .eq("session_id",session_id)
+                return data
+            }
+            getSession(data.supabaseClient,updateSession.old.session_id).then((payload)=>{
+                if (payload.length==0){
+                    dispatch({type: "clean_up_supabase"});
+                }
+            })
+         
+        }
+        setUpdateSession(null)
+
+    },[updateSession])
+
     useEffect(() => {
         // use effect to do basic house keeping on initial start
         // 1. Initialize Cornerstone
@@ -130,6 +154,8 @@ export const DataProvider = ({ children }) => {
 
             dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
         };
+        
+   
 
         const setupSupabase = async () => {
             //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
@@ -143,9 +169,27 @@ export const DataProvider = ({ children }) => {
                 ({ data: { user }, error } = await cl.auth.signInAnonymously());
                 
             }
-            console.log(user)
-            // TODO: error handling for auth
 
+            //if there is a session, connect to current session
+            var { data, errorCurrentSession } = await cl
+                .from("viewbox")
+                .select("user, url_params, session_id")
+                .eq("user", user.id);
+            if (errorCurrentSession) throw errorCurrentSession;
+            console.log(data)
+            if (data && data.length != 0){
+                initialData.s =data[0].session_id
+            }
+     
+            var { data,errorSession } = await cl
+                .from("viewbox")
+                .select("user, url_params, session_id")
+                .eq("session_id",initialData.s );
+            if (errorSession) throw errorSession;
+            if (!data || data.length==0 ){
+                initialData.s = null
+            }
+            // TODO: error handling for auth
             const ss = cl.auth.onAuthStateChange(
                 (event, session) => {
                     console.log(session)
@@ -166,7 +210,9 @@ export const DataProvider = ({ children }) => {
                 
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                     console.log("Supabase setup completed");
+    
                     if (initialData.s) {
+                        
                         dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
                     }
                     
@@ -187,16 +233,8 @@ export const DataProvider = ({ children }) => {
 
     }, [discordUser]);
 
-    async function getSession(session_id){
-        const { row, error } = await data.supabaseClient
-        .from("viewbox")
-        .select("user, url_params, session_id")
-        .eq("session_id", session_id);
 
-      if (error) throw error;
-      console.log(row)
-    }
-
+    
     useEffect(() => {
         // This useEffect is to handle changes to sessionId and create the consequent
         // Supabase realtime rooms as necessary. It relies on supabaseClient to not
@@ -212,7 +250,8 @@ export const DataProvider = ({ children }) => {
                     table:'viewbox'
                     },
                     (payload) => {
-                        getSession(data.sessionId)
+                        console.log(payload)
+                        setUpdateSession(payload)
                     }
                 )
                 .subscribe()

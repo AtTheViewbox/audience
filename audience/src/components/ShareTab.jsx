@@ -18,6 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -39,6 +40,7 @@ function ShareTab() {
 
 
   const addEmail = () => {
+    var currentEmail = document.getElementById("email-input").value;
     if (currentEmail && !emails.includes(currentEmail)) {
       setEmails([...emails, currentEmail])
       setCurrentEmail("")
@@ -50,7 +52,6 @@ function ShareTab() {
   }
 
   const queryParams = new URLSearchParams(window.location.search);
-  queryParams.delete("s");
 
   const [shareSessionState, setShareSessionState] = useState(
     ShareSessionState.LOADING
@@ -70,13 +71,14 @@ function ShareTab() {
         if (data.length > 1) {
           console.log("BIG ERROR");
         }
-
+        console.log(queryParams.toString())
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
           queryParams.set("s", data[0].session_id);
           setShareLink(`${window.location.origin}/?${queryParams.toString()}`);
+          setQRCodeValue(`${window.location.origin}/?${queryParams.toString()}`)
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
@@ -160,6 +162,7 @@ function ShareTab() {
   function SameExistingShareView() {
     return (
       <ScrollArea  className="h-[500px]">   
+      
       <Card>
         <CardHeader>
           <CardTitle>
@@ -212,9 +215,7 @@ function ShareTab() {
           <div className="flex space-x-2">
             <Input
               id="email-input"
-              type="email"
-              value={currentEmail}
-              onChange={(e) => setCurrentEmail(e.target.value)}
+              type="email"      
               placeholder="Enter email address"
               className="flex-grow"
             />
@@ -243,7 +244,7 @@ function ShareTab() {
           )}
         </div>
       )}
-
+<Separator className="my-4" />
 <div className="space-y-1">
           {qrCodeValue && (
               <div className="flex justify-center mt-4">
