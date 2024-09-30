@@ -190,7 +190,7 @@ export default function Viewport(props) {
       });
     }
     return () => { console.log("unmounting viewport"); };
-  }, []);
+  }, [vd,]);
 
 
   return (

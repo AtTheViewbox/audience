@@ -71,7 +71,7 @@ function ShareTab() {
         if (data.length > 1) {
           console.log("BIG ERROR");
         }
-        console.log(queryParams.toString())
+
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
@@ -105,6 +105,21 @@ function ShareTab() {
     }
   }
 
+  async function transferSharedSession() {
+    try {
+      console.log(queryParams.toString())
+      const { data, update_error } = await supabaseClient
+        .from("viewbox")
+        .upsert({user: userData.id, url_params: queryParams.toString()})
+        .select()
+      console.log(data)
+      if (update_error) throw delete_error;
+      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
+    } catch (error) {
+      console.log(error.code);
+    }
+  }
+
   async function generateSharedSession() {
     try {
       const { _, delete_error } = await supabaseClient
@@ -114,12 +129,12 @@ function ShareTab() {
 
       if (delete_error) throw delete_error;
       console.log(queryParams.toString());
-      const { data, write_error } = await supabaseClient
+      const { data, insert_error } = await supabaseClient
         .from("viewbox")
-        .insert([{ user: userData.id, url_params: queryParams.toString() }])
+        .upsert([{ user: userData.id, url_params: queryParams.toString() }])
         .select();
       console.log(data);
-      if (write_error) throw write_error;
+      if (insert_error) throw insert_error;
 
       // once a shared session is created, need to now create a room
       dispatch({
@@ -129,7 +144,7 @@ function ShareTab() {
 
       queryParams.set("s", data[0].session_id);
       setShareLink(`${window.location.origin}/?${queryParams.toString()}`);
-      setQRCodeValue(shareLink)
+      setQRCodeValue(`${window.location.origin}/?${queryParams.toString()}`)
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
     } catch (error) {
       console.log(error.code);
@@ -310,11 +325,24 @@ function ShareTab() {
             If you would like to inactivate the previous session and create a new shared session, click the generate shared session button below:
           </CardDescription>
         </CardContent> */}
-        <CardFooter>
-          <Button onClick={generateSharedSession}>
-            Generate New Shared Session
-          </Button>
-        </CardFooter>
+   
+        <CardFooter className="flex justify-between">
+
+        <Button  onClick = {transferSharedSession}>
+          Transfer Session
+        </Button>
+        
+        <Button onClick={generateSharedSession} variant="secondary">
+          New Session
+        </Button>
+
+        <Button onClick={stopSharedSession} variant="outline">
+          Stop Session
+        </Button>
+       
+      
+      </CardFooter>
+    
       </Card>
     );
   }

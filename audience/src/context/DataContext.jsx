@@ -43,9 +43,6 @@ export const DataProvider = ({ children }) => {
     const [discordUser, setDiscordUser] = useState()
     const [updateSession, setUpdateSession] = useState(null)
 
-
-
-   
     useEffect(() => {
         
         const setupDiscord = async () => {
@@ -95,20 +92,34 @@ export const DataProvider = ({ children }) => {
     },[])
 
     useEffect(()=>{
-        if(updateSession){
-            const getSession = async (cl, session_id)=>{
-                const { data, error } = await cl
-                .from("viewbox")
-                .select("session_id")
-                .eq("session_id",session_id)
-                return data
-            }
+
+        //Can be optimized if session_id is a primary key
+        const getSession = async (cl, session_id)=>{
+            const { data, error } = await cl
+            .from("viewbox")
+            .select("session_id")
+            .eq("session_id",session_id)
+            return data
+        }
+
+        if(updateSession?.eventType==="DELETE"){
             getSession(data.supabaseClient,updateSession.old.session_id).then((payload)=>{
                 if (payload.length==0){
                     dispatch({type: "clean_up_supabase"});
                 }
             })
-         
+        }
+        if(updateSession?.eventType==="UPDATE"){
+            var initialData =unflatten(Object.fromEntries(new URLSearchParams(updateSession.new.url_params)));
+            if (initialData.vd) {
+                initialData.vd.forEach((vdItem) => {
+                    if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+                        vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
+                    }
+                })
+            }
+
+            dispatch({type: "update_viewport_data",payload: {...initialData}} )
         }
         setUpdateSession(null)
 
@@ -170,6 +181,7 @@ export const DataProvider = ({ children }) => {
                 
             }
 
+            /** 
             //if there is a session, connect to current session
             var { data, errorCurrentSession } = await cl
                 .from("viewbox")
@@ -179,15 +191,28 @@ export const DataProvider = ({ children }) => {
             console.log(data)
             if (data && data.length != 0){
                 initialData.s =data[0].session_id
-            }
-     
+            }*/
+            
+            //pull the url from the session 
             var { data,errorSession } = await cl
                 .from("viewbox")
                 .select("user, url_params, session_id")
-                .eq("session_id",initialData.s );
+                .eq("session_id",initialData.s);
             if (errorSession) throw errorSession;
+
             if (!data || data.length==0 ){
                 initialData.s = null
+            }
+            else{
+                var initialData =unflatten(Object.fromEntries(new URLSearchParams(data.url_params)));
+                if (initialData.vd) {
+                    initialData.vd.forEach((vdItem) => {
+                        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+                            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
+                        }
+                    })
+                }
+                dispatch({type: "update_viewport_data",payload: {...initialData}} )
             }
             // TODO: error handling for auth
             const ss = cl.auth.onAuthStateChange(
@@ -363,7 +388,14 @@ export function dataReducer(data, action) {
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
             break;
+        case 'update_viewport_data':
+            console.log(action.payload)
+            let vd = action.payload.vd;
+            let ld = action.payload.ld;
+            let m = action.payload.m;
+            new_data = { ...data, ld:ld,vd:vd,m:m};
 
+            break;
         // case 'export_layout_to_link':
         //     let vp_dt = [];
         //     data.renderingEngine.getViewports().forEach((vp) => {
