@@ -76,9 +76,12 @@ function ShareTab() {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
-          queryParams.set("s", data[0].session_id);
-          setShareLink(`${window.location.origin}/?${queryParams.toString()}`);
-          setQRCodeValue(`${window.location.origin}/?${queryParams.toString()}`)
+
+          const newQueryParams = new URLSearchParams("");
+          newQueryParams.set("s", data[0].session_id);
+          setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
+          setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
+
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
@@ -112,9 +115,14 @@ function ShareTab() {
         .from("viewbox")
         .upsert({user: userData.id, url_params: queryParams.toString()})
         .select()
-      console.log(data)
+      queryParams.set("s", data[0].session_id);
       if (update_error) throw delete_error;
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
+
+      const newQueryParams = new URLSearchParams("");
+      newQueryParams.set("s", data[0].session_id);
+      setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
+      setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
     } catch (error) {
       console.log(error.code);
     }
@@ -128,12 +136,11 @@ function ShareTab() {
         .eq("user", userData.id);
 
       if (delete_error) throw delete_error;
-      console.log(queryParams.toString());
+
       const { data, insert_error } = await supabaseClient
         .from("viewbox")
         .upsert([{ user: userData.id, url_params: queryParams.toString() }])
         .select();
-      console.log(data);
       if (insert_error) throw insert_error;
 
       // once a shared session is created, need to now create a room
@@ -141,11 +148,12 @@ function ShareTab() {
         type: "connect_to_sharing_session",
         payload: { sessionId: data[0].session_id },
       });
-
-      queryParams.set("s", data[0].session_id);
-      setShareLink(`${window.location.origin}/?${queryParams.toString()}`);
-      setQRCodeValue(`${window.location.origin}/?${queryParams.toString()}`)
+      const newQueryParams = new URLSearchParams();
+      newQueryParams.set("s", data[0].session_id);
+      setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
+      setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
+
     } catch (error) {
       console.log(error.code);
       if (error.code === "23505") {

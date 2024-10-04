@@ -30,7 +30,9 @@ if (initialData.vd) {
             vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
         }
     })
-} else {
+} 
+
+else {
     initialData = defaultData.defaultData;
 }
 initialData.userData = null;
@@ -194,30 +196,37 @@ export const DataProvider = ({ children }) => {
             }*/
             
             //pull the url from the session 
-            var { data,errorSession } = await cl
-                .from("viewbox")
-                .select("user, url_params, session_id")
-                .eq("session_id",initialData.s);
-            if (errorSession) throw errorSession;
+            var initialData =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
+            if (initialData?.s){
 
-            if (!data || data.length==0 ){
-                initialData.s = null
-            }
-            else{
-                var initialData =unflatten(Object.fromEntries(new URLSearchParams(data.url_params)));
-                if (initialData.vd) {
-                    initialData.vd.forEach((vdItem) => {
-                        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
-                            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
-                        }
-                    })
+                var { data,errorSession } = await cl
+                    .from("viewbox")
+                    .select("user, url_params, session_id")
+                    .eq("session_id",initialData?.s);
+                console.log(initialData?.s,data)
+                if (errorSession) throw errorSession;
+
+                if (!data || data.length==0 ){
+                    initialData.s = null
                 }
-                dispatch({type: "update_viewport_data",payload: {...initialData}} )
+                else{
+                    
+                    var initialData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
+                    if (initialData.vd) {
+                        initialData.vd.forEach((vdItem) => {
+                            if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+                                vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
+                            }
+                        })
+                    }
+                    dispatch({type: "update_viewport_data",payload: {...initialData}} )
+                }
             }
+            
+          
             // TODO: error handling for auth
             const ss = cl.auth.onAuthStateChange(
                 (event, session) => {
-                    console.log(session)
                         if (event === 'SIGNED_IN') {
                         dispatch({type: 'auth_update', payload: {session}})
                       } else if (event === 'SIGNED_OUT') {
@@ -226,18 +235,17 @@ export const DataProvider = ({ children }) => {
                 }
             )
 
-            dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
+            dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user,s:data[0]?.session_id}})
         }
         
             
             setupCornerstone()
             if((!isEmbedded) || discordUser){
-                
+
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                     console.log("Supabase setup completed");
     
-                    if (initialData.s) {
-                        
+                    if (initialData.s && initialData.s!=-1) {
                         dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
                     }
                     
@@ -387,6 +395,7 @@ export function dataReducer(data, action) {
             break;
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
+            console.log(new_data)
             break;
         case 'update_viewport_data':
             console.log(action.payload)

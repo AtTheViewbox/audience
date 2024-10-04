@@ -62,6 +62,7 @@ function Fab() {
           left: "10px",
           bottom: "10px",
         }}
+        
       >
         {sharingUser == userData.id ? (
           <LocateFixed strokeWidth={1.5} color="#000000" />
@@ -69,6 +70,7 @@ function Fab() {
           <LocateFixed strokeWidth={1.5} color="#000000" />
         )}
       </Button>
+
 
       <DialogContent>
         <DialogPage />
