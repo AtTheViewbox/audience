@@ -40,6 +40,7 @@ function Fab() {
     accessibilityDescription: "Long press to toggle sharing interactions",
     onLongPress: (e) => {
       //switch long and short press
+      console.log("toggle")
       dispatch({ type: "toggle_sharing" });
     },
   });

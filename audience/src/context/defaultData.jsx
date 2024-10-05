@@ -1,6 +1,5 @@
 export default {
   defaultData: {
-    "s":-1,
     "m": "true",
     "ld": {
         "r": "1",

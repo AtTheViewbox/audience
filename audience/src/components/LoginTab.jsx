@@ -43,6 +43,7 @@ export function LoginTab() {
       throw error;
     }
     setloginError(false);
+    location.reload();
   }
 
   async function handleSignUp() {

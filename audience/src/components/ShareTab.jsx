@@ -32,7 +32,7 @@ function ShareTab() {
 
   const { supabaseClient, userData } = useContext(DataContext).data;
 
-  const [visibility, setVisibility] = useState("public")
+  const [visibility, setVisibility] = useState("AUTHENTICATED")
   const [emails, setEmails] = useState([])
   const [currentEmail, setCurrentEmail] = useState("")
   const [qrCodeValue, setQRCodeValue] = useState('')
@@ -59,11 +59,12 @@ function ShareTab() {
   const [shareLink, setShareLink] = useState(null);
 
   useEffect(() => {
+  
     const checkWhetherUserIsSharing = async () => {
       try {
         const { data, error } = await supabaseClient
           .from("viewbox")
-          .select("user, url_params, session_id")
+          .select("user, url_params, session_id,visibility")
           .eq("user", userData.id);
 
         if (error) throw error;
@@ -75,6 +76,7 @@ function ShareTab() {
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
+          setVisibility(data[0].visibility)
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
           const newQueryParams = new URLSearchParams("");
@@ -113,7 +115,7 @@ function ShareTab() {
       console.log(queryParams.toString())
       const { data, update_error } = await supabaseClient
         .from("viewbox")
-        .upsert({user: userData.id, url_params: queryParams.toString()})
+        .upsert({user: userData.id, url_params: queryParams.toString(),visibility:visibility})
         .select()
       queryParams.set("s", data[0].session_id);
       if (update_error) throw delete_error;
@@ -121,8 +123,11 @@ function ShareTab() {
 
       const newQueryParams = new URLSearchParams("");
       newQueryParams.set("s", data[0].session_id);
+      setVisibility(data[0].visibility)
       setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
       setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
+      dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: data[0].session_id} })
+      
     } catch (error) {
       console.log(error.code);
     }
@@ -139,7 +144,7 @@ function ShareTab() {
 
       const { data, insert_error } = await supabaseClient
         .from("viewbox")
-        .upsert([{ user: userData.id, url_params: queryParams.toString() }])
+        .upsert([{ user: userData.id, url_params: queryParams.toString(),visibility:visibility }])
         .select();
       if (insert_error) throw insert_error;
 
@@ -150,6 +155,7 @@ function ShareTab() {
       });
       const newQueryParams = new URLSearchParams();
       newQueryParams.set("s", data[0].session_id);
+      queryParams.set("s", data[0].session_id);
       setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
       setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
@@ -200,7 +206,7 @@ function ShareTab() {
         <CardContent className="space-y-1.5">
         <RadioGroup defaultValue="public" value={visibility} onValueChange={setVisibility}>
         <div className="flex items-center space-x-2 mb-4">
-          <RadioGroupItem value="public" id="public" />
+          <RadioGroupItem value="PUBLIC" id="public" />
           <Label htmlFor="public" className="flex items-center cursor-pointer">
             <Globe className="h-5 w-5 mr-2 text-blue-500" />
             <div>
@@ -209,6 +215,17 @@ function ShareTab() {
             </div>
           </Label>
         </div>
+        <div className="flex items-center space-x-2 mb-4">
+          <RadioGroupItem value="AUTHENTICATED" id="auth" />
+          <Label htmlFor="auth" className="flex items-center cursor-pointer">
+          <Users className="h-5 w-5 mr-2 text-green-500" />
+            <div>
+              <p className="font-medium">Authenticated users</p>
+              <p className="text-sm text-muted-foreground">Only users with accounts can access this</p>
+            </div>
+          </Label>
+        </div>
+        {/** 
         <div className="flex items-center space-x-2 mb-4">
           <RadioGroupItem value="org" id="org" />
           <Label htmlFor="org" className="flex items-center cursor-pointer">
@@ -219,6 +236,7 @@ function ShareTab() {
             </div>
           </Label>
         </div>
+
         <div className="flex items-center space-x-2 mb-4">
           <RadioGroupItem value="private" id="private" />
           <Label htmlFor="private" className="flex items-center cursor-pointer">
@@ -228,7 +246,7 @@ function ShareTab() {
               <p className="text-sm text-muted-foreground">You and shared users can access this</p>
             </div>
           </Label>
-        </div>
+        </div>*/}
         
       </RadioGroup>
 

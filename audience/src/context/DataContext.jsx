@@ -31,7 +31,9 @@ if (initialData.vd) {
         }
     })
 } 
-
+else if (initialData.s){
+    initialData = Object.assign(initialData, defaultData.defaultData);
+}
 else {
     initialData = defaultData.defaultData;
 }
@@ -112,16 +114,20 @@ export const DataProvider = ({ children }) => {
             })
         }
         if(updateSession?.eventType==="UPDATE"){
-            var initialData =unflatten(Object.fromEntries(new URLSearchParams(updateSession.new.url_params)));
-            if (initialData.vd) {
-                initialData.vd.forEach((vdItem) => {
+            var currentURL =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
+            if (!currentURL.vd){
+            var newData =unflatten(Object.fromEntries(new URLSearchParams(updateSession.new.url_params)));
+            if (newData.vd) {
+                newData.vd.forEach((vdItem) => {
                     if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
                         vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
                     }
                 })
             }
-
-            dispatch({type: "update_viewport_data",payload: {...initialData}} )
+            dispatch({type: "update_viewport_data",payload: {...newData}} )
+            }else{
+                dispatch({type: "clean_up_supabase"});
+            }
         }
         setUpdateSession(null)
 
@@ -168,7 +174,7 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
         };
         
-   
+        //var initialData =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
 
         const setupSupabase = async () => {
             //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
@@ -183,46 +189,43 @@ export const DataProvider = ({ children }) => {
                 
             }
 
-            /** 
-            //if there is a session, connect to current session
-            var { data, errorCurrentSession } = await cl
-                .from("viewbox")
-                .select("user, url_params, session_id")
-                .eq("user", user.id);
-            if (errorCurrentSession) throw errorCurrentSession;
-            console.log(data)
-            if (data && data.length != 0){
-                initialData.s =data[0].session_id
-            }*/
-            
-            //pull the url from the session 
-            var initialData =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
-            if (initialData?.s){
-
+            //if there is a session id in url, get url metadata from session
+            if (initialData.s){
                 var { data,errorSession } = await cl
                     .from("viewbox")
                     .select("user, url_params, session_id")
                     .eq("session_id",initialData?.s);
-                console.log(initialData?.s,data)
+      
                 if (errorSession) throw errorSession;
-
-                if (!data || data.length==0 ){
+                console.log(data)
+                if (data?.length==0 ){
                     initialData.s = null
                 }
                 else{
-                    
-                    var initialData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
-                    if (initialData.vd) {
-                        initialData.vd.forEach((vdItem) => {
+                    initialData.s = data[0].session_id
+                    var newData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
+                    if (newData.vd) {
+                        newData.vd.forEach((vdItem) => {
                             if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
                                 vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
                             }
                         })
                     }
-                    dispatch({type: "update_viewport_data",payload: {...initialData}} )
+                    dispatch({type: "update_viewport_data",payload: {...newData}} )
                 }
             }
             
+                
+            //if there is a session for the current image, join that session
+            var { data, errorCurrentSession } = await cl
+                .from("viewbox")
+                .select("user, url_params, session_id")
+                .eq("user", user.id);
+            if (errorCurrentSession) throw errorCurrentSession;
+
+            if (data?.length != 0 && data[0].url_params==queryParams.toString()){
+                initialData.s =data[0].session_id
+            }
           
             // TODO: error handling for auth
             const ss = cl.auth.onAuthStateChange(
@@ -235,7 +238,7 @@ export const DataProvider = ({ children }) => {
                 }
             )
 
-            dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user,s:data[0]?.session_id}})
+            dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
         }
         
             
@@ -243,11 +246,10 @@ export const DataProvider = ({ children }) => {
             if((!isEmbedded) || discordUser){
 
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
-                    console.log("Supabase setup completed");
-    
-                    if (initialData.s && initialData.s!=-1) {
-                        dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
-                    }
+                   
+                  
+                    dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
+                    
                     
                     //TODO: fix discord later
                     //else{
@@ -283,7 +285,6 @@ export const DataProvider = ({ children }) => {
                     table:'viewbox'
                     },
                     (payload) => {
-                        console.log(payload)
                         setUpdateSession(payload)
                     }
                 )
@@ -358,11 +359,16 @@ export const DataProvider = ({ children }) => {
     }, [data.sessionId, data.supabaseClient]);
 
     useEffect(() => {
+        //data.renderingEngine.getViewports()
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
-
-            data.renderingEngine.getViewports().forEach((vp, viewport_idx) => {
+            data.renderingEngine.getViewports().sort((a,b)=>{
+                const idA = Number(a.id.split("-")[0])
+                const idB = Number(b.id.split("-")[0])
+                if (idA < idB) {return -1;}
+                if (idA > idB) {return 1;}
+                return 0
+            }).forEach((vp, viewport_idx) => {
                 data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                    console.log(event.detail.imageIdIndex)
                     data.interactionChannel.send({
                         type: 'broadcast',
                         event: 'frame-changed',
@@ -395,10 +401,8 @@ export function dataReducer(data, action) {
             break;
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
-            console.log(new_data)
             break;
         case 'update_viewport_data':
-            console.log(action.payload)
             let vd = action.payload.vd;
             let ld = action.payload.ld;
             let m = action.payload.m;
@@ -462,6 +466,7 @@ export function dataReducer(data, action) {
             break;
 
         case 'toggle_sharing':
+            console.log(data.shareController)
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true

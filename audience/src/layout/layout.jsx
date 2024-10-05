@@ -9,17 +9,18 @@ import Viewport from "../viewport/viewport.jsx";
 import { useToast } from "@/components/ui/hooks/use-toast";
 
 export default function Layout() {
-  const { ld, renderingEngine, userData,s,supabaseClient } = useContext(DataContext).data;
+  const { ld, renderingEngine, sessionId } = useContext(DataContext).data;
   const { r, c } = ld;
 
   const { dispatch } = useContext(DataDispatchContext);
   const { toast } = useToast();
 
   useEffect(() => {
-    var initialData = Object.fromEntries(
+    var urlData = Object.fromEntries(
       new URLSearchParams(window.location.search)
     );
-    if (s == null && initialData?.s != null&& s!=-1) {
+
+    if (sessionId == null && urlData?.s != null && sessionId!==undefined) {
       setTimeout(() => {
         toast({
           title: "Uh oh! Something went wrong.",
@@ -27,8 +28,7 @@ export default function Layout() {
         });
       });
     }
-    console.log(s,initialData?.s,supabaseClient)
-  }, [s,toast]);
+  }, [sessionId,toast]);
 
   useEffect(() => {
     console.log("layout rerendering");
