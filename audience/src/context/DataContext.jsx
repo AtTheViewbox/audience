@@ -197,7 +197,7 @@ export const DataProvider = ({ children }) => {
                     .eq("session_id",initialData?.s);
       
                 if (errorSession) throw errorSession;
-                console.log(data)
+               
                 if (data?.length==0 ){
                     initialData.s = null
                 }
@@ -299,13 +299,14 @@ export const DataProvider = ({ children }) => {
                     },
                 }
             })
+            console.log(data)
     
             // initialize presence with data
             share_controller.subscribe((status) => {
                 // Wait for successful connection
                 if (status === 'SUBSCRIBED') {
                     console.log("share-controller subscribed")
-                    share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser  });
+                    share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:data.userData.email  });
                     return null
                 }
             })
@@ -314,10 +315,11 @@ export const DataProvider = ({ children }) => {
             share_controller.on('presence', { event: 'sync'}, () => {
 
                 const presenceState = share_controller.presenceState();
+                console.log(presenceState)
 
                 const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
-                    const { lastShareRequest, share,discordData } = info[0];
-                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData };
+                    const { lastShareRequest, share,discordData,email } = info[0];
+                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:email };
                 });
                 
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})

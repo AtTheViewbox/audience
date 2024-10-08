@@ -21,7 +21,7 @@ const LoginState = {
   FORGET_PASSWORD: "reset password",
   LOADING: "loading",
 };
-
+const url = window.location.search
 export function LoginTab() {
   const { supabaseClient } = useContext(DataContext).data;
   const [loginError, setloginError] = useState(false);
@@ -73,7 +73,11 @@ export function LoginTab() {
   }
 
   
-  async function loginWithProvider(provider) {
+  async function loginWithProvider(provider,url) {
+    //Temp solution. provider login uses url query param which alters the redirect url.
+    if(url.includes("#")){
+      url = url.split("#").slice(0, -1).join()
+    }
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: provider,
       options: {
@@ -81,6 +85,7 @@ export function LoginTab() {
           access_type: "offline",
           prompt: "select_account",
         },
+        redirectTo: url
       },
     });
   }
@@ -141,14 +146,15 @@ export function LoginTab() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" disabled>
-              <MailIcon className="mr-2 h-4 w-4" />
-              Outlook
-            </Button>
-            <Button variant="outline" disabled>
+          <Button variant="outline" onClick={()=>loginWithProvider("google",window.location.href)}>
               <MailIcon className="mr-2 h-4 w-4" />
               Google
             </Button>
+            <Button variant="outline" disabled >
+              <MailIcon className="mr-2 h-4 w-4" />
+              Outlook
+            </Button>
+            
           </div>
         </CardContent>
         <CardFooter className="flex justify-between">
