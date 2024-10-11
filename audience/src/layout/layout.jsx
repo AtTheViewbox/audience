@@ -6,14 +6,13 @@ import {
   dataReducer,
 } from "../context/DataContext.jsx";
 import Viewport from "../viewport/viewport.jsx";
-import { useToast } from "@/components/ui/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function Layout() {
   const { ld, renderingEngine, sessionId } = useContext(DataContext).data;
   const { r, c } = ld;
 
   const { dispatch } = useContext(DataDispatchContext);
-  const { toast } = useToast();
 
   useEffect(() => {
     var urlData = Object.fromEntries(
@@ -21,12 +20,7 @@ export default function Layout() {
     );
 
     if (sessionId == null && urlData?.s != null && sessionId!==undefined) {
-      setTimeout(() => {
-        toast({
-          title: "Uh oh! Something went wrong.",
-          description: "The session does not exist or you do not have access",
-        });
-      });
+      toast("The session does not exist or you do not have access");
     }
   }, [sessionId,toast]);
 

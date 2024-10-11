@@ -5,7 +5,8 @@ import ToolsTab from './components/ToolsTab'
 import SessionUsers from './components/SessionUsers'
 import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
-import { Toaster } from "./components/ui/toaster"
+//import { Toaster } from "./components/ui/toaster"
+import { Toaster } from 'sonner';
 
 
 
@@ -17,7 +18,7 @@ function App() {
   }, []);
 
   return (
-    <div className="App">
+    <div className="App overflow-y-scroll no-scrollbar">
       <DataProvider>
         <Layout />
         <ToolsTab/>

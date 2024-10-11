@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 import { utilities } from '@cornerstonejs/core'; 
 import { toast } from "sonner"
 
+
 import defaultData from "./defaultData.jsx";
 import discordSdk from '../discordSdk.tsx'
 
@@ -46,6 +47,7 @@ export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
     const [discordUser, setDiscordUser] = useState()
     const [updateSession, setUpdateSession] = useState(null)
+    
 
     useEffect(() => {
         
@@ -393,6 +395,7 @@ export const DataProvider = ({ children }) => {
 };
 
 export function dataReducer(data, action) {
+   
     let new_data = {...data};
    
     switch (action.type) {
