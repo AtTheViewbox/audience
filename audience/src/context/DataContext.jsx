@@ -321,7 +321,7 @@ export const DataProvider = ({ children }) => {
 
                 const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
                     const { lastShareRequest, share,discordData,email } = info[0];
-                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:email };
+                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:data.userData.email };
                 });
                 
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
@@ -437,7 +437,7 @@ export function dataReducer(data, action) {
             // and the components that care should make updates as necessary
 
             let { globalSharingStatus } = action.payload;
-  
+            console.log(globalSharingStatus)
             const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
             if (usersWhoAreSharing.length > 0) {
                 const mostRecentShare = usersWhoAreSharing
@@ -455,12 +455,14 @@ export function dataReducer(data, action) {
                 }
 
                 if (nonRecentSharers.length !== 0) {
+                    console.log(mostRecentShare)
                     //toast(`"${mostRecentShare.user} has requested control`);
-                    toast(`${mostRecentShare.discordData?mostRecentShare.discordData.username:mostRecentShare.user} has requested control`);
+                    toast(`${mostRecentShare.discordData?.username??mostRecentShare.email??mostRecentShare.user} has requested control`);
                     new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
                 } else {
                     //toast(`"${mostRecentShare.user} has taken control`);
-                    toast(`${mostRecentShare.discordData?mostRecentShare.discordData.username:mostRecentShare.user} has taken control`);
+                    console.log(mostRecentShare)
+                    toast(`${mostRecentShare.discordData?.username??mostRecentShare.email??mostRecentShare.user} has taken control`);
                     new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
                 }
             } else {

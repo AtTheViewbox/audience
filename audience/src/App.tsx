@@ -5,11 +5,7 @@ import ToolsTab from './components/ToolsTab'
 import SessionUsers from './components/SessionUsers'
 import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
-//import { Toaster } from "./components/ui/toaster"
 import { Toaster } from 'sonner';
-
-
-
 
 function App() {
 
@@ -24,7 +20,7 @@ function App() {
         <ToolsTab/>
         <Fab />
         <SessionUsers />
-        <Toaster/>
+        <Toaster position="top-right"/>
       </DataProvider>
     </div>
   );
