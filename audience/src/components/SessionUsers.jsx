@@ -22,11 +22,18 @@ function SessionUsers() {
       return `${CDN}/embed/avatars/${defaultAvatarIndex}.png?size=${SIZE}`;
     }
   }
+  function getInitial(user) {
+    if (user.email) {
+      return user.email[0].toUpperCase();
+    } else {
+      return "?";
+    }
+  }
   
   function createAvatarsFromJson(activeUsers) {
     return activeUsers.map(user => (
       <div
-            key={user}
+            key={user.user}
             className="relative group"
           >
           <div className="absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 w-48 p-3 mb-2 bottom-full left-1/2 transform -translate-x-1/2 bg-white rounded-md ">
@@ -34,11 +41,12 @@ function SessionUsers() {
               <p className="text-sm text-gray-600">{user.email?user.email:"Anonymous User"}</p>
               <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 rotate-45 bg-white border-r border-b border-gray-200"></div>
             </div>
-      <Avatar  key={user} className="transition-transform group-hover:scale-110 ring-1 ring-gray-700 ring-offset-1 ring-offset-black" style={{ transition: "all 0.2s", 
+      <Avatar  key={user.user} className="transition-transform group-hover:scale-110 ring-1 ring-gray-700 ring-offset-1 ring-offset-black" style={{ transition: "all 0.2s", 
                                     filter: user.user === sharingUser ? 'brightness(100%)' : 'brightness(50%)',
                                     marginLeft: user.user === sharingUser ? '0.6rem' : '-0.3rem',
                                     marginRight: user.user === sharingUser ? '0.6rem' : '-0.3rem' }}>
-        {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback className="text-gray-800 font-semibold">?</AvatarFallback>}
+        {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback className="text-gray-800 font-semibold">{getInitial(user)}</AvatarFallback>}
+      
       </Avatar>
       
       </div>

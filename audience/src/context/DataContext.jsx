@@ -39,6 +39,7 @@ else {
     initialData = defaultData.defaultData;
 }
 initialData.userData = null;
+initialData.mode = "TEAM"
 initialData.sharingUser = null;
 initialData.activeUsers = [];
 initialData.toolSelected = "window";
@@ -195,7 +196,7 @@ export const DataProvider = ({ children }) => {
             if (initialData.s){
                 var { data,errorSession } = await cl
                     .from("viewbox")
-                    .select("user, url_params, session_id")
+                    .select("user, url_params, session_id,mode")
                     .eq("session_id",initialData?.s);
       
                 if (errorSession) throw errorSession;
@@ -213,7 +214,7 @@ export const DataProvider = ({ children }) => {
                             }
                         })
                     }
-                    dispatch({type: "update_viewport_data",payload: {...newData}} )
+                    dispatch({type: "update_viewport_data",payload: {...newData,mode:data[0].mode}} )
                 }
             }
             
@@ -221,13 +222,15 @@ export const DataProvider = ({ children }) => {
             //if there is a session for the current image, join that session
             var { data, errorCurrentSession } = await cl
                 .from("viewbox")
-                .select("user, url_params, session_id")
+                .select("user, url_params, session_id,mode")
                 .eq("user", user.id);
             if (errorCurrentSession) throw errorCurrentSession;
-
+    
             if (data?.length != 0 && data[0].url_params==queryParams.toString()){
                 initialData.s =data[0].session_id
+                initialData.mode =data[0].mode
             }
+        
           
             // TODO: error handling for auth
             const ss = cl.auth.onAuthStateChange(
@@ -250,8 +253,7 @@ export const DataProvider = ({ children }) => {
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                    
                   
-                    dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s } })
-                    
+                    dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s,mode:initialData.mode } })
                     
                     //TODO: fix discord later
                     //else{
@@ -301,8 +303,7 @@ export const DataProvider = ({ children }) => {
                     },
                 }
             })
-            console.log(data)
-    
+
             // initialize presence with data
             share_controller.subscribe((status) => {
                 // Wait for successful connection
@@ -317,11 +318,10 @@ export const DataProvider = ({ children }) => {
             share_controller.on('presence', { event: 'sync'}, () => {
 
                 const presenceState = share_controller.presenceState();
-                console.log(presenceState)
 
                 const globalSharingStatus = Object.entries(presenceState).map(([user, info]) => {
                     const { lastShareRequest, share,discordData,email } = info[0];
-                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:data.userData.email };
+                    return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:email };
                 });
                 
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
@@ -340,6 +340,7 @@ export const DataProvider = ({ children }) => {
                 }
             })
 
+            console.log(data)
             interaction_channel.on(
                 'broadcast',
                 { event: 'frame-changed' },
@@ -408,10 +409,11 @@ export function dataReducer(data, action) {
             new_data = { ...data, ...action.payload };
             break;
         case 'update_viewport_data':
-            let vd = action.payload.vd;
-            let ld = action.payload.ld;
-            let m = action.payload.m;
-            new_data = { ...data, ld:ld,vd:vd,m:m};
+            var vd = action.payload.vd;
+            var ld = action.payload.ld;
+            var m = action.payload.m;
+            var mode = action.payload.mode
+            new_data = { ...data, ld:ld,vd:vd,m:m,mode:mode};
 
             break;
         // case 'export_layout_to_link':
@@ -429,15 +431,15 @@ export function dataReducer(data, action) {
             new_data = {...data, ...action.payload}
             break;
         case 'connect_to_sharing_session':
-            let sessionId = action.payload.sessionId;
-            new_data = {...data, sessionId: sessionId}
+            var sessionId = action.payload.sessionId;
+            var mode =action.payload.mode
+            new_data = {...data, sessionId: sessionId, mode:mode}
             break;
         case 'sharer_status_changed':
             // This can become more elegant for sure. This function should really just write globalSharingStatus to state
             // and the components that care should make updates as necessary
-
+          
             let { globalSharingStatus } = action.payload;
-            console.log(globalSharingStatus)
             const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
             if (usersWhoAreSharing.length > 0) {
                 const mostRecentShare = usersWhoAreSharing
