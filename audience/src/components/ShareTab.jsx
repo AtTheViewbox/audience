@@ -88,6 +88,7 @@ function ShareTab() {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
           setVisibility(data[0].visibility)
+          setPresentationModeSwitch(data[0].mode==Mode.TEAM?false:true)
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
           const newQueryParams = new URLSearchParams("");
@@ -126,7 +127,7 @@ function ShareTab() {
       console.log(queryParams.toString())
       const { data, update_error } = await supabaseClient
         .from("viewbox")
-        .upsert({ user: userData.id, url_params: queryParams.toString(), visibility: visibility,mode: presentationModeSwitch?Mode.PRESENTATION:Mode.TEAM })
+        .upsert({ user: userData.id, url_params: queryParams.toString() })
         .select()
       queryParams.set("s", data[0].session_id);
       if (update_error) throw delete_error;
@@ -135,6 +136,7 @@ function ShareTab() {
       const newQueryParams = new URLSearchParams("");
       newQueryParams.set("s", data[0].session_id);
       setVisibility(data[0].visibility)
+      setPresentationModeSwitch(data[0].mode==Mode.TEAM?false:true)
       setShareLink(`${window.location.origin}/?${newQueryParams.toString()}`);
       setQRCodeValue(`${window.location.origin}/?${newQueryParams.toString()}`)
       dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: data[0].session_id } })

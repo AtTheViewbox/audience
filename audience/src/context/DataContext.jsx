@@ -39,8 +39,8 @@ else {
     initialData = defaultData.defaultData;
 }
 initialData.userData = null;
-initialData.mode = "TEAM"
 initialData.sharingUser = null;
+initialData.sessionMeta = {mode:"TEAM",owner:""}
 initialData.activeUsers = [];
 initialData.toolSelected = "window";
 
@@ -178,7 +178,7 @@ export const DataProvider = ({ children }) => {
         };
         
         //var initialData =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
-
+       
         const setupSupabase = async () => {
             //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
             const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
@@ -191,7 +191,7 @@ export const DataProvider = ({ children }) => {
                 ({ data: { user }, error } = await cl.auth.signInAnonymously());
                 
             }
-
+            console.log(user)
             //if there is a session id in url, get url metadata from session
             if (initialData.s){
                 var { data,errorSession } = await cl
@@ -206,6 +206,8 @@ export const DataProvider = ({ children }) => {
                 }
                 else{
                     initialData.s = data[0].session_id
+                    initialData.sessionMeta.mode =data[0].mode
+                    initialData.sessionMeta.owner = data[0].user
                     var newData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
                     if (newData.vd) {
                         newData.vd.forEach((vdItem) => {
@@ -226,9 +228,11 @@ export const DataProvider = ({ children }) => {
                 .eq("user", user.id);
             if (errorCurrentSession) throw errorCurrentSession;
     
+            
             if (data?.length != 0 && data[0].url_params==queryParams.toString()){
                 initialData.s =data[0].session_id
-                initialData.mode =data[0].mode
+                initialData.sessionMeta.mode =data[0].mode
+                initialData.sessionMeta.owner = data[0].user
             }
         
           
@@ -246,14 +250,14 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
         }
         
-            
+       
             setupCornerstone()
             if((!isEmbedded) || discordUser){
 
                 setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
                    
                   
-                    dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s,mode:initialData.mode } })
+                    dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s,mode:initialData.sessionMeta.mode,owner:initialData.sessionMeta.owner} })
                     
                     //TODO: fix discord later
                     //else{
@@ -339,16 +343,17 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
-
-            console.log(data)
-            interaction_channel.on(
-                'broadcast',
-                { event: 'frame-changed' },
-                (payload) => {
-                    data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
-                    data.renderingEngine.getViewport(payload.payload.viewport).render()
-                }
-            )
+            if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
+                console.log("log")
+                interaction_channel.on(
+                    'broadcast',
+                    { event: 'frame-changed' },
+                    (payload) => {
+                        data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
+                        data.renderingEngine.getViewport(payload.payload.viewport).render()
+                    }
+                )
+        }
 
             dispatch({type: 'sharing_controller_initialized', payload: {shareController: share_controller, interactionChannel: interaction_channel}})
             
@@ -365,6 +370,7 @@ export const DataProvider = ({ children }) => {
 
     useEffect(() => {
         //data.renderingEngine.getViewports()
+        if(data.sessionMeta.mode=="TEAM" || data.userData.id!=data.sessionMeta.owner){
         if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
             data.renderingEngine.getViewports().sort((a,b)=>{
                 const idA = Number(a.id.split("-")[0])
@@ -383,6 +389,7 @@ export const DataProvider = ({ children }) => {
             })
 
         }
+    }
     }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
 
 
@@ -412,8 +419,12 @@ export function dataReducer(data, action) {
             var vd = action.payload.vd;
             var ld = action.payload.ld;
             var m = action.payload.m;
-            var mode = action.payload.mode
-            new_data = { ...data, ld:ld,vd:vd,m:m,mode:mode};
+            var sessionMeta = {
+                owner:action.payload.owner,
+                mode:action.payload.mode
+            }
+            new_data = { ...data, ld:ld,vd:vd,m:m,
+                sessionMeta:sessionMeta};
 
             break;
         // case 'export_layout_to_link':
@@ -432,8 +443,11 @@ export function dataReducer(data, action) {
             break;
         case 'connect_to_sharing_session':
             var sessionId = action.payload.sessionId;
-            var mode =action.payload.mode
-            new_data = {...data, sessionId: sessionId, mode:mode}
+            var sessionMeta = {
+                owner:action.payload.owner,
+                mode:action.payload.mode
+            }
+            new_data = {...data, sessionId: sessionId, sessionMeta:sessionMeta}
             break;
         case 'sharer_status_changed':
             // This can become more elegant for sure. This function should really just write globalSharingStatus to state
