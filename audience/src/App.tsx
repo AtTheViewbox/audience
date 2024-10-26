@@ -12,6 +12,7 @@ function App() {
   useEffect(() => {
     console.log("App loaded")
   }, []);
+  
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">

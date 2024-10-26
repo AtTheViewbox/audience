@@ -21,8 +21,11 @@ function ToolsTab() {
         setPosition(value)
         dispatch({ type: 'select_tool', payload: value })
     }
+
+    const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     return (
-        
+        mobile?null:
         <DropdownMenu open modal={false}>
             <DropdownMenuTrigger asChild style={{display: "none"}}>
                 <Button
@@ -58,7 +61,7 @@ function ToolsTab() {
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>
         </DropdownMenu>
-
+                 
     );
 }
 

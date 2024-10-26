@@ -18,7 +18,9 @@ export default function Viewport(props) {
   const [isloading,setIsLoading] = useState(true);
 
   useEffect(()=>{
-    if (isloading) return;
+    const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    if (isloading || mobile) return;
     
     const {
       PanTool,
@@ -160,7 +162,7 @@ export default function Viewport(props) {
       if (mobile) {
         toolGroup.addTool(WindowLevelTool.toolName);
         toolGroup.addTool(ZoomTool.toolName);
-        toolGroup.addTool(StackScrollTool.toolName, { loop: false });
+        toolGroup.addTool(StackScrollTool.toolName);
 
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });

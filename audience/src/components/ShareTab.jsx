@@ -93,8 +93,8 @@ function ShareTab() {
 
           const newQueryParams = new URLSearchParams("");
           newQueryParams.set("s", data[0].session_id);
-          setShareLink(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`);
-          setQRCodeValue(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`)
+          setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
+          setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
 
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
@@ -137,8 +137,8 @@ function ShareTab() {
       newQueryParams.set("s", data[0].session_id);
       setVisibility(data[0].visibility)
       setPresentationModeSwitch(data[0].mode==Mode.TEAM?false:true)
-      setShareLink(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`);
-      setQRCodeValue(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`)
+      setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
+      setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
       dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: data[0].session_id } })
 
     } catch (error) {
@@ -169,8 +169,8 @@ function ShareTab() {
       const newQueryParams = new URLSearchParams();
       newQueryParams.set("s", data[0].session_id);
       queryParams.set("s", data[0].session_id);
-      setShareLink(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`);
-      setQRCodeValue(`${window.location.origin+ window.location.pathname}/?${newQueryParams.toString()}`)
+      setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
+      setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
 
     } catch (error) {
