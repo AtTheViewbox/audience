@@ -103,7 +103,7 @@ export default function Viewport(props) {
 
       const stack = s;
       await viewport.setStack(stack);
-
+      console.log(ww,wc)
       viewport.setProperties({
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
         isComputedVOI: false,

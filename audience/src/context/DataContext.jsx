@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useReducer } from "react";
 import { unflatten, flatten } from "flat";
 
-import { recreateList } from '../lib/inputParser.ts';
+import { recreateList} from '../lib/inputParser.ts';
 
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
@@ -344,12 +344,23 @@ export const DataProvider = ({ children }) => {
                 }
             })
             if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
-                console.log("log")
                 interaction_channel.on(
                     'broadcast',
                     { event: 'frame-changed' },
                     (payload) => {
                         data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
+                        data.renderingEngine.getViewport(payload.payload.viewport).render()
+                    }
+                )
+
+                interaction_channel.on(
+                    'broadcast',
+                    { event: 'voi-changed' },
+                    (payload) => {
+                        data.renderingEngine.getViewport(payload.payload.viewport).setProperties({
+                            voiRange: cornerstone.utilities.windowLevel.toLowHighRange(payload.payload.ww, payload.payload.wc),
+                            isComputedVOI: false,
+                          });
                         data.renderingEngine.getViewport(payload.payload.viewport).render()
                     }
                 )
@@ -379,6 +390,7 @@ export const DataProvider = ({ children }) => {
                 if (idA > idB) {return 1;}
                 return 0
             }).forEach((vp, viewport_idx) => {
+                
                 data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
                     data.interactionChannel.send({
                         type: 'broadcast',
@@ -386,6 +398,22 @@ export const DataProvider = ({ children }) => {
                         payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
                     })
                 })
+
+                data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_VOI_MODIFIED', (event) => {
+                    const window = cornerstone.utilities.windowLevel.toWindowLevel(event.detail.range.lower,event.detail.range.upper)
+                    data.interactionChannel.send({
+                        type: 'broadcast',
+                        event: 'voi-changed',
+                        payload: { ww:window.windowWidth, wc:window.windowCenter, viewport: `${viewport_idx}-vp` },
+                    })
+
+                })
+                
+
+                //data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', (event) => {
+                //    console.log(event)
+                //})
+               
             })
 
         }
@@ -449,51 +477,49 @@ export function dataReducer(data, action) {
             }
             new_data = {...data, sessionId: sessionId, sessionMeta:sessionMeta}
             break;
-        case 'sharer_status_changed':
-            // This can become more elegant for sure. This function should really just write globalSharingStatus to state
-            // and the components that care should make updates as necessary
-          
-            let { globalSharingStatus } = action.payload;
-            const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
-            if (usersWhoAreSharing.length > 0) {
-                const mostRecentShare = usersWhoAreSharing
-                    .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
-                
-                const nonRecentSharers = usersWhoAreSharing
-                    .filter(sharer => sharer.user !== mostRecentShare.user)
-                    .map(sharer => sharer.user);
-                
-                // if the current user is sharing, and someone else has requested
-                // reset the listeners and update the presence state
-                if (nonRecentSharers.includes(data.userData.id)) {
-                    data.eventListenerManager.reset()
-                    data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
-                }
-
-                if (nonRecentSharers.length !== 0) {
-                    console.log(mostRecentShare)
-                    //toast(`"${mostRecentShare.user} has requested control`);
-                    toast(`${mostRecentShare.discordData?.username??mostRecentShare.email??mostRecentShare.user} has requested control`);
-                    new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
+            case 'sharer_status_changed':
+                // This can become more elegant for sure. This function should really just write globalSharingStatus to state
+                // and the components that care should make updates as necessary
+              
+                let { globalSharingStatus } = action.payload;
+                const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
+                if (usersWhoAreSharing.length > 0) {
+                    const mostRecentShare = usersWhoAreSharing
+                        .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
+                    
+                    const nonRecentSharers = usersWhoAreSharing
+                        .filter(sharer => sharer.user !== mostRecentShare.user)
+                        .map(sharer => sharer.user);
+                    
+                    // if the current user is sharing, and someone else has requested
+                    // reset the listeners and update the presence state
+                    if (nonRecentSharers.includes(data.userData.id)) {
+                        data.eventListenerManager.reset()
+                        data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
+                    }
+    
+                    if (nonRecentSharers.length !== 0) {
+                        //toast(`"${mostRecentShare.user} has requested control`);
+                        toast(`${mostRecentShare.discordData?.username??(mostRecentShare.email && !mostRecentShare.email=="")?mostRecentShare.email:mostRecentShare.user} has requested control`);
+                        new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
+                    } else {
+                        //toast(`"${mostRecentShare.user} has taken control`);
+                        toast(`${mostRecentShare.discordData?.username??(mostRecentShare.email && !mostRecentShare.email=="")?mostRecentShare.email:mostRecentShare.user} has taken control`);
+                        new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
+                    }
                 } else {
-                    //toast(`"${mostRecentShare.user} has taken control`);
-                    console.log(mostRecentShare)
-                    toast(`${mostRecentShare.discordData?.username??mostRecentShare.email??mostRecentShare.user} has taken control`);
-                    new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
+                    data.eventListenerManager.reset()
+                    new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
                 }
-            } else {
-                data.eventListenerManager.reset()
-                new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
-            }
-
-            break;
+    
+                break;
+    
 
         case 'toggle_sharing':
-            console.log(data.shareController)
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
-                data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
+                data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData,email:data.userData.email });
                 // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
                 // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date
                 // so if you try to cancel while it is processing, it will try to create a new request rather than cancelling the request
