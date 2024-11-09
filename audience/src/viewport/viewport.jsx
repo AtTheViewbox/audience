@@ -5,6 +5,7 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
+import LoadingPage from '../components/LoadingPage.jsx';
 
 
 export default function Viewport(props) {
@@ -196,8 +197,10 @@ export default function Viewport(props) {
 
 
   return (
-    <>
-      <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} />
-    </>
+   
+      <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
+        {isloading?<LoadingPage/>:null}
+        </div>
+  
   );
 }
