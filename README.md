@@ -19,6 +19,22 @@ npm run dev
 cloudflared tunnel --url http://localhost:5173
 ```
 
+## Deploy on Github
+Be on the branch you want to deploy. 
+
+```
+npm run build
+```
+delete remote and delete local
+```
+git push -d origin gh-pages 
+git branch -D gh-pages    
+```
+go to top level on folder
+```
+git subtree add --prefix -f audience/dist   
+git subtree push --prefix audience/dist origin gh-pages
+```
 
 ## Run in Discord
 Navigate to server and run 
