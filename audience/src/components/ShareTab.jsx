@@ -1,11 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
-import { ClipboardCopy, Globe, Lock, Users, Plus, X, Presentation } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { QRCodeSVG } from 'qrcode.react'
+import {
+  ClipboardCopy,
+  Globe,
+  Lock,
+  Users,
+  Plus,
+  X,
+  Presentation,
+  Copy,
+  Check,
+} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { QRCodeSVG } from "qrcode.react";
 import { LoginTab } from "./LoginTab.jsx";
-import { Switch } from "@/components/ui/switch"
+import { Switch } from "@/components/ui/switch";
 import {
   Card,
   CardContent,
@@ -15,7 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,32 +45,32 @@ const Visibility = {
 };
 
 const Mode = {
-  PRESENTATION:"PRESENTATION",
-  TEAM:"TEAM"
+  PRESENTATION: "PRESENTATION",
+  TEAM: "TEAM",
 };
 function ShareTab() {
   const { dispatch } = useContext(DataDispatchContext);
 
   const { supabaseClient, userData } = useContext(DataContext).data;
 
-  const [visibility, setVisibility] = useState(Visibility.AUTHENTICATED)
-  const [emails, setEmails] = useState([])
-  const [currentEmail, setCurrentEmail] = useState("")
-  const [qrCodeValue, setQRCodeValue] = useState('')
+  const [visibility, setVisibility] = useState(Visibility.AUTHENTICATED);
+  const [emails, setEmails] = useState([]);
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [qrCodeValue, setQRCodeValue] = useState("");
+  const [copyClicked, setCopyClicked] = useState(false);
   const [presentationModeSwitch, setPresentationModeSwitch] = useState(false);
-
 
   const addEmail = () => {
     var currentEmail = document.getElementById("email-input").value;
     if (currentEmail && !emails.includes(currentEmail)) {
-      setEmails([...emails, currentEmail])
-      setCurrentEmail("")
+      setEmails([...emails, currentEmail]);
+      setCurrentEmail("");
     }
-  }
+  };
 
   const removeEmail = (email) => {
-    setEmails(emails.filter(e => e !== email))
-  }
+    setEmails(emails.filter((e) => e !== email));
+  };
 
   const queryParams = new URLSearchParams(window.location.search);
 
@@ -70,7 +80,6 @@ function ShareTab() {
   const [shareLink, setShareLink] = useState(null);
 
   useEffect(() => {
-
     const checkWhetherUserIsSharing = async () => {
       try {
         const { data, error } = await supabaseClient
@@ -87,15 +96,22 @@ function ShareTab() {
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
         } else if (data[0].url_params == queryParams.toString()) {
-          setVisibility(data[0].visibility)
-          setPresentationModeSwitch(data[0].mode==Mode.TEAM?false:true)
+          setVisibility(data[0].visibility);
+          setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
           const newQueryParams = new URLSearchParams("");
           newQueryParams.set("s", data[0].session_id);
-          setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
-          setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
-
+          setShareLink(
+            `${
+              window.location.origin + window.location.pathname
+            }?${newQueryParams.toString()}`
+          );
+          setQRCodeValue(
+            `${
+              window.location.origin + window.location.pathname
+            }?${newQueryParams.toString()}`
+          );
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
@@ -124,23 +140,33 @@ function ShareTab() {
 
   async function transferSharedSession() {
     try {
-      console.log(queryParams.toString())
+      console.log(queryParams.toString());
       const { data, update_error } = await supabaseClient
         .from("viewbox")
         .upsert({ user: userData.id, url_params: queryParams.toString() })
-        .select()
+        .select();
       queryParams.set("s", data[0].session_id);
       if (update_error) throw delete_error;
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
       const newQueryParams = new URLSearchParams("");
       newQueryParams.set("s", data[0].session_id);
-      setVisibility(data[0].visibility)
-      setPresentationModeSwitch(data[0].mode==Mode.TEAM?false:true)
-      setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
-      setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
-      dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: data[0].session_id } })
-
+      setVisibility(data[0].visibility);
+      setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
+      setShareLink(
+        `${
+          window.location.origin + window.location.pathname
+        }?${newQueryParams.toString()}`
+      );
+      setQRCodeValue(
+        `${
+          window.location.origin + window.location.pathname
+        }?${newQueryParams.toString()}`
+      );
+      dispatch({
+        type: "connect_to_sharing_session",
+        payload: { sessionId: data[0].session_id },
+      });
     } catch (error) {
       console.log(error.code);
     }
@@ -157,22 +183,36 @@ function ShareTab() {
 
       const { data, insert_error } = await supabaseClient
         .from("viewbox")
-        .upsert([{ user: userData.id, url_params: queryParams.toString(), visibility: visibility,mode: presentationModeSwitch?Mode.PRESENTATION:Mode.TEAM }])
+        .upsert([
+          {
+            user: userData.id,
+            url_params: queryParams.toString(),
+            visibility: visibility,
+            mode: presentationModeSwitch ? Mode.PRESENTATION : Mode.TEAM,
+          },
+        ])
         .select();
       if (insert_error) throw insert_error;
 
       // once a shared session is created, need to now create a room
       dispatch({
         type: "connect_to_sharing_session",
-        payload: { sessionId: data[0].session_id,mode:data[0].mode },
+        payload: { sessionId: data[0].session_id, mode: data[0].mode },
       });
       const newQueryParams = new URLSearchParams();
       newQueryParams.set("s", data[0].session_id);
       queryParams.set("s", data[0].session_id);
-      setShareLink(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`);
-      setQRCodeValue(`${window.location.origin+ window.location.pathname}?${newQueryParams.toString()}`)
-      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION)
-
+      setShareLink(
+        `${
+          window.location.origin + window.location.pathname
+        }?${newQueryParams.toString()}`
+      );
+      setQRCodeValue(
+        `${
+          window.location.origin + window.location.pathname
+        }?${newQueryParams.toString()}`
+      );
+      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
     } catch (error) {
       console.log(error.code);
       if (error.code === "23505") {
@@ -183,107 +223,132 @@ function ShareTab() {
 
   function ShareView() {
     return (
-      
       <Card>
         <ScrollArea className=" h-full flex-grow max-h-[450px] w-full overflow-y-auto">
-        <CardHeader>
-          <CardTitle>
-            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ?
-              "You already have an active shared session for this study" :
-              "Welcome!"}
-          </CardTitle>
-          <CardDescription>
-            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? "Here is the link to the existing shared session if you would like to share it with more people." :
-              "Click the button below to generate a link to a shared session where you and others can interact with the dicom together!"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
-          <RadioGroup defaultValue="public" value={visibility} onValueChange={setVisibility}>
-            <div className="flex items-center space-x-2 mb-4">
-              <RadioGroupItem value="PUBLIC" id="public" />
-              <Label htmlFor="public" className="flex items-center cursor-pointer">
-                <Globe className="h-5 w-5 mr-2 text-blue-500" />
-                <div>
-                  <p className="font-medium">Public</p>
-                  <p className="text-sm text-muted-foreground">Anyone on the internet can see this</p>
+          <CardHeader>
+            <CardTitle>
+              {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION
+                ? "You already have an active shared session for this study"
+                : "Welcome!"}
+            </CardTitle>
+            <CardDescription>
+              {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION
+                ? "Here is the link to the existing shared session if you would like to share it with more people."
+                : "Click the button below to generate a link to a shared session where you and others can interact with the dicom together!"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+           
+          
+          {qrCodeValue && (
+                <div className="flex justify-center">
+                  <QRCodeSVG value={qrCodeValue} size={200} />
                 </div>
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2 mb-4">
-              <RadioGroupItem value="AUTHENTICATED" id="auth" />
-              <Label htmlFor="auth" className="flex items-center cursor-pointer">
-                <Users className="h-5 w-5 mr-2 text-green-500" />
-                <div>
-                  <p className="font-medium">Authenticated users</p>
-                  <p className="text-sm text-muted-foreground">Only users with accounts can access this</p>
-                </div>
-              </Label>
-            </div>
-          </RadioGroup>
-
-          <div className="flex flex-col space-y-4">
-            <div className="flex items-center justify-between space-x-2">
-              <div>
-                <Label htmlFor="presentation-mode" className="font-medium">
-                  {presentationModeSwitch ? "Presentation Mode" : "Team Mode"}
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  {presentationModeSwitch ? " Presentation Mode is used when sharing with a large group of people. It allows users to only broadcast to the presenter screen." :
-                    "Team Mode is used when sharing with a small group of people. It allows users to broadcast to all users in the session."}
-                </p>
-              </div>
-              <Switch
-                id="presentation-mode"
-                checked={presentationModeSwitch}
-                onCheckedChange={setPresentationModeSwitch}
-              />
-            </div>
-
-          </div>
-          {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ?
-            <>
-              <Separator className="my-4" />
-              <div className="space-y-1">
-                {qrCodeValue && (
-                  <div className="flex justify-center mt-4">
-                    <QRCodeSVG value={qrCodeValue} size={200} />
-                  </div>
+              )}
+            <div className="flex w-full max-w-sm items-center space-x-2 p-2">
+              
+              {/**<Input disabled placeholder={shareLink} />*/}
+              <Input value={shareLink} readOnly />
+              <Button
+                size="icon"
+                onClick={() => {navigator.clipboard.writeText(shareLink)
+                  setCopyClicked(true)
+                }}
+              >
+                {copyClicked ? (
+                  <Check className="h-4" />
+                ) : (
+                  <Copy className="h-4" />
                 )}
-              </div>
-              <div className="flex w-full max-w-sm items-center space-x-2">
-                {/**<Input disabled placeholder={shareLink} />*/}
-                <Input value={shareLink} readOnly/>
-                <Button
-                  size="icon"
-                  onClick={() => navigator.clipboard.writeText(shareLink)}
+              </Button>
+            </div>
+            
+            <Separator className="my-2" />
+            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
+              <div className="space-y-2 pt-2">
+                <RadioGroup
+                  defaultValue="public"
+                  value={visibility}
+                  onValueChange={setVisibility}
                 >
-                  <ClipboardCopy className="h-4 w-4" />
-                </Button>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <RadioGroupItem value="PUBLIC" id="public" />
+                    <Label
+                      htmlFor="public"
+                      className="flex items-center cursor-pointer"
+                    >
+                      <Globe className="h-5 w-5 mr-2 text-blue-500" />
+                      <div>
+                        <p className="font-medium">Public</p>
+                        <p className="text-sm text-muted-foreground">
+                          Anyone on the internet can see this
+                        </p>
+                      </div>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <RadioGroupItem value="AUTHENTICATED" id="auth" />
+                    <Label
+                      htmlFor="auth"
+                      className="flex items-center cursor-pointer"
+                    >
+                      <Users className="h-5 w-5 mr-2 text-green-500" />
+                      <div>
+                        <p className="font-medium">Authenticated users</p>
+                        <p className="text-sm text-muted-foreground">
+                          Only users with accounts can access this
+                        </p>
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between space-x-2">
+                    <div>
+                      <Label
+                        htmlFor="presentation-mode"
+                        className="font-medium"
+                      >
+                        {presentationModeSwitch
+                          ? "Presentation Mode"
+                          : "Team Mode"}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {presentationModeSwitch
+                          ? " Presentation Mode is used when sharing with a large group of people. It allows users to only broadcast to the presenter screen."
+                          : "Team Mode is used when sharing with a small group of people. It allows users to broadcast to all users in the session."}
+                      </p>
+                    </div>
+                    <Switch
+                      id="presentation-mode"
+                      checked={presentationModeSwitch}
+                      onCheckedChange={setPresentationModeSwitch}
+                    />
+                  </div>
+                </div>
+
+                <CardDescription>
+                  If you would like to inactivate the previous session and
+                  create a new shared session for this study, click the generate
+                  shared session button below:
+                </CardDescription>
               </div>
+            ) : null}
+          </CardContent>
 
-              <CardDescription>
-                If you would like to inactivate the previous session and create a
-                new shared session for this study, click the generate shared session
-                button below:
-              </CardDescription>
-            </> : null}
-
-        </CardContent>
-
-        <CardFooter className="flex justify-between">
-
-          <Button onClick={generateSharedSession}>
-            Generate New Shared Session
-          </Button>
-          {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ?
-            <Button variant="outline" onClick={stopSharedSession}>
-              Stop Session
-            </Button> : null}
-
-        </CardFooter>
+          <CardFooter className="flex justify-between">
+            <Button onClick={generateSharedSession}>
+              Generate New Shared Session
+            </Button>
+            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
+              <Button variant="outline" onClick={stopSharedSession}>
+                Stop Session
+              </Button>
+            ) : null}
+          </CardFooter>
         </ScrollArea>
       </Card>
-      
     );
   }
 
@@ -316,10 +381,7 @@ function ShareTab() {
         </CardContent> */}
 
         <CardFooter className="flex justify-between">
-
-          <Button onClick={transferSharedSession}>
-            Transfer Session
-          </Button>
+          <Button onClick={transferSharedSession}>Transfer Session</Button>
 
           <Button onClick={generateSharedSession} variant="secondary">
             New Session
@@ -328,10 +390,7 @@ function ShareTab() {
           <Button onClick={stopSharedSession} variant="outline">
             Stop Session
           </Button>
-
-
         </CardFooter>
-
       </Card>
     );
   }
@@ -355,7 +414,8 @@ function ShareTab() {
 
 export default ShareTab;
 
-{/** 
+{
+  /** 
           <CardContent className="space-y-1.5">
             <RadioGroup defaultValue="public" value={visibility} onValueChange={setVisibility}>
               <div className="flex items-center space-x-2 mb-4">
@@ -415,5 +475,5 @@ export default ShareTab;
                 )}
               </div>
             )}
-  */}
-
+  */
+}

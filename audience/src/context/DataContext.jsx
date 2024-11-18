@@ -33,7 +33,7 @@ if (initialData.vd) {
     })
 } 
 else if (initialData.s){
-    initialData = Object.assign(initialData, defaultData.defaultData);
+    initialData = Object.assign(defaultData.defaultData,initialData);
 }
 else {
     initialData = defaultData.defaultData;
@@ -99,7 +99,7 @@ export const DataProvider = ({ children }) => {
     },[])
 
     useEffect(()=>{
-
+    
         //Can be optimized if session_id is a primary key
         const getSession = async (cl, session_id)=>{
             const { data, error } = await cl
@@ -183,17 +183,10 @@ export const DataProvider = ({ children }) => {
             //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
             const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
             
-            // if there is a user logged in, store that as user
-            let { data: { user }, error } = await cl.auth.getUser();
-           
-            if (!user) {
-                // otherwise, use anonymous login
-                ({ data: { user }, error } = await cl.auth.signInAnonymously());
-                
-            }
-            console.log(user)
             //if there is a session id in url, get url metadata from session
-            if (initialData.s){
+
+            if (initialData.s && initialData.s !="-1" ){
+                console.log(initialData.s)
                 var { data,errorSession } = await cl
                     .from("viewbox")
                     .select("user, url_params, session_id,mode")
@@ -220,7 +213,14 @@ export const DataProvider = ({ children }) => {
                 }
             }
             
+            // if there is a user logged in, store that as user
+            let { data: { user }, error } = await cl.auth.getUser();
+           
+            if (!user) {
+                // otherwise, use anonymous login
+                ({ data: { user }, error } = await cl.auth.signInAnonymously());
                 
+            }
             //if there is a session for the current image, join that session
             var { data, errorCurrentSession } = await cl
                 .from("viewbox")

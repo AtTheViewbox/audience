@@ -32,7 +32,8 @@ git branch -D gh-pages
 ```
 go to top level on folder
 ```
-git subtree add --prefix -f audience/dist   
+git add -f audience/dist 
+git commit -m "Initial dist subtree commit"  
 git subtree push --prefix audience/dist origin gh-pages
 ```
 
