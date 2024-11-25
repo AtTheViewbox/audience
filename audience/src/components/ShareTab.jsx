@@ -103,13 +103,11 @@ function ShareTab() {
           const newQueryParams = new URLSearchParams("");
           newQueryParams.set("s", data[0].session_id);
           setShareLink(
-            `${
-              window.location.origin + window.location.pathname
+            `${window.location.origin + window.location.pathname
             }?${newQueryParams.toString()}`
           );
           setQRCodeValue(
-            `${
-              window.location.origin + window.location.pathname
+            `${window.location.origin + window.location.pathname
             }?${newQueryParams.toString()}`
           );
         } else {
@@ -133,6 +131,7 @@ function ShareTab() {
       if (delete_error) throw delete_error;
       dispatch({ type: "clean_up_supabase" });
       setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+      setQRCodeValue("")
     } catch (error) {
       console.log(error.code);
     }
@@ -154,13 +153,11 @@ function ShareTab() {
       setVisibility(data[0].visibility);
       setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
       setShareLink(
-        `${
-          window.location.origin + window.location.pathname
+        `${window.location.origin + window.location.pathname
         }?${newQueryParams.toString()}`
       );
       setQRCodeValue(
-        `${
-          window.location.origin + window.location.pathname
+        `${window.location.origin + window.location.pathname
         }?${newQueryParams.toString()}`
       );
       dispatch({
@@ -203,13 +200,11 @@ function ShareTab() {
       newQueryParams.set("s", data[0].session_id);
       queryParams.set("s", data[0].session_id);
       setShareLink(
-        `${
-          window.location.origin + window.location.pathname
+        `${window.location.origin + window.location.pathname
         }?${newQueryParams.toString()}`
       );
       setQRCodeValue(
-        `${
-          window.location.origin + window.location.pathname
+        `${window.location.origin + window.location.pathname
         }?${newQueryParams.toString()}`
       );
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
@@ -238,95 +233,106 @@ function ShareTab() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
-           
-          
-          {qrCodeValue && (
-                <div className="flex justify-center">
-                  <QRCodeSVG value={qrCodeValue} size={200} />
+
+
+            {qrCodeValue && (
+              <div className="flex justify-center">
+                <QRCodeSVG value={qrCodeValue} size={200} />
+              </div>
+            )}
+
+            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
+              <>
+                <div className="flex w-full max-w-sm items-center space-x-2 p-2">
+
+                  {/**<Input disabled placeholder={shareLink} />*/}
+                  <Input value={shareLink} readOnly />
+                  <Button
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareLink)
+                      setCopyClicked(true)
+                    }}
+                  >
+                    {copyClicked ? (
+                      <Check className="h-4" />
+                    ) : (
+                      <Copy className="h-4" />
+                    )}
+                  </Button>
+
                 </div>
-              )}
-            <div className="flex w-full max-w-sm items-center space-x-2 p-2">
-              
-              {/**<Input disabled placeholder={shareLink} />*/}
-              <Input value={shareLink} readOnly />
-              <Button
-                size="icon"
-                onClick={() => {navigator.clipboard.writeText(shareLink)
-                  setCopyClicked(true)
-                }}
-              >
-                {copyClicked ? (
-                  <Check className="h-4" />
-                ) : (
-                  <Copy className="h-4" />
-                )}
-              </Button>
+                <Separator className="my-2" />
+              </>
+            ) : null}
+
+
+            <RadioGroup
+              defaultValue="public"
+              value={visibility}
+              onValueChange={setVisibility}
+              className="space-y-2 pt-2"
+
+            >
+              <div className="flex items-center space-x-2 mb-4">
+                <RadioGroupItem value="PUBLIC" id="public" />
+                <Label
+                  htmlFor="public"
+                  className="flex items-center cursor-pointer"
+                >
+                  <Globe className="h-5 w-5 mr-2 text-blue-500" />
+                  <div>
+                    <p className="font-medium">Public</p>
+                    <p className="text-sm text-muted-foreground">
+                      Anyone on the internet can see this
+                    </p>
+                  </div>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 mb-4">
+                <RadioGroupItem value="AUTHENTICATED" id="auth" />
+                <Label
+                  htmlFor="auth"
+                  className="flex items-center cursor-pointer"
+                >
+                  <Users className="h-5 w-5 mr-2 text-green-500" />
+                  <div>
+                    <p className="font-medium">Authenticated users</p>
+                    <p className="text-sm text-muted-foreground">
+                      Only users with accounts can access this
+                    </p>
+                  </div>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between space-x-2">
+                <div>
+                  <Label
+                    htmlFor="presentation-mode"
+                    className="font-medium"
+                  >
+                    {presentationModeSwitch
+                      ? "Presentation Mode"
+                      : "Team Mode"}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {presentationModeSwitch
+                      ? " Presentation Mode is used when sharing with a large group of people. It allows users to only broadcast to the presenter screen."
+                      : "Team Mode is used when sharing with a small group of people. It allows users to broadcast to all users in the session."}
+                  </p>
+                </div>
+                <Switch
+                  id="presentation-mode"
+                  checked={presentationModeSwitch}
+                  onCheckedChange={setPresentationModeSwitch}
+                />
+              </div>
             </div>
-            
-            <Separator className="my-2" />
             {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
               <div className="space-y-2 pt-2">
-                <RadioGroup
-                  defaultValue="public"
-                  value={visibility}
-                  onValueChange={setVisibility}
-                >
-                  <div className="flex items-center space-x-2 mb-4">
-                    <RadioGroupItem value="PUBLIC" id="public" />
-                    <Label
-                      htmlFor="public"
-                      className="flex items-center cursor-pointer"
-                    >
-                      <Globe className="h-5 w-5 mr-2 text-blue-500" />
-                      <div>
-                        <p className="font-medium">Public</p>
-                        <p className="text-sm text-muted-foreground">
-                          Anyone on the internet can see this
-                        </p>
-                      </div>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 mb-4">
-                    <RadioGroupItem value="AUTHENTICATED" id="auth" />
-                    <Label
-                      htmlFor="auth"
-                      className="flex items-center cursor-pointer"
-                    >
-                      <Users className="h-5 w-5 mr-2 text-green-500" />
-                      <div>
-                        <p className="font-medium">Authenticated users</p>
-                        <p className="text-sm text-muted-foreground">
-                          Only users with accounts can access this
-                        </p>
-                      </div>
-                    </Label>
-                  </div>
-                </RadioGroup>
 
-                <div className="flex flex-col">
-                  <div className="flex items-center justify-between space-x-2">
-                    <div>
-                      <Label
-                        htmlFor="presentation-mode"
-                        className="font-medium"
-                      >
-                        {presentationModeSwitch
-                          ? "Presentation Mode"
-                          : "Team Mode"}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {presentationModeSwitch
-                          ? " Presentation Mode is used when sharing with a large group of people. It allows users to only broadcast to the presenter screen."
-                          : "Team Mode is used when sharing with a small group of people. It allows users to broadcast to all users in the session."}
-                      </p>
-                    </div>
-                    <Switch
-                      id="presentation-mode"
-                      checked={presentationModeSwitch}
-                      onCheckedChange={setPresentationModeSwitch}
-                    />
-                  </div>
-                </div>
 
                 <CardDescription>
                   If you would like to inactivate the previous session and

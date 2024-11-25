@@ -22,9 +22,10 @@ export const DataDispatchContext = createContext({});
 
 const queryParams = new URLSearchParams(window.location.search);
 const isEmbedded = queryParams.get('frame_id') != null;
-
-// create initial data object from URL query string
 var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
+// create initial data object from URL query string
+
+
 if (initialData.vd) {
     initialData.vd.forEach((vdItem) => {
         if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
@@ -48,7 +49,7 @@ export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
     const [discordUser, setDiscordUser] = useState()
     const [updateSession, setUpdateSession] = useState(null)
-    
+
 
     useEffect(() => {
         

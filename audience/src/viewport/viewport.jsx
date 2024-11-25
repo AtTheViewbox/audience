@@ -69,6 +69,7 @@ export default function Viewport(props) {
   },[toolSelected])
 
   const loadImagesAndDisplay = async () => {
+    setIsLoading(true)
     const viewportId = `${viewport_idx}-vp`;
     const viewportInput = {
       viewportId,
@@ -175,7 +176,6 @@ export default function Viewport(props) {
 
   useEffect(() => {
     if (viewport_data) {  
-      setIsLoading(true)
       loadImagesAndDisplay().then(() => {
         addCornerstoneTools()
         setIsLoading(false)
