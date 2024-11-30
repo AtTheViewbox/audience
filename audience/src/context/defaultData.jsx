@@ -5,8 +5,7 @@ export default {
         "r": "1",
         "c": "1"
     },
-    "s":"-1",
-    "default" :"true",
+    "s":"1",
     "vd": [
         {
             "s": [

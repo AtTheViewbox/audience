@@ -32,14 +32,18 @@ if (initialData.vd) {
             vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e,vdItem.s.D);
         }
     })
+    initialData.isRequestLoading= false
 } 
 else if (initialData.s){
     initialData = Object.assign(defaultData.defaultData,initialData);
+    initialData.isRequestLoading = true;
 }
 else {
     initialData = defaultData.defaultData;
+    initialData.isRequestLoading= false
 }
 initialData.userData = null;
+
 initialData.sharingUser = null;
 initialData.sessionMeta = {mode:"TEAM",owner:""}
 initialData.activeUsers = [];
@@ -100,7 +104,7 @@ export const DataProvider = ({ children }) => {
     },[])
 
     useEffect(()=>{
-    
+       
         //Can be optimized if session_id is a primary key
         const getSession = async (cl, session_id)=>{
             const { data, error } = await cl
@@ -111,6 +115,7 @@ export const DataProvider = ({ children }) => {
         }
 
         if(updateSession?.eventType==="DELETE"){
+            dispatch({type: 'loading_request'})
             getSession(data.supabaseClient,updateSession.old.session_id).then((payload)=>{
                 if (payload.length==0){
                     dispatch({type: "clean_up_supabase"});
@@ -118,6 +123,7 @@ export const DataProvider = ({ children }) => {
             })
         }
         if(updateSession?.eventType==="UPDATE"){
+            dispatch({type: 'loading_request'})
             var currentURL =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
             if (!currentURL.vd){
             var newData =unflatten(Object.fromEntries(new URLSearchParams(updateSession.new.url_params)));
@@ -129,6 +135,9 @@ export const DataProvider = ({ children }) => {
                 })
             }
             dispatch({type: "update_viewport_data",payload: {...newData}} )
+
+            //TODO: Fix buggy tranfering sessions, but reloading works for now.
+            window.location.reload();
             }else{
                 dispatch({type: "clean_up_supabase"});
             }
@@ -186,8 +195,8 @@ export const DataProvider = ({ children }) => {
             
             //if there is a session id in url, get url metadata from session
 
-            if (initialData.s && initialData.s !="-1" ){
-                console.log(initialData.s)
+            if (initialData.s ){
+         
                 var { data,errorSession } = await cl
                     .from("viewbox")
                     .select("user, url_params, session_id,mode")
@@ -199,9 +208,12 @@ export const DataProvider = ({ children }) => {
                     initialData.s = null
                 }
                 else{
+                    
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode =data[0].mode
                     initialData.sessionMeta.owner = data[0].user
+                   
+                    console.log(initialData)
                     var newData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
                     if (newData.vd) {
                         newData.vd.forEach((vdItem) => {
@@ -344,6 +356,7 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
+   
             if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
                 interaction_channel.on(
                     'broadcast',
@@ -444,16 +457,22 @@ export function dataReducer(data, action) {
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
             break;
+        case 'loading_request':
+            new_data = {...data, isRequestLoading:true}
+            break;
         case 'update_viewport_data':
             var vd = action.payload.vd;
             var ld = action.payload.ld;
             var m = action.payload.m;
+            
             var sessionMeta = {
                 owner:action.payload.owner,
                 mode:action.payload.mode
             }
             new_data = { ...data, ld:ld,vd:vd,m:m,
-                sessionMeta:sessionMeta};
+                sessionMeta:sessionMeta,
+                isRequestLoading:false,
+            };
 
             break;
         // case 'export_layout_to_link':
@@ -531,6 +550,7 @@ export function dataReducer(data, action) {
         case 'select_tool':
                 new_data = {...data, toolSelected: action.payload}
                 break;
+
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
 

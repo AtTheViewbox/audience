@@ -164,6 +164,9 @@ function ShareTab() {
         type: "connect_to_sharing_session",
         payload: { sessionId: data[0].session_id },
       });
+
+      //TODO: Fix buggy tranfering sessions, but reloading works for now.
+      window.location.reload();
     } catch (error) {
       console.log(error.code);
     }

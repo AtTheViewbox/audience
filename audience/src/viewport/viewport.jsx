@@ -11,7 +11,7 @@ import LoadingPage from '../components/LoadingPage.jsx';
 export default function Viewport(props) {
   const elementRef = useRef(null);
 
-  const { vd, channels, sharing, toolSelected,s } = useContext(DataContext).data;
+  const { vd, channels, sharing, toolSelected,s,isRequestLoading } = useContext(DataContext).data;
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
 
@@ -22,6 +22,7 @@ export default function Viewport(props) {
   useEffect(()=>{
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
     if (isLoading || mobile) return;
     
     const {
@@ -69,7 +70,7 @@ export default function Viewport(props) {
   },[toolSelected])
 
   const loadImagesAndDisplay = async () => {
-    setIsLoading(true)
+    //setIsLoading(true)
     const viewportId = `${viewport_idx}-vp`;
     const viewportInput = {
       viewportId,
@@ -89,10 +90,11 @@ export default function Viewport(props) {
     );
 
     const { s, ww, wc } = viewport_data;
+
     s.map((imageId) => {
       cornerstone.imageLoader.loadAndCacheImage(imageId);
     });
-
+    
     const stack = s;
     await viewport.setStack(stack);
 
@@ -126,6 +128,7 @@ export default function Viewport(props) {
   };
 
   const addCornerstoneTools = () => {
+  
 
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
@@ -172,23 +175,27 @@ export default function Viewport(props) {
     }
 
     toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
+    SetInitalLoad(false)
   };
 
   useEffect(() => {
-    if (viewport_data) {  
+    if (viewport_data && !isRequestLoading) {  
+ 
       loadImagesAndDisplay().then(() => {
-        addCornerstoneTools()
+        if (initalLoad){
+          addCornerstoneTools()
+        }
         setIsLoading(false)
       });
     }
     return () => { console.log("unmounting viewport"); };
-  }, [vd,isLoading]);
+  }, [vd,isRequestLoading]);
 
 
   return (
    <>
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%'}} >
-        {isLoading?<LoadingPage/>:null}
+        {(isRequestLoading)?<LoadingPage/>:null}
         </div>
     </>
   );
