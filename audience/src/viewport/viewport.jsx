@@ -195,7 +195,7 @@ export default function Viewport(props) {
   return (
    <>
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%'}} >
-        {(isRequestLoading)?<LoadingPage/>:null}
+        {(isRequestLoading||isLoading)?<LoadingPage/>:null}
         </div>
     </>
   );

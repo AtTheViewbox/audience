@@ -106,7 +106,7 @@ export const DataProvider = ({ children }) => {
     useEffect(()=>{
        
         //Can be optimized if session_id is a primary key
-        const getSession = async (cl, session_id)=>{
+        const getSessionBySessionID = async (cl, session_id)=>{
             const { data, error } = await cl
             .from("viewbox")
             .select("session_id")
@@ -114,15 +114,19 @@ export const DataProvider = ({ children }) => {
             return data
         }
 
+        console.log(data)
         if(updateSession?.eventType==="DELETE"){
+            console.log(updateSession)
             dispatch({type: 'loading_request'})
-            getSession(data.supabaseClient,updateSession.old.session_id).then((payload)=>{
+       
+            getSessionBySessionID(data.supabaseClient,data.s).then((payload)=>{
                 if (payload.length==0){
                     dispatch({type: "clean_up_supabase"});
                 }
             })
+ 
         }
-        if(updateSession?.eventType==="UPDATE"){
+        if(updateSession?.eventType==="UPDATE" ||updateSession?.eventType==="INSERT"){
             dispatch({type: 'loading_request'})
             var currentURL =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
             if (!currentURL.vd){
@@ -134,6 +138,7 @@ export const DataProvider = ({ children }) => {
                     }
                 })
             }
+            
             dispatch({type: "update_viewport_data",payload: {...newData}} )
 
             //TODO: Fix buggy tranfering sessions, but reloading works for now.
@@ -356,7 +361,8 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
-   
+            
+            console.log(data.userData.id,data)
             if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
                 interaction_channel.on(
                     'broadcast',
@@ -391,7 +397,7 @@ export const DataProvider = ({ children }) => {
             }
             console.log("share_controller unsubscribed");
         }
-    }, [data.sessionId, data.supabaseClient]);
+    }, [data.sessionId, data.supabaseClient,data.sessionMeta.mode]);
 
     useEffect(() => {
         //data.renderingEngine.getViewports()
@@ -464,11 +470,12 @@ export function dataReducer(data, action) {
             var vd = action.payload.vd;
             var ld = action.payload.ld;
             var m = action.payload.m;
-            
+     
             var sessionMeta = {
                 owner:action.payload.owner,
                 mode:action.payload.mode
             }
+            
             new_data = { ...data, ld:ld,vd:vd,m:m,
                 sessionMeta:sessionMeta,
                 isRequestLoading:false,

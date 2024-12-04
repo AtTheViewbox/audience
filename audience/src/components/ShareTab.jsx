@@ -211,6 +211,8 @@ function ShareTab() {
         }?${newQueryParams.toString()}`
       );
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
+      //TODO: Fix buggy tranfering sessions, but reloading works for now.
+      window.location.reload();
     } catch (error) {
       console.log(error.code);
       if (error.code === "23505") {
