@@ -16,6 +16,15 @@ function App() {
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">
+      <head>
+      <link
+  rel="iframely"
+  href="https://attheviewbox.github.io/audience/"
+  media="(aspect-ratio: 1280/720)"
+/>
+<meta property="title" content="AtTheViewBox" />
+<meta property="description" content="get started reading images" />
+</head>
       <DataProvider>
         <Layout />
         <ToolsTab/>
