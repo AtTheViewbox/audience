@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import {ZoomIn, Contrast, Move, ArrowDownUp, Bolt } from "lucide-react";
 import { useEffect, useContext,useState } from "react";
 import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
+import { UserContext } from "../context/UserContext"
 
 import {
     Card,
@@ -15,7 +16,9 @@ import {
 
 function SettingTab() {
     const { dispatch } = useContext(DataDispatchContext);
-    const { supabaseClient, userData } = useContext(DataContext).data;
+    //const { supabaseClient, userData } = useContext(DataContext).data;
+    const { supabaseClient } = useContext(DataContext).data;
+    const { userData} = useContext(UserContext).data;
 
     const [position, setPosition] = useState("window")
 

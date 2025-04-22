@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useReducer } from "react";
+import { createContext, useState, useEffect, useReducer, useContext } from "react";
 import { unflatten, flatten } from "flat";
 
 import { recreateList} from '../lib/inputParser.ts';
@@ -8,7 +8,7 @@ import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
 
-import { createClient } from '@supabase/supabase-js'
+
 
 import { utilities } from '@cornerstonejs/core'; 
 import { toast } from "sonner"
@@ -16,6 +16,8 @@ import { toast } from "sonner"
 
 import defaultData from "./defaultData.jsx";
 import discordSdk from '../discordSdk.tsx'
+import { cl } from './SupabaseClient.jsx';
+import { UserContext } from "./UserContext.jsx";
 
 export const DataContext = createContext({});    
 export const DataDispatchContext = createContext({});
@@ -34,14 +36,12 @@ if (initialData.vd) {
     })
     initialData.isRequestLoading= false
 } 
+
 else if (initialData.s){
     initialData = Object.assign(defaultData.defaultData,initialData);
     initialData.isRequestLoading = true;
 }
-else {
-    initialData = defaultData.defaultData;
-    initialData.isRequestLoading= false
-}
+
 initialData.userData = null;
 
 initialData.sharingUser = null;
@@ -51,8 +51,9 @@ initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
-    const [discordUser, setDiscordUser] = useState()
-    const [updateSession, setUpdateSession] = useState(null)
+    const {userData,supabaseClient} = useContext(UserContext).data;
+    const [discordUser, setDiscordUser] = useState();
+    const [updateSession, setUpdateSession] = useState(null);
 
 
     useEffect(() => {
@@ -116,7 +117,7 @@ export const DataProvider = ({ children }) => {
 
         if(updateSession?.eventType==="DELETE"){
             dispatch({type: 'loading_request'})
-            getSession(data.supabaseClient,updateSession.old.session_id).then((payload)=>{
+            getSession(supabaseClient,updateSession.old.session_id).then((payload)=>{
                 if (payload.length==0){
                     dispatch({type: "clean_up_supabase"});
                 }
@@ -191,7 +192,7 @@ export const DataProvider = ({ children }) => {
        
         const setupSupabase = async () => {
             //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
-            const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
+            //const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
             
             //if there is a session id in url, get url metadata from session
 
@@ -225,7 +226,7 @@ export const DataProvider = ({ children }) => {
                     dispatch({type: "update_viewport_data",payload: {...newData,mode:data[0].mode}} )
                 }
             }
-            
+             {/** 
             // if there is a user logged in, store that as user
             let { data: { user }, error } = await cl.auth.getUser();
            
@@ -234,11 +235,12 @@ export const DataProvider = ({ children }) => {
                 ({ data: { user }, error } = await cl.auth.signInAnonymously());
                 
             }
+                */}
             //if there is a session for the current image, join that session
             var { data, errorCurrentSession } = await cl
                 .from("viewbox")
                 .select("user, url_params, session_id,mode")
-                .eq("user", user.id);
+                .eq("user", userData.id);
             if (errorCurrentSession) throw errorCurrentSession;
     
             
@@ -250,6 +252,7 @@ export const DataProvider = ({ children }) => {
         
           
             // TODO: error handling for auth
+            {/** 
             const ss = cl.auth.onAuthStateChange(
                 (event, session) => {
                         if (event === 'SIGNED_IN') {
@@ -261,7 +264,8 @@ export const DataProvider = ({ children }) => {
             )
 
             dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
-        }
+            */}
+            }
         
        
             setupCornerstone()
@@ -295,8 +299,8 @@ export const DataProvider = ({ children }) => {
         // This useEffect is to handle changes to sessionId and create the consequent
         // Supabase realtime rooms as necessary. It relies on supabaseClient to not
         // be null so the if statement just guards against that
-        if (data.sessionId && data.supabaseClient) {
-            const allChanges = data.supabaseClient
+        if (data.sessionId && supabaseClient) {
+            const allChanges = supabaseClient
                 .channel('schema-db-changes')
                 .on(
                     'postgres_changes',
@@ -312,11 +316,12 @@ export const DataProvider = ({ children }) => {
                 .subscribe()
            
             // configure presence room -- should this be in every client or just the initializing client??
-            const share_controller = data.supabaseClient.channel(`${data.sessionId}-share-controller`, {
+            const share_controller = supabaseClient.channel(`${data.sessionId}-share-controller`, {
                 config: {
                     broadcast: { self: true },
                     presence: {
-                        key: data.userData.id
+                        //key: data.userData.id
+                        key: userData.id
                     },
                 }
             })
@@ -326,7 +331,9 @@ export const DataProvider = ({ children }) => {
                 // Wait for successful connection
                 if (status === 'SUBSCRIBED') {
                     console.log("share-controller subscribed")
-                    share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:data.userData.email  });
+                    //share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:data.userData.email  });
+                    share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:userData.email  });
+                    
                     return null
                 }
             })
@@ -344,7 +351,7 @@ export const DataProvider = ({ children }) => {
                 dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
             })
 
-            const interaction_channel = data.supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
+            const interaction_channel = supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
                 config: {
                     broadcast: { self: false },
                 }
@@ -356,8 +363,10 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
-   
-            if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
+            console.log(data)
+            //if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
+            if(data.sessionMeta.mode=="TEAM" || userData.id==data.sessionMeta.owner){
+            
                 interaction_channel.on(
                     'broadcast',
                     { event: 'frame-changed' },
@@ -391,12 +400,14 @@ export const DataProvider = ({ children }) => {
             }
             console.log("share_controller unsubscribed");
         }
-    }, [data.sessionId, data.supabaseClient]);
+    }, [data.sessionId, supabaseClient]);
 
     useEffect(() => {
         //data.renderingEngine.getViewports()
-        if(data.sessionMeta.mode=="TEAM" || data.userData.id!=data.sessionMeta.owner){
-        if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
+        //if(data.sessionMeta.mode=="TEAM" || data.userData.id!=data.sessionMeta.owner){
+        //if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
+        if(data.sessionMeta.mode=="TEAM" || userData.id!=data.sessionMeta.owner){
+            if (data.shareController && data.renderingEngine && data.sharingUser === userData?.id && data.sessionId) {
             data.renderingEngine.getViewports().sort((a,b)=>{
                 const idA = Number(a.id.split("-")[0])
                 const idB = Number(b.id.split("-")[0])
@@ -432,7 +443,8 @@ export const DataProvider = ({ children }) => {
 
         }
     }
-    }, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
+    //}, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
+}, [data.shareController, data.renderingEngine, data.sharingUser, userData]);
 
 
     return (
@@ -454,9 +466,10 @@ export function dataReducer(data, action) {
         case 'cornerstone_initialized':
             new_data = {...data, ...action.payload};
             break;
+        {/** 
         case 'supabase_initialized':
             new_data = { ...data, ...action.payload };
-            break;
+            break;*/}
         case 'loading_request':
             new_data = {...data, isRequestLoading:true}
             break;
@@ -513,9 +526,11 @@ export function dataReducer(data, action) {
                     
                     // if the current user is sharing, and someone else has requested
                     // reset the listeners and update the presence state
-                    if (nonRecentSharers.includes(data.userData.id)) {
+                    //if (nonRecentSharers.includes(data.userData.id)) {
+                    if (nonRecentSharers.includes(userData.id)) {
                         data.eventListenerManager.reset()
-                        data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
+                        //data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
+                        data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData });
                     }
     
                     if (nonRecentSharers.length !== 0) {
@@ -539,7 +554,8 @@ export function dataReducer(data, action) {
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
-                data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData,email:data.userData.email });
+                //data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData,email:data.userData.email });
+                data.shareController.track({ share: data.sharingUser !== userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData,email:userData.email });
                 // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
                 // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date
                 // so if you try to cancel while it is processing, it will try to create a new request rather than cancelling the request
@@ -558,17 +574,18 @@ export function dataReducer(data, action) {
                 data.renderingEngine.getViewport(`${action.payload.viewportId}-vp`)
             );
             break;
-
+        {/** 
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };
             break;
         case 'log_out':
             new_data = { ...data, userData:null };
-            break;
+            break;*/}
+
         case 'clean_up_supabase':
             new_data = {...data, sessionId: null}
             data.supabaseAuthSubscription.data.subscription.unsubscribe();
-            data.supabaseClient.removeAllChannels();
+            supabaseClient.removeAllChannels();
             break;
         default:
             throw Error('Unknown action: ' + action.type);

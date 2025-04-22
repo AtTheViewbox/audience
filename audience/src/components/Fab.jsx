@@ -1,38 +1,28 @@
 import { mergeProps, useLongPress, usePress } from "react-aria";
 import { Button } from "@/components/ui/button";
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { LocateFixed, LocateOff, LogIn } from "lucide-react";
+import { UserContext } from "../context/UserContext"
 
 import DialogPage from "./DialogPage.jsx";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 function Fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  const { userData, sharingUser } = useContext(DataContext).data;
+  //const { userData, sharingUser } = useContext(DataContext).data;
+  const { sharingUser } = useContext(DataContext).data;
+  const  {userData}= useContext(UserContext).data;
+
   // get mode from state
+  useEffect(()=>{
+    console.log(userData)
+  },[userData])
 
   const { dispatch } = useContext(DataDispatchContext);
 

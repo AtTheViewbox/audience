@@ -13,7 +13,6 @@ import {
 
 function ToolsTab() {
     const { dispatch } = useContext(DataDispatchContext);
-    const { userData } = useContext(DataContext).data;
 
     const [position, setPosition] = useState("window")
 

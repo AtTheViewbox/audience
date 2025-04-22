@@ -30,6 +30,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { UserContext, UserDispatchContext } from "../context/UserContext"
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -50,8 +51,10 @@ const Mode = {
 };
 function ShareTab() {
   const { dispatch } = useContext(DataDispatchContext);
-
-  const { supabaseClient, userData } = useContext(DataContext).data;
+  const { userDispatch } = useContext(UserDispatchContext);
+  //const { supabaseClient, userData } = useContext(DataContext).data;
+  //const { supabaseClient } = useContext(DataContext).data;
+  const { userData,supabaseClient} = useContext(UserContext).data;
 
   const [visibility, setVisibility] = useState(Visibility.AUTHENTICATED);
   const [emails, setEmails] = useState([]);
@@ -114,7 +117,8 @@ function ShareTab() {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
       } catch (error) {
-        dispatch({ type: "auth_update", payload: { session: null } });
+        console.log(error)
+        userDispatch({ type: "auth_update", payload: { session: null } });
       }
     };
 
@@ -129,6 +133,7 @@ function ShareTab() {
         .eq("user", userData.id);
 
       if (delete_error) throw delete_error;
+      userDispatch({ type: "clean_up_supabase" });
       dispatch({ type: "clean_up_supabase" });
       setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
       setQRCodeValue("")

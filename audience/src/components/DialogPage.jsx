@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { useState, useContext } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
+import { UserContext } from "../context/UserContext"
 
 import {
   DialogDescription,
@@ -21,7 +22,8 @@ import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
 
 function DialogPage() {
-  const { userData } = useContext(DataContext).data;
+  //const { userData } = useContext(DataContext).data;
+  const { userData} = useContext(UserContext).data;
   return (
     <>
         <DialogHeader>

@@ -1,5 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 .App {
   background-color: #282c34;
   height: 100%;
   touch-action:none;
 }
+
+
+/* Add transitions for smooth resize interactions */
+[class*="cursor-col-resize"] {
+  transition: background-color 0.15s;
+}
+

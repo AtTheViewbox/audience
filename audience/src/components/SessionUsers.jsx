@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { useState, useContext, useEffect } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { UserContext } from "../context/UserContext"
 
 const CDN = `https://cdn.discordapp.com`
 const SIZE = 256
@@ -11,9 +12,7 @@ const queryParams = new URLSearchParams(window.location.search);
 const isEmbedded = queryParams.get('frame_id') != null;
 
 function SessionUsers() {
-  const { userData, sharingUser, activeUsers,sessionId } = useContext(DataContext).data;
-
-
+  const { sharingUser, activeUsers,sessionId } = useContext(DataContext).data;
   function getAvatarUrl(user) {
     if (user.discordData.avatar != null) {
       return `${CDN}/avatars/${user.discordData.id}/${user.discordData.avatar}.png?size=${SIZE}`;

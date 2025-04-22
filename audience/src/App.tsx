@@ -1,37 +1,48 @@
 import './App.css';
-import Layout from './layout/layout';
-import Fab from './components/Fab'
-import ToolsTab from './components/ToolsTab'
-import SessionUsers from './components/SessionUsers'
+import MainPage from './components/MainPage'
 import { DataProvider } from './context/DataContext';
+import { UserProvider } from './context/UserContext';
+import HomePage from "./components/HomePage"
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
-import { Toaster } from 'sonner';
+import { Helmet } from 'react-helmet';
+import { useLocation } from 'react-router-dom';
 
 function App() {
 
   useEffect(() => {
     console.log("App loaded")
   }, []);
-  
+
+  const AudienceRoute = () => {
+    const { search } = useLocation();
+    return search ? 
+    <UserProvider>
+      <DataProvider>
+        <MainPage /> 
+      </DataProvider>
+      </UserProvider>: 
+      <UserProvider> <HomePage /></UserProvider>;
+  };
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">
-      <head>
-      <link
-  rel="iframely"
-  href="https://attheviewbox.github.io/audience/"
-  media="(aspect-ratio: 1280/720)"
-/>
-<meta property="title" content="AtTheViewBox" />
-<meta property="description" content="get started reading images" />
-</head>
-      <DataProvider>
-        <Layout />
-        <ToolsTab/>
-        <Fab />
-        <SessionUsers />
-        <Toaster position="top-right"/>
-      </DataProvider>
+      <Helmet>
+        <link
+          rel="iframely"
+          href="https://attheviewbox.github.io/audience/"
+          media="(aspect-ratio: 1280/720)"
+        />
+        <meta property="title" content="AtTheViewBox" />
+        <meta property="description" content="get started reading images" />
+      </Helmet>
+   
+        <Router>
+          <Routes>
+            <Route path="/audience" element={<AudienceRoute/>} />
+          </Routes>
+        </Router>
+ 
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { MailIcon, UserIcon,CheckCircle  } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { UserContext } from "../context/UserContext.jsx";
 
 const LoginState = {
   LOGIN: "login",
@@ -23,7 +24,7 @@ const LoginState = {
 };
 const url = window.location.search
 export function LoginTab() {
-  const { supabaseClient } = useContext(DataContext).data;
+  const { supabaseClient} = useContext(UserContext).data;
   const [loginError, setloginError] = useState(false);
   const [signUpError, setSignUpError] = useState(null);
   const [loginState, setLoginState] = useState(LoginState.LOGIN);
