@@ -15,22 +15,15 @@ import {
 
 function Fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  //const { userData, sharingUser } = useContext(DataContext).data;
   const { sharingUser } = useContext(DataContext).data;
   const  {userData}= useContext(UserContext).data;
-
-  // get mode from state
-  useEffect(()=>{
-    console.log(userData)
-  },[userData])
-
   const { dispatch } = useContext(DataDispatchContext);
 
   let { longPressProps } = useLongPress({
     accessibilityDescription: "Long press to toggle sharing interactions",
     onLongPress: (e) => {
       //switch long and short press
-      dispatch({ type: "toggle_sharing" });
+      dispatch({ type: "toggle_sharing",payload:{userData:userData} });
     },
   });
 

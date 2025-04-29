@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { useLocation } from 'react-router-dom';
+import UpdatePassword from './login/UpdatePassword';
 
 function App() {
 
@@ -40,6 +41,7 @@ function App() {
         <Router>
           <Routes>
             <Route path="/audience" element={<AudienceRoute/>} />
+            <Route path="/audience/passwordreset" element={<UpdatePassword/>} />
           </Routes>
         </Router>
  

@@ -11,12 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { MailIcon, UserIcon } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription} from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { UserContext } from "../context/UserContext.jsx";
+
 
 export function SignUpTab() {
-  const { supabaseClient } = useContext(DataContext).data;
+  const { supabaseClient } = useContext(UserContext).data;
   const [signUpError, setsignUpError] = useState(false);
 
   async function handleSignUp() {
@@ -24,7 +25,7 @@ export function SignUpTab() {
     const email = document.getElementById("email").value;
     const password = document.getElementById("password").value;
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseClient.auth.signUp({
       name: name,
       email: email,
       password: password,

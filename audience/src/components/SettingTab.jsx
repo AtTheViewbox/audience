@@ -15,27 +15,16 @@ import {
 
 
 function SettingTab() {
-    const { dispatch } = useContext(DataDispatchContext);
-    //const { supabaseClient, userData } = useContext(DataContext).data;
-    const { supabaseClient } = useContext(DataContext).data;
-    const { userData} = useContext(UserContext).data;
-
-    const [position, setPosition] = useState("window")
-
-    const selectTool = (value) => {
-        setPosition(value)
-        dispatch({ type: 'select_tool', payload: value })
-    }
+    const { userData,supabaseClient} = useContext(UserContext).data;
     
 async function logOut() {
 
     try {
-
         let { error } = await supabaseClient.auth.signOut({scope:'global',})
         if (error) throw error;
 
         //log back in as Anonymous user 
-        ({ data: { user }, error } = await supabaseClient.auth.signInAnonymously());
+        const { data: { user }, error: signInError } = await supabaseClient.auth.signInAnonymously();
     } catch (error) {
       console.log(error)
     }

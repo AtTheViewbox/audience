@@ -17,7 +17,7 @@ import { toast } from "sonner"
 import defaultData from "./defaultData.jsx";
 import discordSdk from '../discordSdk.tsx'
 import { cl } from './SupabaseClient.jsx';
-import { UserContext } from "./UserContext.jsx";
+import { UserContext,UserDispatchContext } from "./UserContext.jsx";
 
 export const DataContext = createContext({});    
 export const DataDispatchContext = createContext({});
@@ -51,6 +51,7 @@ initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
     const [data, dispatch] = useReducer(dataReducer, initialData);
+    const { userDispatch } = useContext(UserDispatchContext);
     const {userData,supabaseClient} = useContext(UserContext).data;
     const [discordUser, setDiscordUser] = useState();
     const [updateSession, setUpdateSession] = useState(null);
@@ -119,7 +120,7 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'loading_request'})
             getSession(supabaseClient,updateSession.old.session_id).then((payload)=>{
                 if (payload.length==0){
-                    dispatch({type: "clean_up_supabase"});
+                    userDispatch({type: "clean_up_supabase"});
                 }
             })
         }
@@ -140,7 +141,7 @@ export const DataProvider = ({ children }) => {
             //TODO: Fix buggy tranfering sessions, but reloading works for now.
             window.location.reload();
             }else{
-                dispatch({type: "clean_up_supabase"});
+                userDispatch({type: "clean_up_supabase"});
             }
         }
         setUpdateSession(null)
@@ -188,11 +189,7 @@ export const DataProvider = ({ children }) => {
             dispatch({type: 'cornerstone_initialized', payload: {renderingEngine: re, eventListenerManager: eventListenerManager}})
         };
         
-        //var initialData =unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
-       
         const setupSupabase = async () => {
-            //const cl = createClient("https://vnepxfkzfswqwmyvbyug.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZXB4Zmt6ZnN3cXdteXZieXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM0MzI1NTksImV4cCI6MjAwOTAwODU1OX0.JAPtogIHwJyiSmXji4o1mpa2Db55amhCYe6r3KwNrYo");
-            //const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
             
             //if there is a session id in url, get url metadata from session
 
@@ -208,13 +205,11 @@ export const DataProvider = ({ children }) => {
                 if (data?.length==0 ){
                     initialData.s = null
                 }
-                else{
-                    
+                else{            
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode =data[0].mode
                     initialData.sessionMeta.owner = data[0].user
                    
-                    console.log(initialData)
                     var newData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
                     if (newData.vd) {
                         newData.vd.forEach((vdItem) => {
@@ -226,16 +221,7 @@ export const DataProvider = ({ children }) => {
                     dispatch({type: "update_viewport_data",payload: {...newData,mode:data[0].mode}} )
                 }
             }
-             {/** 
-            // if there is a user logged in, store that as user
-            let { data: { user }, error } = await cl.auth.getUser();
-           
-            if (!user) {
-                // otherwise, use anonymous login
-                ({ data: { user }, error } = await cl.auth.signInAnonymously());
-                
-            }
-                */}
+        
             //if there is a session for the current image, join that session
             var { data, errorCurrentSession } = await cl
                 .from("viewbox")
@@ -249,22 +235,6 @@ export const DataProvider = ({ children }) => {
                 initialData.sessionMeta.mode =data[0].mode
                 initialData.sessionMeta.owner = data[0].user
             }
-        
-          
-            // TODO: error handling for auth
-            {/** 
-            const ss = cl.auth.onAuthStateChange(
-                (event, session) => {
-                        if (event === 'SIGNED_IN') {
-                        dispatch({type: 'auth_update', payload: {session}})
-                      } else if (event === 'SIGNED_OUT') {
-                        dispatch({type: 'log_out', payload: {session}})
-                      }
-                }
-            )
-
-            dispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
-            */}
             }
         
        
@@ -287,7 +257,7 @@ export const DataProvider = ({ children }) => {
         return () => {
             if(!isEmbedded || discordUser){
             console.log("cleaning up supabase")
-            dispatch({ type: 'clean_up_supabase' })
+            userDispatch({ type: 'clean_up_supabase' })
             }
         }
 
@@ -320,7 +290,6 @@ export const DataProvider = ({ children }) => {
                 config: {
                     broadcast: { self: true },
                     presence: {
-                        //key: data.userData.id
                         key: userData.id
                     },
                 }
@@ -331,7 +300,6 @@ export const DataProvider = ({ children }) => {
                 // Wait for successful connection
                 if (status === 'SUBSCRIBED') {
                     console.log("share-controller subscribed")
-                    //share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:data.userData.email  });
                     share_controller.track({ share: false, lastShareRequest: null,discordData:discordUser, email:userData.email  });
                     
                     return null
@@ -348,7 +316,7 @@ export const DataProvider = ({ children }) => {
                     return { user, shareStatus: share, timeOfLastShareStatusUpdated: lastShareRequest, discordData:discordData,email:email };
                 });
                 
-                dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus}})
+                dispatch({type: "sharer_status_changed", payload: {globalSharingStatus: globalSharingStatus,userData:userData}})
             })
 
             const interaction_channel = supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
@@ -364,7 +332,6 @@ export const DataProvider = ({ children }) => {
                 }
             })
             console.log(data)
-            //if(data.sessionMeta.mode=="TEAM" || data.userData.id==data.sessionMeta.owner){
             if(data.sessionMeta.mode=="TEAM" || userData.id==data.sessionMeta.owner){
             
                 interaction_channel.on(
@@ -404,8 +371,6 @@ export const DataProvider = ({ children }) => {
 
     useEffect(() => {
         //data.renderingEngine.getViewports()
-        //if(data.sessionMeta.mode=="TEAM" || data.userData.id!=data.sessionMeta.owner){
-        //if (data.shareController && data.renderingEngine && data.sharingUser === data.userData?.id && data.sessionId) {
         if(data.sessionMeta.mode=="TEAM" || userData.id!=data.sessionMeta.owner){
             if (data.shareController && data.renderingEngine && data.sharingUser === userData?.id && data.sessionId) {
             data.renderingEngine.getViewports().sort((a,b)=>{
@@ -433,17 +398,11 @@ export const DataProvider = ({ children }) => {
                     })
 
                 })
-                
-
-                //data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', (event) => {
-                //    console.log(event)
-                //})
                
             })
 
         }
     }
-    //}, [data.shareController, data.renderingEngine, data.sharingUser, data.userData]);
 }, [data.shareController, data.renderingEngine, data.sharingUser, userData]);
 
 
@@ -466,10 +425,6 @@ export function dataReducer(data, action) {
         case 'cornerstone_initialized':
             new_data = {...data, ...action.payload};
             break;
-        {/** 
-        case 'supabase_initialized':
-            new_data = { ...data, ...action.payload };
-            break;*/}
         case 'loading_request':
             new_data = {...data, isRequestLoading:true}
             break;
@@ -486,19 +441,7 @@ export function dataReducer(data, action) {
                 sessionMeta:sessionMeta,
                 isRequestLoading:false,
             };
-
             break;
-        // case 'export_layout_to_link':
-        //     let vp_dt = [];
-        //     data.renderingEngine.getViewports().forEach((vp) => {
-        //         const {imageIds, voiRange, currentImageIdIndex} = vp;
-        //         const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
-        //         vp_dt.push({imageIds, ww: window.windowWidth, wc: window.windowCenter, currentImageIdIndex})
-        //     })
-        //     // print the query string to the console so it can be copied and pasted into the URL bar
-        //     console.log(new URLSearchParams(flatten({layout_data: data.layout_data, viewport_data: vp_dt})).toString());
-        //     break;
-        
         case 'sharing_controller_initialized':
             new_data = {...data, ...action.payload}
             break;
@@ -510,11 +453,11 @@ export function dataReducer(data, action) {
             }
             new_data = {...data, sessionId: sessionId, sessionMeta:sessionMeta}
             break;
-            case 'sharer_status_changed':
+        case 'sharer_status_changed':{
                 // This can become more elegant for sure. This function should really just write globalSharingStatus to state
                 // and the components that care should make updates as necessary
               
-                let { globalSharingStatus } = action.payload;
+                let { globalSharingStatus,userData } = action.payload;
                 const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
                 if (usersWhoAreSharing.length > 0) {
                     const mostRecentShare = usersWhoAreSharing
@@ -526,10 +469,8 @@ export function dataReducer(data, action) {
                     
                     // if the current user is sharing, and someone else has requested
                     // reset the listeners and update the presence state
-                    //if (nonRecentSharers.includes(data.userData.id)) {
                     if (nonRecentSharers.includes(userData.id)) {
                         data.eventListenerManager.reset()
-                        //data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData });
                         data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData });
                     }
     
@@ -548,13 +489,13 @@ export function dataReducer(data, action) {
                 }
     
                 break;
-    
+            }
+        case 'toggle_sharing':{
 
-        case 'toggle_sharing':
+            let {userData} = action.payload;
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
-                //data.shareController.track({ share: data.sharingUser !== data.userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === data.userData.id)[0].discordData,email:data.userData.email });
                 data.shareController.track({ share: data.sharingUser !== userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData,email:userData.email });
                 // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
                 // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date
@@ -563,6 +504,7 @@ export function dataReducer(data, action) {
                 // the right thing to do is to remove interaction with the share button while in the transitioning state
             }
             break;
+        }
         case 'select_tool':
                 new_data = {...data, toolSelected: action.payload}
                 break;
@@ -573,19 +515,6 @@ export function dataReducer(data, action) {
             const viewport = (
                 data.renderingEngine.getViewport(`${action.payload.viewportId}-vp`)
             );
-            break;
-        {/** 
-        case 'auth_update':
-            new_data = { ...data, userData: action.payload.session.user };
-            break;
-        case 'log_out':
-            new_data = { ...data, userData:null };
-            break;*/}
-
-        case 'clean_up_supabase':
-            new_data = {...data, sessionId: null}
-            data.supabaseAuthSubscription.data.subscription.unsubscribe();
-            supabaseClient.removeAllChannels();
             break;
         default:
             throw Error('Unknown action: ' + action.type);

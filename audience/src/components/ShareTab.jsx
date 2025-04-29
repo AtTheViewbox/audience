@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QRCodeSVG } from "qrcode.react";
-import { LoginTab } from "./LoginTab.jsx";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -52,28 +51,12 @@ const Mode = {
 function ShareTab() {
   const { dispatch } = useContext(DataDispatchContext);
   const { userDispatch } = useContext(UserDispatchContext);
-  //const { supabaseClient, userData } = useContext(DataContext).data;
-  //const { supabaseClient } = useContext(DataContext).data;
   const { userData,supabaseClient} = useContext(UserContext).data;
 
-  const [visibility, setVisibility] = useState(Visibility.AUTHENTICATED);
-  const [emails, setEmails] = useState([]);
-  const [currentEmail, setCurrentEmail] = useState("");
+  const [visibility, setVisibility] = useState(Visibility.PUBLIC);
   const [qrCodeValue, setQRCodeValue] = useState("");
   const [copyClicked, setCopyClicked] = useState(false);
   const [presentationModeSwitch, setPresentationModeSwitch] = useState(false);
-
-  const addEmail = () => {
-    var currentEmail = document.getElementById("email-input").value;
-    if (currentEmail && !emails.includes(currentEmail)) {
-      setEmails([...emails, currentEmail]);
-      setCurrentEmail("");
-    }
-  };
-
-  const removeEmail = (email) => {
-    setEmails(emails.filter((e) => e !== email));
-  };
 
   const queryParams = new URLSearchParams(window.location.search);
 
@@ -134,7 +117,6 @@ function ShareTab() {
 
       if (delete_error) throw delete_error;
       userDispatch({ type: "clean_up_supabase" });
-      dispatch({ type: "clean_up_supabase" });
       setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
       setQRCodeValue("")
     } catch (error) {
@@ -379,20 +361,6 @@ function ShareTab() {
             this study, click the button below.
           </CardDescription>
         </CardHeader>
-        {/* <CardContent className="space-y-2">
-          <div className="flex w-full max-w-sm items-center space-x-2">
-            <Input disabled placeholder="link to go here" />
-            <Button size="icon">
-              <ClipboardCopy className="h-4 w-4"/>
-            </Button>
-          </div>
-          <div className="space-y-1">
-            <Label>QR to go here</Label>
-          </div>
-          <CardDescription>
-            If you would like to inactivate the previous session and create a new shared session, click the generate shared session button below:
-          </CardDescription>
-        </CardContent> */}
 
         <CardFooter className="flex justify-between">
           <Button onClick={transferSharedSession}>Transfer Session</Button>
@@ -409,18 +377,14 @@ function ShareTab() {
     );
   }
 
-  if (!userData || userData.is_anonymous) return <LoginTab />;
+
 
   switch (shareSessionState) {
-    case ShareSessionState.LOGGED_OUT:
-      return <LoginTab />;
     case ShareSessionState.EXISTING_SAME_SESSION:
     case ShareSessionState.NO_EXISTING_SESSION:
       return <ShareView />;
     case ShareSessionState.EXISTING_OTHER_SESSION:
       return <DifferentExistingShareView />;
-    //case ShareSessionState.EXISTING_SAME_SESSION:
-    //  return <SameExistingShareView />;
     default:
       return <div>Loading...</div>;
   }
@@ -428,66 +392,3 @@ function ShareTab() {
 
 export default ShareTab;
 
-{
-  /** 
-          <CardContent className="space-y-1.5">
-            <RadioGroup defaultValue="public" value={visibility} onValueChange={setVisibility}>
-              <div className="flex items-center space-x-2 mb-4">
-                <RadioGroupItem value="PUBLIC" id="public" />
-                <Label htmlFor="public" className="flex items-center cursor-pointer">
-                  <Globe className="h-5 w-5 mr-2 text-blue-500" />
-                  <div>
-                    <p className="font-medium">Public</p>
-                    <p className="text-sm text-muted-foreground">Anyone on the internet can see this</p>
-                  </div>
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 mb-4">
-                <RadioGroupItem value="AUTHENTICATED" id="auth" />
-                <Label htmlFor="auth" className="flex items-center cursor-pointer">
-                  <Users className="h-5 w-5 mr-2 text-green-500" />
-                  <div>
-                    <p className="font-medium">Authenticated users</p>
-                    <p className="text-sm text-muted-foreground">Only users with accounts can access this</p>
-                  </div>
-                </Label>
-              </div>
-            </RadioGroup>
-
-            {visibility === "private" && (
-              <div className="mt-4 space-y-4">
-                <Label htmlFor="email-input">Add email addresses to share with:</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    id="email-input"
-                    type="email"
-                    placeholder="Enter email address"
-                    className="flex-grow"
-                  />
-                  <Button onClick={addEmail} size="icon">
-                    <Plus className="h-4 w-4" />
-                    <span className="sr-only">Add email</span>
-                  </Button>
-                </div>
-                {emails.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="text-sm font-semibold mb-2">Added Emails:</h3>
-                    <ScrollArea className="h-[200px] w-full rounded-md border">
-                      <div className="p-4 space-y-2">
-                        {emails.map((email) => (
-                          <div key={email} className="flex items-center justify-between bg-gray-100 p-2 rounded">
-                            <span className="text-sm">{email}</span>
-                            <Button onClick={() => removeEmail(email)} variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <X className="h-4 w-4" />
-                              <span className="sr-only">Remove {email}</span>
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                )}
-              </div>
-            )}
-  */
-}
