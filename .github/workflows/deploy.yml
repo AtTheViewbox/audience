@@ -48,4 +48,6 @@ jobs:
           cp -r root/* .
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
+          git remote add origin https://github.com/${{ github.repository }}.git
           git push --force origin gh-pages
+
