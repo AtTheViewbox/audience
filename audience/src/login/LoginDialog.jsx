@@ -12,6 +12,7 @@ const LoginState = {
 };
 
 export function LoginDialog() {
+  const basename = import.meta.env.BASE_URL
   const { supabaseClient } = useContext(UserContext).data;
   const [loginState, setLoginState] = useState(LoginState.LOGIN);
   const [loginError, setLoginError] = useState(false);
@@ -65,10 +66,11 @@ export function LoginDialog() {
     }
   };
 
+  
   const sendPasswordRecovery = async () => {
     const email = document.getElementById("resetEmail").value;
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/audience/passwordreset",
+      redirectTo: basename + "/passwordreset",
       
     });
 
