@@ -25,27 +25,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend (prod or staging)
+      - name: Build frontend
         run: |
           if [[ "${{ github.ref_name }}" == "staging" ]]; then
             npm run build:staging
-            mkdir -p ../gh-pages/staging
-            cp -r dist/* ../gh-pages/staging/
+            export TARGET_DIR="staging"
           else
             npm run build:prod
-            mkdir -p ../gh-pages/root
-            cp -r dist/* ../gh-pages/root/
+            export TARGET_DIR="."
+          fi
+          echo "TARGET_DIR=$TARGET_DIR" >> $GITHUB_ENV
+          mkdir -p ../deploy/$TARGET_DIR
+          cp -r dist/* ../deploy/$TARGET_DIR/
+
+      - name: Checkout gh-pages branch
+        run: |
+          git fetch origin gh-pages || echo "No gh-pages branch yet"
+          git worktree add ../gh-pages gh-pages || git worktree add -B gh-pages ../gh-pages origin/gh-pages
+
+      - name: Copy built files into gh-pages
+        run: |
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            rm -rf ../gh-pages/staging
+            cp -r ../deploy/staging ../gh-pages/staging
+          else
+            rm -rf ../gh-pages/*
+            cp -r ../deploy/. ../gh-pages/
           fi
           
       - name: Deploy to GitHub Pages
         run: |
           cd ../gh-pages
-          git init
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git checkout -b gh-pages
-          mkdir -p staging
-          cp -r root/* .
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
           git remote add origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
