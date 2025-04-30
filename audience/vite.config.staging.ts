@@ -5,7 +5,7 @@ import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
-  base : '/audience/stagin/',
+  base : '/audience/staging/',
   plugins: [react(), wasm(), topLevelAwait()],
   envDir: '../',
   server: {
