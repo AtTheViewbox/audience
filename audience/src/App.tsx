@@ -6,6 +6,7 @@ import SessionUsers from './components/SessionUsers'
 import { DataProvider } from './context/DataContext';
 import { useEffect } from 'react';
 import { Toaster } from 'sonner';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 function App() {
 
@@ -24,14 +25,23 @@ function App() {
 />
 <meta property="title" content="AtTheViewBox" />
 <meta property="description" content="get started reading images" />
-</head>
-      <DataProvider>
+
+<Router basename="/audience">
+          <Routes>
+            <Route path="/" element={  
+              <DataProvider>
         <Layout />
         <ToolsTab/>
         <Fab />
         <SessionUsers />
         <Toaster position="top-right"/>
       </DataProvider>
+    } />
+
+          </Routes>
+        </Router>
+</head>
+    
     </div>
   );
 }
