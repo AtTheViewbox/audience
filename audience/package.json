@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "deploy": "gh-pages -d dist",
-    "build:staging": "vite build --config vite.config.staging.ts",
+    "build:staging": "vite build BUILD_ENV=staging",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

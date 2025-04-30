@@ -11,6 +11,8 @@ import UpdatePassword from './login/UpdatePassword';
 
 function App() {
 
+  const basename = import.meta.env.BASE_URL
+
   useEffect(() => {
     console.log("App loaded")
   }, []);
@@ -37,7 +39,7 @@ function App() {
         <meta property="title" content="AtTheViewBox" />
         <meta property="description" content="get started reading images" />
       </Helmet>
-        <Router basename="/audience">
+        <Router basename={basename}>
           <Routes>
             <Route path="/" element={<AudienceRoute/>} />
             <Route path="/passwordreset" element={<UpdatePassword/>} />
