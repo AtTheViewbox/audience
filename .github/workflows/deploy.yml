@@ -40,12 +40,13 @@ jobs:
       - name: Deploy to GitHub Pages
         run: |
           cd ../gh-pages
+          ls
           git init
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git checkout -b gh-pages
           mkdir -p staging
-          cp -r dist/* .
+          cp -r root/* .
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
           git remote add origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
