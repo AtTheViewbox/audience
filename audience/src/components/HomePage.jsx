@@ -8,6 +8,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/comp
 import { ScrollArea } from "@/components/ui/scroll-area"
 import HomeSideBar from "./HomeSideBarComp"
 import HomeHeaderComp from "./HomeHeaderComp"
+import AddCaseDialog from "./AddCaseDialog"
 
 // Sample data for playlists
 const playlists = [
@@ -15,32 +16,32 @@ const playlists = [
         id: 1,
         title: "Chill Vibes",
         description: "Relaxing beats to study and work to",
-    
+
         tracks: 24,
         duration: "1h 42m",
         creator: "Jane Doe",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
     },
     {
         id: 2,
         title: "Workout Mix",
         description: "High energy tracks to keep you motivated",
-   
+
         tracks: 18,
         duration: "1h 15m",
         creator: "John Smith",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2FWyEhuu38LB_1.2.826.0.1.3680043.2.629.20190306.13443345420354718385031285380%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=01&vd.0.s.e=32&vd.0.s.D=1&vd.0.ww=3000&vd.0.wc=1324&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2FWyEhuu38LB_1.2.826.0.1.3680043.2.629.20190306.13443345420354718385031285380%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=01&vd.0.s.e=32&vd.0.s.D=1&vd.0.ww=3000&vd.0.wc=1324&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
     },
     {
         id: 3,
         title: "Focus Flow",
         description: "Ambient sounds for deep concentration",
-      
+
         tracks: 32,
         duration: "2h 10m",
         creator: "Alex Johnson",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
-    
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+
     },
     {
         id: 4,
@@ -50,8 +51,8 @@ const playlists = [
         tracks: 15,
         duration: "58m",
         creator: "Music Explorer",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
-    
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+
     },
     {
         id: 5,
@@ -61,19 +62,19 @@ const playlists = [
         tracks: 28,
         duration: "1h 52m",
         creator: "Rock Enthusiast",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
-    
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+
     },
     {
         id: 6,
         title: "Jazz Lounge",
         description: "Smooth jazz for relaxing evenings",
-     
+
         tracks: 20,
         duration: "1h 30m",
         creator: "Jazz Club",
-        src:"https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
-    
+        src: "https://attheviewbox.github.io/audience/?m=true&ld.r=1&ld.c=1&vd.0.s.pf=dicomweb%3Ahttps%3A%2F%2Fimages.pacsbin.com%2Fdicom%2Fproduction%2Fbyou2mvZUj_1613192914.43722958750188138547142278382773578733%2F&vd.0.s.sf=.dcm.gz&vd.0.s.s=1&vd.0.s.e=103&vd.0.s.D=1&vd.0.ww=435&vd.0.wc=1069&vd.0.ci=0&vd.0.z=1&vd.0.px=0&vd.0.py=0&vd.0.r=0"
+
     },
 ]
 
@@ -119,24 +120,24 @@ export default function HomePage() {
         }
     }, [])
 
-     useEffect(() => {
+    useEffect(() => {
         const getStudies = async () => {
-          try {
-            const { data, error } = await supabaseClient
-              .from("viewbox")
-              .select("user, url_params, session_id,visibility,mode")
-              .eq("visibility", "PUBLIC");
-    
-            if (error) throw error;
+            try {
+                const { data, error } = await supabaseClient
+                    .from("viewbox")
+                    .select("user, url_params, session_id,visibility,mode")
+                    .eq("visibility", "PUBLIC");
 
-            console.log(data)
-    
-          } catch (error) {
-            console.log(error)
-          }
+                if (error) throw error;
+
+                console.log(data)
+
+            } catch (error) {
+                console.log(error)
+            }
         };
-    
-      }, []);
+
+    }, []);
 
     return (
         <div className="flex h-screen bg-background">
@@ -148,13 +149,12 @@ export default function HomePage() {
                 <div className="flex-1 flex overflow-hidden">
                     {/* Playlist Grid */}
                     <div className="flex-1 overflow-auto p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-bold ">Studies</h2>
-
-                        <div className="flex items-center gap-4">
-                                            <Button variant="outline" >Add</Button>
-                                        </div>
-                    </div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold ">Studies</h2>
+                            <div className="flex items-center gap-4">
+                                <AddCaseDialog />
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {playlists.map((playlist) => (
                                 <Card
@@ -164,7 +164,7 @@ export default function HomePage() {
                                 >
                                     <CardHeader className="pb-2">
                                         <div className="flex items-start gap-3">
-                                           
+
                                             <div>
                                                 <CardTitle className="text-base">{playlist.title}</CardTitle>
                                                 <CardDescription className="text-xs line-clamp-2">{playlist.description}</CardDescription>
@@ -194,14 +194,14 @@ export default function HomePage() {
                             <>
                                 <div className="p-6 border-b">
                                     <div className="flex flex-col items-center text-center mb-4">
-                                    <iframe
-                                        src={selectedPlaylist.src}
-                                        title={`${selectedPlaylist.title} player`}
-                                        className="w-full h-full border-0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                    ></iframe>
-                                       
+                                        <iframe
+                                            src={selectedPlaylist.src}
+                                            title={`${selectedPlaylist.title} player`}
+                                            className="w-full h-full border-0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                        ></iframe>
+
                                         <h3 className="text-xl font-bold">{selectedPlaylist.title}</h3>
 
                                         <p className="text-sm text-muted-foreground">{selectedPlaylist.description}</p>
@@ -221,7 +221,7 @@ export default function HomePage() {
                                 <ScrollArea className="flex-1">
                                     <div className="p-4">
                                         <h4 className="font-medium mb-2">Tracks</h4>
-                                      
+
                                     </div>
                                 </ScrollArea>
                             </>
