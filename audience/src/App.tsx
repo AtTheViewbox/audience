@@ -16,35 +16,34 @@ function App() {
   useEffect(() => {
     console.log("App loaded")
   }, []);
-  
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">
 
       <link
-  rel="iframely"
-  href="https://attheviewbox.github.io/audience/"
-  media="(aspect-ratio: 1280/720)"
-/>
-<meta property="title" content="AtTheViewBox" />
-<meta property="description" content="get started reading images" />
+        rel="iframely"
+        href="https://attheviewbox.github.io/audience/"
+        media="(aspect-ratio: 1280/720)"
+      />
+      <meta property="title" content="AtTheViewBox" />
+      <meta property="description" content="get started reading images" />
 
-<Router basename={basename}>
-          <Routes>
-            <Route path="/" element={  
-              <DataProvider>
-        <Layout />
-        <ToolsTab/>
-        <Fab />
-        <SessionUsers />
-        <Toaster position="top-right"/>
-      </DataProvider>
-    } />
+      <Router basename={basename}>
+        <Routes>
+          <Route path="/" element={
+            <DataProvider>
+              <Layout />
+              <ToolsTab />
+              <Fab />
+              <SessionUsers />
+              <Toaster position="top-right" />
+            </DataProvider>
+          } />
 
-          </Routes>
-        </Router>
+        </Routes>
+      </Router>
 
-    
+
     </div>
   );
 }
