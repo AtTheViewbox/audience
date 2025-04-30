@@ -47,7 +47,7 @@ jobs:
           git checkout -b gh-pages
           mkdir -p staging
           if [[ "${{ github.ref_name }}" == "staging" ]]; then
-            cp -r staging/* .
+            :
           else
             cp -r root/* .
           fi
