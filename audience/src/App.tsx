@@ -17,7 +17,7 @@ function App() {
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">
-      <head>
+
       <link
   rel="iframely"
   href="https://attheviewbox.github.io/audience/"
@@ -40,7 +40,7 @@ function App() {
 
           </Routes>
         </Router>
-</head>
+
     
     </div>
   );
