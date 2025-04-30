@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { createClient } from '@supabase/supabase-js'
+import { useContext } from "react"
+import { UserContext } from "../context/UserContext"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import { FileIcon, FolderIcon, UploadCloudIcon, XIcon } from "lucide-react"
 
 export function UploaderComp() {
   const [open, setOpen] = useState(false)
+  const { supabaseClient } = useContext(UserContext).data;
   const [files, setFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -66,19 +68,15 @@ export function UploaderComp() {
 
 
   const uploadImageToR2 = async (file) => {
-    const cl = createClient("https://gcoomnnwmbehpkmbgroi.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw");
-  
 
     const {
         data: { session },
         error,
-      } = await cl.auth.getSession();
+      } = await supabaseClient.auth.getSession();
       
     const token = session?.access_token;
-    console.log(token)
-    const reader = new FileReader();
 
-  
+    const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = reader.result.split(',')[1]; // Strip the base64 prefix
   
