@@ -50,4 +50,3 @@ jobs:
           git commit -m "Deploy from ${{ github.ref_name }}"
           git remote add origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
           git push --force origin gh-pages
-
