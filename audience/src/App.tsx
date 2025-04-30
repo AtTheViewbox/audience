@@ -3,7 +3,7 @@ import MainPage from './components/MainPage'
 import { DataProvider } from './context/DataContext';
 import { UserProvider } from './context/UserContext';
 import HomePage from "./components/HomePage"
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { useLocation } from 'react-router-dom';
@@ -12,6 +12,7 @@ import UpdatePassword from './login/UpdatePassword';
 function App() {
 
   const basename = import.meta.env.BASE_URL
+  console.log("basename", basename)
 
   useEffect(() => {
     console.log("App loaded")
