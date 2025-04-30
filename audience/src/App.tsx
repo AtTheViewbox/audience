@@ -10,6 +10,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 function App() {
 
+  const basename = import.meta.env.BASE_URL
+  console.log("basename", basename)
+
   useEffect(() => {
     console.log("App loaded")
   }, []);
@@ -26,7 +29,7 @@ function App() {
 <meta property="title" content="AtTheViewBox" />
 <meta property="description" content="get started reading images" />
 
-<Router basename="/audience">
+<Router basename={basename}>
           <Routes>
             <Route path="/" element={  
               <DataProvider>

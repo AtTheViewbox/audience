@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "build:staging": "vite build --config vite.config.staging.js",
+    "build:staging": "cross-env BUILD_ENV=staging vite build",
     "build:prod": "vite build --config vite.config.js",
     "deploy": "gh-pages -d dist"
   },
