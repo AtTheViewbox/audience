@@ -60,6 +60,5 @@ jobs:
           git config user.email "github-actions@github.com"
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
-          git remote set-url origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
           git push --force origin gh-pages
 
