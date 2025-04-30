@@ -37,7 +37,6 @@ function App() {
         <meta property="title" content="AtTheViewBox" />
         <meta property="description" content="get started reading images" />
       </Helmet>
-   
         <Router basename="/audience">
           <Routes>
             <Route path="/" element={<AudienceRoute/>} />
