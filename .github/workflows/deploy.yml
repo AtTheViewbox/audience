@@ -45,7 +45,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git checkout -b gh-pages
           mkdir -p staging
-          cp -r root/* .
+          cp -r dist/* .
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
           git remote add origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
