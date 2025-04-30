@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: audience
 
     steps:
       - name: Checkout repo
@@ -48,4 +48,6 @@ jobs:
           cp -r root/* .
           git add .
           git commit -m "Deploy from ${{ github.ref_name }}"
+          git remote add origin https://${{ secrets.GH_DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git
           git push --force origin gh-pages
+
