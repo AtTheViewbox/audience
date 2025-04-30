@@ -148,8 +148,13 @@ export default function HomePage() {
                 <div className="flex-1 flex overflow-hidden">
                     {/* Playlist Grid */}
                     <div className="flex-1 overflow-auto p-6">
-                        <h2 className="text-2xl font-bold mb-6">Public Studies</h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold ">Studies</h2>
 
+                        <div className="flex items-center gap-4">
+                                            <Button variant="outline" >Add</Button>
+                                        </div>
+                    </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {playlists.map((playlist) => (
                                 <Card
