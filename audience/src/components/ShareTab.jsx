@@ -2,13 +2,8 @@ import { Button } from "@/components/ui/button";
 import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import {
-  ClipboardCopy,
   Globe,
-  Lock,
   Users,
-  Plus,
-  X,
-  Presentation,
   Copy,
   Check,
 } from "lucide-react";
@@ -30,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { UserContext, UserDispatchContext } from "../context/UserContext"
+import { Visibility } from "../lib/constants.js";
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -37,11 +33,6 @@ const ShareSessionState = {
   EXISTING_SAME_SESSION: "existing same session",
   NO_EXISTING_SESSION: "no existing session",
   LOADING: "loading",
-};
-
-const Visibility = {
-  AUTHENTICATED: "AUTHENTICATED",
-  PUBLIC: "PUBLIC",
 };
 
 const Mode = {
