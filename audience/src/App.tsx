@@ -46,7 +46,6 @@ function App() {
             <Route path="/passwordreset" element={<UpdatePassword/>} />
           </Routes>
         </Router>
- 
     </div>
   );
 }
