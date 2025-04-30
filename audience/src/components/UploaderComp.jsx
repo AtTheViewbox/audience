@@ -66,7 +66,6 @@ export function UploaderComp() {
     }
   }
 
-
   const uploadImageToR2 = async (file) => {
 
     const {
