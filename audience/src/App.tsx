@@ -38,10 +38,10 @@ function App() {
         <meta property="description" content="get started reading images" />
       </Helmet>
    
-        <Router>
+        <Router basename="/audience">
           <Routes>
-            <Route path="/audience" element={<AudienceRoute/>} />
-            <Route path="/audience/passwordreset" element={<UpdatePassword/>} />
+            <Route path="/" element={<AudienceRoute/>} />
+            <Route path="/passwordreset" element={<UpdatePassword/>} />
           </Routes>
         </Router>
  
