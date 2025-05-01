@@ -79,6 +79,7 @@ export default function Viewport(props) {
           toolGroup.setToolPassive(ZoomTool.toolName);
           toolGroup.setToolPassive(PanTool.toolName);
           toolGroup.setToolPassive(StackScrollTool.toolName);
+          if (mobile){toolGroup.setToolActive(ProbeTool.toolName,{ bindings: [{ mouseButton: MouseBindings.Primary }], });}
           toolGroup.setToolActive(ProbeTool.toolName);
           break;
     }
@@ -146,26 +147,22 @@ export default function Viewport(props) {
     // Any viewport using the group
     ToolGroupManager.createToolGroup(toolGroupId);
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
-
-    if (mobile) {
-      toolGroup.addTool(WindowLevelTool.toolName);
+    toolGroup.addTool(WindowLevelTool.toolName);
+      toolGroup.addTool(PanTool.toolName);
       toolGroup.addTool(ZoomTool.toolName);
-      toolGroup.addTool(StackScrollTool.toolName);
+      toolGroup.addTool(StackScrollTool.toolName, { loop: false });
       toolGroup.addTool(ProbeTool.toolName);
 
+    if (mobile) {
+  
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
+      toolGroup.setToolActive(PanTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
       toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
       toolGroup.setToolActive(ProbeTool.toolName);
 
     } else {
-      toolGroup.addTool(WindowLevelTool.toolName);
-      toolGroup.addTool(PanTool.toolName);
-      toolGroup.addTool(ZoomTool.toolName);
-      toolGroup.addTool(StackScrollTool.toolName, { loop: false });
       toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
-      toolGroup.addTool(ProbeTool.toolName);
-      
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
