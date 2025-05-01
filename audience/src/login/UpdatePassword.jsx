@@ -16,13 +16,6 @@ export default function UpdatePasswordForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
 
-  useEffect(() => {
-    cl.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('Password recovery session:', session);
-      }
-    });
-  }, []);
 
   async function updatePassword(newPassword) {
     if (document.getElementById("confirmPassword").value != document.getElementById("password").value) {

@@ -70,8 +70,9 @@ export function LoginDialog() {
   const sendPasswordRecovery = async () => {
     const email = document.getElementById("resetEmail").value;
     const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+    console.log(rootUrl + "passwordreset")
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: rootUrl + "/passwordreset",
+      redirectTo: rootUrl + "passwordreset",
       
     });
 
