@@ -69,11 +69,13 @@ export default function HomePage() {
         }
     };
 
-    const getIframeURL = (url_params) => {
+    const getIframeURL = (url_params,preview=false) => {
         const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
         const url = new URL(url_params);
         const params = new URLSearchParams(url.search);
+        if (preview){
         params.set('preview', 'true');
+        }
         const newSearch = '?' + params.toString();
         const fullUrl = rootUrl + newSearch;
         return fullUrl;
@@ -195,7 +197,7 @@ export default function HomePage() {
                                 <div className="p-6 border-b">
                                     <div className="flex flex-col items-center text-center mb-4">
                                         <iframe
-                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):""}
+                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params,preview=true):""}
                                             title={`${selectedStudyList.name}`}
                                             className="w-full h-[300px] border-0"
                                             allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
