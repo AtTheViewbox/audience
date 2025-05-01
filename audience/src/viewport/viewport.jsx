@@ -1,19 +1,22 @@
 import React, { useRef, useContext, useEffect,useState } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
-
+import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
-import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
-import dicomParser from 'dicom-parser';
 import LoadingPage from '../components/LoadingPage.jsx';
+import { Circle } from "lucide-react"
+
 
 
 export default function Viewport(props) {
   const elementRef = useRef(null);
 
-  const { vd, channels, sharing, toolSelected,s,isRequestLoading } = useContext(DataContext).data;
+  const { vd,toolSelected,s,isRequestLoading,coordData,sharingUser,  } = useContext(DataContext).data;
+  const { userData } = useContext(UserContext).data;
+  const [viewportReady, setViewportReady] = useState(false);
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
+  const [dotPos, setDotPos] = useState([0, 0]);
 
   const { dispatch } = useContext(DataDispatchContext);
   const [isLoading,setIsLoading] = useState(true);
@@ -22,6 +25,7 @@ export default function Viewport(props) {
   useEffect(()=>{
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    
 
     if (isLoading || mobile) return;
     
@@ -32,6 +36,7 @@ export default function Viewport(props) {
       StackScrollMouseWheelTool,
       ZoomTool,
       PlanarRotateTool,
+      ProbeTool,
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
@@ -45,29 +50,41 @@ export default function Viewport(props) {
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "window":
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "zoom":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "scroll":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
+      case "pointer":
+          toolGroup.setToolPassive(WindowLevelTool.toolName);
+          toolGroup.setToolPassive(ZoomTool.toolName);
+          toolGroup.setToolPassive(PanTool.toolName);
+          toolGroup.setToolPassive(StackScrollTool.toolName);
+          toolGroup.setToolActive(ProbeTool.toolName);
+          break;
     }
 
   },[toolSelected])
+  
 
   const loadImagesAndDisplay = async () => {
     //setIsLoading(true)
@@ -88,7 +105,6 @@ export default function Viewport(props) {
     const viewport = (
       rendering_engine.getViewport(viewportId)
     );
-
     const { s, ww, wc } = viewport_data;
 
     s.map((imageId) => {
@@ -103,28 +119,6 @@ export default function Viewport(props) {
       isComputedVOI: false,
     });
 
-    // elementRef.current.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-    //   channels[viewport_idx].send({
-    //     type: 'broadcast',
-    //     event: 'master',
-    //     payload: { message: event.detail.imageIdIndex, viewport: viewportId },
-    //   })
-    // })
-
-    // channels[viewport_idx].on(
-    //   'broadcast',
-    //   { event: 'master' },
-    //   (payload) => {
-    //     console.log(payload)
-    //     // if (m == 'false') {
-    //       if (payload.payload.viewport == viewportId) {
-    //         viewport.setImageIdIndex(payload.payload.message);
-    //       }
-    //     // } 
-    //   }
-    // )
-
-    viewport.render();
   };
 
   const addCornerstoneTools = () => {
@@ -139,6 +133,7 @@ export default function Viewport(props) {
       StackScrollTool,
       StackScrollMouseWheelTool,
       ZoomTool,
+      ProbeTool,
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
@@ -167,11 +162,13 @@ export default function Viewport(props) {
       toolGroup.addTool(ZoomTool.toolName);
       toolGroup.addTool(StackScrollTool.toolName, { loop: false });
       toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
-
+      toolGroup.addTool(ProbeTool.toolName);
+      
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
       toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
+      toolGroup.setToolActive(ProbeTool.toolName);
     }
 
     toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
@@ -179,10 +176,24 @@ export default function Viewport(props) {
   };
 
   useEffect(() => {
+    if (viewport_data && !isRequestLoading && viewportReady) {  
+
+      const viewportId = `${viewport_idx}-vp`;
+      const viewport = (
+        rendering_engine.getViewport(viewportId)
+      );
+      const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
+      setDotPos([canvasCoord[0],  canvasCoord[1] ]);
+
+    }
+  }, [coordData]);
+
+  useEffect(() => {
     if (viewport_data && !isRequestLoading) {  
  
       loadImagesAndDisplay().then(() => {
         if (initalLoad){
+          setViewportReady(true);
           addCornerstoneTools()
         }
         setIsLoading(false)
@@ -193,10 +204,23 @@ export default function Viewport(props) {
 
 
   return (
-   <>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%'}} >
         {(isRequestLoading)?<LoadingPage/>:null}
+        {coordData && coordData.viewport ==`${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && <Circle style={{
+            position: 'absolute',
+            left: `${dotPos[0]}px`,
+            top: `${dotPos[1]}px`,
+            transform: 'translate(-50%, -50%)',
+            color: 'red',
+            width: 15,
+            height: 15,
+            zIndex: 1000,
+          }}/>}
+        
         </div>
-    </>
+    </div>
   );
 }
+
+

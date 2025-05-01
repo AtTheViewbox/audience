@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import {ZoomIn, Contrast, Move, ArrowDownUp, Bolt } from "lucide-react";
+import {ZoomIn, Contrast, Move, ArrowDownUp, Bolt,Crosshair } from "lucide-react";
 import { useEffect, useContext,useState } from "react";
 import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
 import {
@@ -24,9 +24,9 @@ function ToolsTab() {
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     return (
-        mobile?null:
-        <DropdownMenu open modal={false}>
-            <DropdownMenuTrigger asChild style={{display: "none"}}>
+       
+        <DropdownMenu open={mobile?false:true} modal={false}>
+            <DropdownMenuTrigger asChild style={mobile?{}:{display: "none"}} >
                 <Button
                     size={"icon"}
                     variant="ghost"
@@ -35,8 +35,7 @@ function ToolsTab() {
                         position: 'fixed', left: '10px', top: '10px',
                     }}
                 >
-                    {/*<Wrench strokeWidth={0.75} color="#ffffff" />*/}
-                    <Bolt strokeWidth={0.75} />
+                    <Bolt strokeWidth={0.75}/>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
@@ -56,6 +55,10 @@ function ToolsTab() {
                     <DropdownMenuRadioItem value="scroll">
                         <ArrowDownUp strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Scroll</span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="pointer">
+                        <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                        <span>&nbsp;Pointer</span>
                     </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>

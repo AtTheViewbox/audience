@@ -5,15 +5,11 @@ import { recreateList} from '../lib/inputParser.ts';
 
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
+
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
-
-
-
 import { utilities } from '@cornerstonejs/core'; 
 import { toast } from "sonner"
-
-
 import defaultData from "./defaultData.jsx";
 import discordSdk from '../discordSdk.tsx'
 import { cl } from './SupabaseClient.jsx';
@@ -26,6 +22,7 @@ const queryParams = new URLSearchParams(window.location.search);
 const isEmbedded = queryParams.get('frame_id') != null;
 var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
 // create initial data object from URL query string
+
 
 
 if (initialData.vd) {
@@ -174,7 +171,7 @@ export const DataProvider = ({ children }) => {
                 StackScrollTool,
                 StackScrollMouseWheelTool,
                 ZoomTool,
-                PlanarRotateTool,
+                ProbeTool
             } = cornerstoneTools;
 
             cornerstoneTools.addTool(PanTool);
@@ -182,7 +179,7 @@ export const DataProvider = ({ children }) => {
             cornerstoneTools.addTool(StackScrollTool);
             cornerstoneTools.addTool(StackScrollMouseWheelTool);
             cornerstoneTools.addTool(ZoomTool);
-            cornerstoneTools.addTool(PlanarRotateTool);
+            cornerstoneTools.addTool(ProbeTool);
 
             const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
 
@@ -332,6 +329,7 @@ export const DataProvider = ({ children }) => {
                 }
             })
             console.log(data)
+
             if(data.sessionMeta.mode=="TEAM" || userData.id==data.sessionMeta.owner){
             
                 interaction_channel.on(
@@ -352,6 +350,15 @@ export const DataProvider = ({ children }) => {
                             isComputedVOI: false,
                           });
                         data.renderingEngine.getViewport(payload.payload.viewport).render()
+                    }
+                )
+
+                interaction_channel.on(
+                    'broadcast',
+                    { event: 'pointer-changed' },
+                    (payload) => {
+                       dispatch({type: 'set_pointer', payload: {coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ,viewport: payload.payload.viewport}})
+            
                     }
                 )
         }
@@ -398,12 +405,33 @@ export const DataProvider = ({ children }) => {
                     })
 
                 })
+                if (data.toolSelected=="pointer"){
+                data.eventListenerManager.addEventListener(vp.element,cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
+
+                    const eventData = event.detail;
+                    const { currentPoints } = eventData;
+                    if (currentPoints && currentPoints.world) {
+                        data.interactionChannel.send({
+                            type: 'broadcast',
+                            event: 'pointer-changed',
+                            payload: { coordX:currentPoints.world[0], coordY:currentPoints.world[1],coordZ:currentPoints.world[2], viewport: `${viewport_idx}-vp`  },
+                        })
+                    }
+                  
+                });}else{
+                    data.interactionChannel.send({
+                        type: 'broadcast',
+                        event: 'pointer-changed',
+                        payload: { coordX:10000, coordY:10000,coordZ:10000 },
+                    })
+                    data.eventListenerManager.removeEventListener(vp.element,cornerstoneTools.Enums.Events.MOUSE_MOVE);
+                }
                
             })
 
         }
     }
-}, [data.shareController, data.renderingEngine, data.sharingUser, userData]);
+}, [data.shareController, data.renderingEngine, data.sharingUser, userData,data.toolSelected]);
 
 
     return (
@@ -508,7 +536,11 @@ export function dataReducer(data, action) {
         case 'select_tool':
                 new_data = {...data, toolSelected: action.payload}
                 break;
-
+        case 'set_pointer':
+                new_data = {...data, coordData:
+                    {coord:[action.payload.coordX,action.payload.coordY,action.payload.coordZ],
+                        viewport:action.payload.viewport} }
+                break;
         case 'viewport_ready':
             console.log("viewport ready!", action.payload)
 
