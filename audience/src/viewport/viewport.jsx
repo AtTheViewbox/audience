@@ -27,7 +27,7 @@ export default function Viewport(props) {
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     
 
-    if (isLoading || mobile) return;
+    if (isLoading ) return;
     
     const {
       PanTool,
