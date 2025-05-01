@@ -197,7 +197,7 @@ export default function HomePage() {
                                 <div className="p-6 border-b">
                                     <div className="flex flex-col items-center text-center mb-4">
                                         <iframe
-                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params,preview=true):""}
+                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params,true):""}
                                             title={`${selectedStudyList.name}`}
                                             className="w-full h-[300px] border-0"
                                             allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
