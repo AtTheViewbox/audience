@@ -4,3 +4,11 @@ export const Visibility = {
     PRIVATE: "PRIVATE",
     Organization: "ORGANIZATION",
   };
+
+   
+export const Filter = {
+  ALL: "ALL",
+  PUBLIC: "PUBLIC",
+  MYSTUDIES: "MYSTUDIES",
+  FAVORITE: "FAVORITE",
+}

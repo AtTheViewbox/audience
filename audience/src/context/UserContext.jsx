@@ -1,4 +1,5 @@
 import { createContext, useState,useReducer,useEffect } from 'react';
+import LoadingPage from '../components/LoadingPage.jsx';
 import { cl } from './SupabaseClient.jsx';
 
 
@@ -45,7 +46,7 @@ export const UserProvider = ({ children }) => {
 }, []);
 
 
-if (loading) return <div>Loading context...</div>;
+if (loading) return <LoadingPage />;
 
   return (
     <UserContext.Provider value={{ data }}>
@@ -71,7 +72,6 @@ export function dataReducer(data, action) {
             data.supabaseClient.removeAllChannels();
             break;
         case 'auth_update':
-            
             new_data = { ...data, userData: action.payload.session.user };
             break;
         case 'log_out':

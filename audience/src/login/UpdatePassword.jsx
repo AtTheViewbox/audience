@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react"
+import { AlertCircle, Eye, EyeOff } from "lucide-react"
 import { useNavigate } from "react-router-dom";
 import { cl } from '../context/SupabaseClient.jsx';
 
@@ -14,6 +14,15 @@ export default function UpdatePasswordForm() {
   const [errors, setErrors] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+
+  useEffect(() => {
+    cl.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('Password recovery session:', session);
+      }
+    });
+  }, []);
 
   async function updatePassword(newPassword) {
     if (document.getElementById("confirmPassword").value != document.getElementById("password").value) {
@@ -33,7 +42,7 @@ export default function UpdatePasswordForm() {
     } else {
       console.log('Password updated successfully:', data);
       setIsLoading(false)
-      navigate("/audience");
+      navigate("/");
       return { success: true, data };
     }
     

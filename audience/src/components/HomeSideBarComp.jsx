@@ -1,17 +1,44 @@
-import { useState, useEffect } from "react"
-import { Home, Search, Library,  User, Settings, ChevronRight } from "lucide-react"
-
+import { useState, useEffect, useContext } from "react"
+import { Home, Search, Library, User, Settings, Globe, Moon } from "lucide-react"
+import { Filter, Visibility } from "../lib/constants"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import {
+    Dialog,
+    DialogContent,
+    DialogTrigger,
+    DialogTitle
+} from "@/components/ui/dialog"
+import SettingTab from "./SettingTab.jsx"
+import { UserContext } from "../context/UserContext"
 
 
-function HomeSideBar() {
+function HomeSideBar({ filter, setFilter }) {
     const [leftPanelWidth, setLeftPanelWidth] = useState(256) // 64 * 4 = 256px (w-64)
+    const [open, setOpen] = useState(false)
+    const { userData } = useContext(UserContext).data;
 
     const [isResizingLeft, setIsResizingLeft] = useState(false)
 
     const minLeftWidth = 180
     const maxLeftWidth = 400
 
+
+    useEffect(() => {
+        document.documentElement.classList.add("dark")
+        return () => {
+            // If you want to remove dark mode when navigating away
+            // document.documentElement.classList.remove('dark');
+        }
+    }, [])
+
+    const ToggleDarkMode = () => {
+        if (document.documentElement.classList.contains("dark")) {
+            document.documentElement.classList.remove("dark")
+        } else {
+            document.documentElement.classList.add("dark")
+        }
+    }
 
     // Handle mouse events for resizing
     useEffect(() => {
@@ -49,53 +76,60 @@ function HomeSideBar() {
                     </div>
 
                     <nav className="space-y-1">
-                        <Button variant="ghost" className="w-full justify-start">
-                            <Home className="mr-2 h-4 w-4" />
-                            Home
+                        {!userData || userData.is_anonymous ? null :
+                            <Button variant="ghost" onClick={() => setFilter(Filter.ALL)} className={cn("w-full justify-start",
+                                filter === Filter.ALL
+                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                                    : "",
+                            )}>
+                                <Home className="mr-2 h-4 w-4" />
+                                Home
+                            </Button>}
+
+                        <Button onClick={() => setFilter(Filter.PUBLIC)} variant="ghost" className={cn("w-full justify-start",
+                            filter === Filter.PUBLIC
+                                ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                                : "",
+                        )}>
+                            <Globe className="mr-2 h-4 w-4" />
+                            Public Studies
                         </Button>
-                        <Button variant="ghost" className="w-full justify-start">
-                            <Search className="mr-2 h-4 w-4" />
-                            Search
-                        </Button>
-                        <Button variant="ghost" className="w-full justify-start">
-                            <Library className="mr-2 h-4 w-4" />
-                            Your Studies
-                        </Button>
+                        {!userData || userData.is_anonymous ? null :
+                            <Button onClick={() => setFilter(Filter.MYSTUDIES)} variant="ghost" className={cn("w-full justify-start",
+                                filter === Filter.MYSTUDIES
+                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                                    : "",
+                            )}>
+                                <Library className="mr-2 h-4 w-4" />
+                                Your Studies
+                            </Button>
+                        }
                     </nav>
-                    {/** 
-                    <Separator className="my-4" />
-
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">Your Playlists</span>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <PlusCircle className="h-4 w-4" />
-                            </Button>
-                        </div>
-
-                        <nav className="space-y-1">
-                            <Button variant="ghost" className="w-full justify-start">
-                                <Heart className="mr-2 h-4 w-4" />
-                                Liked Songs
-                            </Button>
-                            <Button variant="ghost" className="w-full justify-start">
-                                <Clock className="mr-2 h-4 w-4" />
-                                Recently Played
-                            </Button>
-                        </nav>
-                    </div>*/}
                 </div>
 
                 <div className="mt-auto p-4 border-t">
-                    <Button variant="ghost" className="w-full justify-start">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
-                    </Button>
-                    <Button variant="ghost" className="w-full justify-start">
-                        <User className="mr-2 h-4 w-4" />
-                        Profile
+                    {!userData || userData.is_anonymous ? null :
+                        <Dialog open={open} onOpenChange={setOpen} >
+
+                            <Button onClick={() => setOpen(true)} variant="ghost" className="w-full justify-start">
+                                <Settings className="mr-2 h-4 w-4" />
+                                Settings
+                            </Button>
+                            <DialogTitle className="hidden">Settings</DialogTitle>
+                            <DialogContent className="sm:max-w-md p-0 rounded-2xl shadow-xl overflow-hidden border-0">
+                                <SettingTab />
+                            </DialogContent>
+                        </Dialog>}
+
+
+                    <Button onClick={ToggleDarkMode} variant="ghost" className="w-full justify-start">
+                        <Moon className="mr-2 h-4 w-4" />
+                        Toggle Dark Mode
                     </Button>
                 </div>
+
+
+
             </div>
 
             {/* Resize handle for left panel */}
