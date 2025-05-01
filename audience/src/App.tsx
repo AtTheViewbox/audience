@@ -12,7 +12,7 @@ import UpdatePassword from './login/UpdatePassword';
 function App() {
 
   const basename = import.meta.env.BASE_URL
-  console.log("basename", basename)
+
 
   useEffect(() => {
     console.log("App loaded")

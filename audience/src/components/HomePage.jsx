@@ -11,6 +11,7 @@ import { UserContext } from "../context/UserContext"
 import { Input } from "@/components/ui/input"
 import {  Filter } from "../lib/constants"
 
+const basename = import.meta.env.BASE_URL
 export default function HomePage() {
     const [selectedStudyList, setSelectedStudyList] = useState([])
     const [filter, setFilter] = useState(Filter.ALL)
@@ -67,6 +68,16 @@ export default function HomePage() {
             console.log(error)
         }
     };
+
+    const getIframeURL = (url_params) => {
+        const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+        const url = new URL(url_params);
+        const params = new URLSearchParams(url.search);
+        params.set('preview', 'true');
+        const newSearch = '?' + params.toString();
+        const fullUrl = rootUrl + newSearch;
+        return fullUrl;
+    }
     const getStudies = async () => {
         try {
             let data, error;
@@ -184,7 +195,7 @@ export default function HomePage() {
                                 <div className="p-6 border-b">
                                     <div className="flex flex-col items-center text-center mb-4">
                                         <iframe
-                                            src={selectedStudyList.url_params+"&preview=true"}
+                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):""}
                                             title={`${selectedStudyList.name}`}
                                             className="w-full h-[300px] border-0"
                                             allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -202,7 +213,7 @@ export default function HomePage() {
                                         <Button
                                             className="flex-1"
                                             onClick={() => {
-                                                window.open(selectedStudyList.url_params, '_blank');
+                                                window.open(selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):"", '_blank');
                                             }}
                                         >
                                             Launch to New Tab
@@ -211,11 +222,11 @@ export default function HomePage() {
                                     </div>
                                     <div className="flex gap-2">
 
-                                        <Input value={selectedStudyList.url_params??""} readOnly />
+                                        <Input value={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):""??""} readOnly />
                                         <Button
                                             size="icon"
                                             onClick={() => {
-                                                navigator.clipboard.writeText(selectedStudyList.url_params)
+                                                navigator.clipboard.writeText(selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):"")
                                                 setCopyClicked(true)
                                             }}
                                         >
