@@ -15,6 +15,7 @@ function ToolsTab() {
     const { dispatch } = useContext(DataDispatchContext);
 
     const [position, setPosition] = useState("window")
+    const [modelDropdown, setModelDropdown] = useState(false)
 
     const selectTool = (value) => {
         setPosition(value)
@@ -25,7 +26,7 @@ function ToolsTab() {
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     return (
        
-        <DropdownMenu open={mobile?false:true} modal={false}>
+        <DropdownMenu modal={false} open={mobile? modelDropdown : true} onOpenChange={() => {setModelDropdown(!modelDropdown)}}>
             <DropdownMenuTrigger asChild style={mobile?{}:{display: "none"}} >
                 <Button
                     size={"icon"}

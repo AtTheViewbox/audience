@@ -151,10 +151,12 @@ export default function Viewport(props) {
       toolGroup.addTool(WindowLevelTool.toolName);
       toolGroup.addTool(ZoomTool.toolName);
       toolGroup.addTool(StackScrollTool.toolName);
+      toolGroup.addTool(ProbeTool.toolName);
 
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
       toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
+      toolGroup.setToolActive(ProbeTool.toolName);
 
     } else {
       toolGroup.addTool(WindowLevelTool.toolName);
