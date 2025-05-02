@@ -47,12 +47,13 @@ function ToolsTab() {
                     </DropdownMenuRadioItem>
                     <DropdownMenuRadioItem value="zoom">
                         <ZoomIn strokeWidth={0.75} className="mr-2 h-4 w-4" />
-                        <span>&nbsp;Zoom</span>
+                        <span>&nbsp;{mobile?"Zoom & Pan" :"Zoom"}</span>
                     </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="pan">
+                    {mobile?null:<DropdownMenuRadioItem value="pan">
                         <Move strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Pan</span>
-                    </DropdownMenuRadioItem>
+                    </DropdownMenuRadioItem>}
+                    
                     <DropdownMenuRadioItem value="scroll">
                         <ArrowDownUp strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Scroll</span>

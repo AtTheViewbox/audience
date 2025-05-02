@@ -53,19 +53,19 @@ export default function Viewport(props) {
         toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
+      case "zoom":
+          toolGroup.setToolPassive(WindowLevelTool.toolName);
+          toolGroup.setToolPassive(PanTool.toolName);
+          toolGroup.setToolPassive(StackScrollTool.toolName);
+          toolGroup.setToolPassive(ProbeTool.toolName);
+          toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+          break;
       case "window":
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
         toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
-        break;
-      case "zoom":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolPassive(ProbeTool.toolName);
-        toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "scroll":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
@@ -79,7 +79,7 @@ export default function Viewport(props) {
           toolGroup.setToolPassive(ZoomTool.toolName);
           toolGroup.setToolPassive(PanTool.toolName);
           toolGroup.setToolPassive(StackScrollTool.toolName);
-          if (mobile){toolGroup.setToolActive(ProbeTool.toolName,{ bindings: [{ mouseButton: MouseBindings.Primary }], });}
+          //if (mobile){toolGroup.setToolActive(ProbeTool.toolName,{ bindings: [{ mouseButton: MouseBindings.Primary }], });}
           toolGroup.setToolActive(ProbeTool.toolName);
           break;
     }
@@ -159,7 +159,7 @@ export default function Viewport(props) {
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
       toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
-      toolGroup.setToolActive(ProbeTool.toolName);
+
 
     } else {
       toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
@@ -167,7 +167,6 @@ export default function Viewport(props) {
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
       toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
-      toolGroup.setToolActive(ProbeTool.toolName);
     }
 
     toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
