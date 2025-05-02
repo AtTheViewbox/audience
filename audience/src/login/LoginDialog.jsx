@@ -30,7 +30,7 @@ export function LoginDialog() {
       setLoginError(true);
     } else {
       setLoginError(false);
-      // location.reload(); // Uncomment if needed
+      location.reload(); 
     }
   };
 

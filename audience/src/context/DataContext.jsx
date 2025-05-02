@@ -47,6 +47,10 @@ initialData.activeUsers = [];
 initialData.toolSelected = "window";
 
 export const DataProvider = ({ children }) => {
+
+    const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
     const [data, dispatch] = useReducer(dataReducer, initialData);
     const { userDispatch } = useContext(UserDispatchContext);
     const {userData,supabaseClient} = useContext(UserContext).data;
@@ -405,32 +409,48 @@ export const DataProvider = ({ children }) => {
                     })
 
                 })
-                if (data.toolSelected=="pointer"){
-                data.eventListenerManager.addEventListener(vp.element,cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
+                if (data.toolSelected == "pointer") {
+                    if (mobile) {
+                        data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.TOUCH_DRAG, (event) => {
 
-                    const eventData = event.detail;
-                    const { currentPoints } = eventData;
-                    if (currentPoints && currentPoints.world) {
-                        data.interactionChannel.send({
-                            type: 'broadcast',
-                            event: 'pointer-changed',
-                            payload: { coordX:currentPoints.world[0], coordY:currentPoints.world[1],coordZ:currentPoints.world[2], viewport: `${viewport_idx}-vp`  },
+                            const eventData = event.detail;
+                            const { currentPoints } = eventData;
+                            if (currentPoints && currentPoints.world) {
+                                data.interactionChannel.send({
+                                    type: 'broadcast',
+                                    event: 'pointer-changed',
+                                    payload: { coordX: currentPoints.world[0], coordY: currentPoints.world[1], coordZ: currentPoints.world[2], viewport: `${viewport_idx}-vp` },
+                                })
+                            }
+                        })
+                    } else {
+                        data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
+                            const eventData = event.detail;
+                            const { currentPoints } = eventData;
+                            if (currentPoints && currentPoints.world) {
+                                data.interactionChannel.send({
+                                    type: 'broadcast',
+                                    event: 'pointer-changed',
+                                    payload: { coordX: currentPoints.world[0], coordY: currentPoints.world[1], coordZ: currentPoints.world[2], viewport: `${viewport_idx}-vp` },
+                                })
+                            }
+
                         })
                     }
-                  
-                });}else{
+                }
+                else {
                     data.interactionChannel.send({
                         type: 'broadcast',
                         event: 'pointer-changed',
-                        payload: { coordX:10000, coordY:10000,coordZ:10000 },
+                        payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
                     })
-                    data.eventListenerManager.removeEventListener(vp.element,cornerstoneTools.Enums.Events.MOUSE_MOVE);
+                    data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE);
                 }
-               
+
             })
 
+            }
         }
-    }
 }, [data.shareController, data.renderingEngine, data.sharingUser, userData,data.toolSelected]);
 
 

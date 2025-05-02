@@ -30,9 +30,9 @@ function ToolsTab() {
             <DropdownMenuTrigger asChild style={mobile?{}:{display: "none"}} >
                 <Button
                     size={"icon"}
-                    variant="ghost"
+                    //variant="ghost"
                     style={{
-                        //backgroundColor:  'transparent',
+                        backgroundColor:  'transparent',
                         position: 'fixed', left: '10px', top: '10px',
                     }}
                 >
@@ -49,6 +49,7 @@ function ToolsTab() {
                         <ZoomIn strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;{mobile?"Zoom & Pan" :"Zoom"}</span>
                     </DropdownMenuRadioItem>
+
                     {mobile?null:<DropdownMenuRadioItem value="pan">
                         <Move strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Pan</span>
