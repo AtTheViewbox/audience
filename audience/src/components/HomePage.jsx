@@ -1,5 +1,5 @@
-import { useState, useEffect,useContext } from "react"
-import {  Heart,Trash2,  Copy,Check, } from "lucide-react"
+import { useState, useEffect, useContext } from "react"
+import { Heart, Trash2, Copy, Check, } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,7 +9,8 @@ import HomeHeaderComp from "./HomeHeaderComp"
 import AddCaseDialog from "./AddCaseDialog"
 import { UserContext } from "../context/UserContext"
 import { Input } from "@/components/ui/input"
-import {  Filter } from "../lib/constants"
+import { Filter } from "../lib/constants"
+import { unflatten, flatten } from "flat";
 
 const basename = import.meta.env.BASE_URL
 export default function HomePage() {
@@ -18,7 +19,7 @@ export default function HomePage() {
     const [search, setSearch] = useState("")
     const [studyList, setStudyList] = useState([])
     const [displayStudyList, setdisplayStudyList] = useState([])
-    const { supabaseClient,userData } = useContext(UserContext).data;
+    const { supabaseClient, userData } = useContext(UserContext).data;
     const [rightPanelWidth, setRightPanelWidth] = useState(400) // 80 * 4 = 320px (w-80)
     const [isResizingRight, setIsResizingRight] = useState(false)
     const [copyClicked, setCopyClicked] = useState(false);
@@ -69,21 +70,38 @@ export default function HomePage() {
         }
     };
 
-    const getIframeURL = (url_params,preview=false) => {
+    const getIframeURL = (url_params, preview = false) => {
         const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
         const url = new URL(url_params);
-        const params = new URLSearchParams(url.search);
-        if (preview){
-        params.set('preview', 'true');
+        var params = new URLSearchParams(url.search);
+        const initialData = unflatten(Object.fromEntries(new URLSearchParams(url.search)));
+        
+        if (preview) {
+            if (initialData.vd) {
+                initialData.vd.forEach((vdItem) => {
+                    if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+                        console.log(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e, vdItem.s.D)
+                        var newD = vdItem.s.D * Math.floor((vdItem.s.e - vdItem.s.s) / (10 * vdItem.s.D))
+                        if (newD < 1) {
+                            newD = 1
+                        }
+                        vdItem.s.D = newD;
+                    }
+                })
+            }
+            const updatedFlatData = flatten(initialData);
+            var params = new URLSearchParams(updatedFlatData);
+            params.set('preview', 'true');
         }
         const newSearch = '?' + params.toString();
         const fullUrl = rootUrl + newSearch;
+        console.log("Full URL:", fullUrl);
         return fullUrl;
     }
     const getStudies = async () => {
         try {
             let data, error;
-    
+
             if (filter === Filter.PUBLIC) {
                 ({ data, error } = await supabaseClient
                     .from("studies")
@@ -100,49 +118,48 @@ export default function HomePage() {
                     .from("studies")
                     .select("*"));
             }
-    
+
             if (error) throw error;
-    
-            console.log(data);
+
             setStudyList(data);
             setdisplayStudyList(data)
             setSelectedStudyList(data[0]);
-    
+
         } catch (error) {
             console.log(error);
         }
-    };    
+    };
 
     useEffect(() => {
-        
+
         getStudies();
     }, [filter]);
 
     useEffect(() => {
         function searchItems(query, list) {
             return list.filter(item =>
-              Object.values(item).some(value =>
-                value.toString().toLowerCase().includes(query.toLowerCase())
-              )
+                Object.values(item).some(value =>
+                    value.toString().toLowerCase().includes(query.toLowerCase())
+                )
             );
-          }
-          setdisplayStudyList(searchItems(search, studyList));
+        }
+        setdisplayStudyList(searchItems(search, studyList));
 
     }, [search]);
 
     return (
         <div className="flex h-screen bg-background">
-            <HomeSideBar filter = {filter} setFilter={setFilter} />
+            <HomeSideBar filter={filter} setFilter={setFilter} />
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
-                <HomeHeaderComp setSearch = {setSearch}/>
+                <HomeHeaderComp setSearch={setSearch} />
 
                 <div className="flex-1 flex overflow-hidden">
                     <div className="flex-1 overflow-auto p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-bold ">Studies</h2>
                             <div className="flex items-center gap-4">
-                            {!userData?.is_anonymous?<AddCaseDialog onStudyAdded={getStudies}/>:null}
+                                {!userData?.is_anonymous ? <AddCaseDialog onStudyAdded={getStudies} /> : null}
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -152,15 +169,15 @@ export default function HomePage() {
                                     className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${selectedStudyList.id === study.id ? "border-primary" : ""}`}
                                     onClick={() => setSelectedStudyList(study)}
                                 >
-                                    {filter === Filter.MYSTUDIES?<Button
+                                    {filter === Filter.MYSTUDIES ? <Button
                                         variant="ghost"
                                         size="icon"
                                         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                                       onClick={() => handleDelete(study.id)}
+                                        onClick={() => handleDelete(study.id)}
                                         aria-label="Delete study"
                                     >
                                         <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>: null}
+                                    </Button> : null}
                                     <CardHeader className="pb-2">
                                         <div className="flex items-start gap-3">
 
@@ -174,7 +191,7 @@ export default function HomePage() {
                                     </CardHeader>
 
                                     <CardFooter className="pt-2 text-xs text-muted-foreground">
-                                    Created on {(new Date(study.last_accessed)).toISOString().split('T')[0]}
+                                        Created on {(new Date(study.last_accessed)).toISOString().split('T')[0]}
                                     </CardFooter>
                                 </Card>
                             ))}
@@ -197,7 +214,7 @@ export default function HomePage() {
                                 <div className="p-6 border-b">
                                     <div className="flex flex-col items-center text-center mb-4">
                                         <iframe
-                                            src={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params,true):""}
+                                            src={selectedStudyList?.url_params ? getIframeURL(selectedStudyList?.url_params, true) : ""}
                                             title={`${selectedStudyList.name}`}
                                             className="w-full h-[300px] border-0"
                                             allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -207,40 +224,40 @@ export default function HomePage() {
                                         <h3 className="text-xl font-bold">{selectedStudyList.name}</h3>
 
                                         <div className="text-xs text-muted-foreground mt-2">
-                                            Created by {selectedStudyList.owner} 
+                                            Created by {selectedStudyList.owner}
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                    <div className="flex gap-2">
-                                        <Button
-                                            className="flex-1"
-                                            onClick={() => {
-                                                window.open(selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):"", '_blank');
-                                            }}
-                                        >
-                                            Launch to New Tab
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                className="flex-1"
+                                                onClick={() => {
+                                                    window.open(selectedStudyList?.url_params ? getIframeURL(selectedStudyList?.url_params) : "", '_blank');
+                                                }}
+                                            >
+                                                Launch to New Tab
+                                            </Button>
 
+                                        </div>
+                                        <div className="flex gap-2">
+
+                                            <Input value={selectedStudyList?.url_params ? getIframeURL(selectedStudyList?.url_params) : "" ?? ""} readOnly />
+                                            <Button
+                                                size="icon"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(selectedStudyList?.url_params ? getIframeURL(selectedStudyList?.url_params) : "")
+                                                    setCopyClicked(true)
+                                                }}
+                                            >
+                                                {copyClicked ? (
+                                                    <Check className="h-4" />
+                                                ) : (
+                                                    <Copy className="h-4" />
+                                                )}
+                                            </Button>
+
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
-
-                                        <Input value={selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):""??""} readOnly />
-                                        <Button
-                                            size="icon"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(selectedStudyList?.url_params?getIframeURL(selectedStudyList?.url_params):"")
-                                                setCopyClicked(true)
-                                            }}
-                                        >
-                                            {copyClicked ? (
-                                                <Check className="h-4" />
-                                            ) : (
-                                                <Copy className="h-4" />
-                                            )}
-                                        </Button>
-
-                                    </div>
-                                </div>
                                 </div>
                                 <ScrollArea className="flex-1">
                                     <div className="p-4">

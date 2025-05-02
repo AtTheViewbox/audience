@@ -1,9 +1,6 @@
-import { mergeProps, useLongPress, usePress } from 'react-aria';
-import { Button } from "@/components/ui/button"
 import { useState, useContext, useEffect } from 'react';
-import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
+import { DataContext,  } from '../context/DataContext.jsx';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { UserContext } from "../context/UserContext"
 
 const CDN = `https://cdn.discordapp.com`
 const SIZE = 256
