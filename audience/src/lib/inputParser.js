@@ -82,7 +82,7 @@ function recreateListFromList(strs) {
 
 export function smallestInStack(s){
     const numbers = s.map(url => {
-        const match = url.match(/(\d)\.dcm\.gz/); // Match the 3-digit number before ".dcm.gz"
+        const match = url.match(/(\d+)\.dcm\.gz/); // Match the 3-digit number before ".dcm.gz"
         return match ? parseInt(match[1], 10) : null; // Convert to integer if matched
     }).filter(num => num !== null); // Filter out any null values
     

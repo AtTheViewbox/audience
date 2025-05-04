@@ -99,6 +99,7 @@ export default function Viewport(props) {
     });
     
     const stack = s;
+    console.log(smallestInStack(s))
     await viewport.setStack(stack,ci-smallestInStack(s) );
 
     viewport.setZoom(z); 
