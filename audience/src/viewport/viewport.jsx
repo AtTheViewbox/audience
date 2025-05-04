@@ -6,6 +6,7 @@ import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
 import LoadingPage from '../components/LoadingPage.jsx';
+import { smallestInStack } from '../lib/inputParser.js';
 
 
 export default function Viewport(props) {
@@ -14,6 +15,7 @@ export default function Viewport(props) {
   const { vd, channels, sharing, toolSelected,s,isRequestLoading } = useContext(DataContext).data;
   const { viewport_idx, rendering_engine } = props;
   const viewport_data = vd[viewport_idx];
+  console.log(viewport_data)
 
   const { dispatch } = useContext(DataDispatchContext);
   const [isLoading,setIsLoading] = useState(true);
@@ -89,41 +91,25 @@ export default function Viewport(props) {
       rendering_engine.getViewport(viewportId)
     );
 
-    const { s, ww, wc } = viewport_data;
+    const { s, ww, wc,z,px,py,ci } = viewport_data;
+
 
     s.map((imageId) => {
       cornerstone.imageLoader.loadAndCacheImage(imageId);
     });
     
     const stack = s;
-    await viewport.setStack(stack);
+    await viewport.setStack(stack,ci-smallestInStack(s) );
+
+    viewport.setZoom(z); 
+    viewport.setPan([px*(viewport.canvas.width/400),py*(viewport.canvas.width/400)]);
 
     viewport.setProperties({
       voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
       isComputedVOI: false,
     });
-
-    // elementRef.current.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-    //   channels[viewport_idx].send({
-    //     type: 'broadcast',
-    //     event: 'master',
-    //     payload: { message: event.detail.imageIdIndex, viewport: viewportId },
-    //   })
-    // })
-
-    // channels[viewport_idx].on(
-    //   'broadcast',
-    //   { event: 'master' },
-    //   (payload) => {
-    //     console.log(payload)
-    //     // if (m == 'false') {
-    //       if (payload.payload.viewport == viewportId) {
-    //         viewport.setImageIdIndex(payload.payload.message);
-    //       }
-    //     // } 
-    //   }
-    // )
-
+   
+    
     viewport.render();
   };
 

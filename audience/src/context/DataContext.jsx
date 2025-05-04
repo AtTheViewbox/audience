@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useReducer } from "react";
 import { unflatten, flatten } from "flat";
 
-import { recreateList} from '../lib/inputParser.ts';
+import { recreateList} from '../lib/inputParser.js';
 
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
@@ -212,8 +212,7 @@ export const DataProvider = ({ children }) => {
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode =data[0].mode
                     initialData.sessionMeta.owner = data[0].user
-                   
-                    console.log(initialData)
+
                     var newData =unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
                     if (newData.vd) {
                         newData.vd.forEach((vdItem) => {
