@@ -103,9 +103,9 @@ export default function Viewport(props) {
     var currentIndex  = ci-smallestInStack(s)+1
     
     await viewport.setStack(stack,currentIndex<0?0:currentIndex );
-
+    console.log(viewport,viewport.canvas)
     viewport.setZoom(z); 
-    viewport.setPan([px*(viewport.canvas.width/400),py*(viewport.canvas.width/400)]);
+    viewport.setPan([px*(viewport.canvas.width/400),py*(viewport.canvas.height/400)]);
 
     viewport.setProperties({
       voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
