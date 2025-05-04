@@ -5,10 +5,13 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import LoadingPage from '../components/LoadingPage.jsx';
 import { Circle } from "lucide-react"
+import { smallestInStack } from '../lib/inputParser.ts';
 
 
 
 export default function Viewport(props) {
+  const searchParams = new URLSearchParams(location.search);
+  const isPreview = searchParams.get("preview") === "true";
   const elementRef = useRef(null);
 
   const { vd,toolSelected,s,isRequestLoading,coordData,sharingUser,  } = useContext(DataContext).data;
@@ -106,19 +109,26 @@ export default function Viewport(props) {
     const viewport = (
       rendering_engine.getViewport(viewportId)
     );
-    const { s, ww, wc } = viewport_data;
+    const { s, ww, wc,px,py,ci,z} = viewport_data;
 
-    s.map((imageId) => {
-      cornerstone.imageLoader.loadAndCacheImage(imageId);
-    });
-    
+    var currentIndex = ci - smallestInStack(s) + 1;
+
     const stack = s;
-    await viewport.setStack(stack);
+    await viewport.setStack(stack, (currentIndex < 0 || isPreview) ? 0 : currentIndex);
+
+  
+  // Apply to current viewport dimensions with zoom consideration
+  const panX = (px / 400 * viewport.canvas.clientWidth) / z;
+  const panY = ( py / 400 * viewport.canvas.clientHeight) / z;
+ 
+    viewport.setZoom(z);
+    viewport.setPan([panX, panY]);
 
     viewport.setProperties({
       voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
       isComputedVOI: false,
     });
+
 
   };
 
