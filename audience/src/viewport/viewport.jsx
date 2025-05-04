@@ -121,8 +121,8 @@ export default function Viewport(props) {
   const panX = (px / 400 * viewport.canvas.clientWidth) / z;
   const panY = ( py / 400 * viewport.canvas.clientHeight) / z;
  
-    viewport.setZoom(z);
-    viewport.setPan([panX, panY]);
+    //viewport.setZoom(z);
+    //viewport.setPan([panX, panY]);
 
     viewport.setProperties({
       voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
