@@ -37,7 +37,6 @@ export default function AddCaseDialog({ onStudyAdded }) {
 
     async function addCase() {
         try { // Create new case object
-            console.log(userData)
             const caseItem = {
                 owner: userData.id,
                 name: document.getElementById("name").value,
@@ -45,7 +44,7 @@ export default function AddCaseDialog({ onStudyAdded }) {
                 url_params: document.getElementById("link").value,
                 visibility: visibility,
             }
-            console.log(caseItem)
+    
             const { data, upsert_error } = await supabaseClient
                 .from("studies")
                 .upsert(caseItem)

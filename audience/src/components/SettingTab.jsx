@@ -18,7 +18,6 @@ import {
 
 function SettingTab() {
     const { userData,supabaseClient} = useContext(UserContext).data;
-    console.log(userData)
     const navigate = useNavigate();
     
 async function logOut() {

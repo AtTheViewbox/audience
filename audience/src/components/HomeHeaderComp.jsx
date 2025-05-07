@@ -62,7 +62,7 @@ function HomeHeaderComp({setSearch}) {
                                 onClick={() => setIsOpen(false)}
                                 aria-label="Close search"
               >
-                <X className="h-4 w-4" />
+                <X onClick = {()=>{ setSearch("")}}className="h-4 w-4" />
               </Button>
             </div>
     

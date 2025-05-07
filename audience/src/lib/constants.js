@@ -11,4 +11,5 @@ export const Filter = {
   PUBLIC: "PUBLIC",
   MYSTUDIES: "MYSTUDIES",
   FAVORITE: "FAVORITE",
+  PACSBIN:"PACSBIN",
 }

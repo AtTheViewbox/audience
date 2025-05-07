@@ -1,12 +1,13 @@
 import React, { useRef, useContext, useEffect,useState } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
-
+import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
 import LoadingPage from '../components/LoadingPage.jsx';
 import { smallestInStack } from '../lib/inputParser.ts';
+import { Circle } from "lucide-react"
 
 
 export default function Viewport(props) {
@@ -14,13 +15,29 @@ export default function Viewport(props) {
   const isPreview = searchParams.get("preview") === "true";
   const elementRef = useRef(null);
 
-  const { vd, channels, sharing, toolSelected,s,isRequestLoading } = useContext(DataContext).data;
+  const { vd, channels, sharing, toolSelected,s,isRequestLoading,coordData,sharingUser } = useContext(DataContext).data;
+  const { userData } = useContext(UserContext).data;
   const { viewport_idx, rendering_engine } = props;
+  const [viewportReady, setViewportReady] = useState(false);
   const viewport_data = vd[viewport_idx];
+  const [dotPos, setDotPos] = useState([0, 0]);
 
   const { dispatch } = useContext(DataDispatchContext);
   const [isLoading,setIsLoading] = useState(true);
   const [initalLoad, SetInitalLoad] = useState(true);
+
+  useEffect(() => {
+    if (viewport_data && !isRequestLoading && viewportReady) {  
+
+      const viewportId = `${viewport_idx}-vp`;
+      const viewport = (
+        rendering_engine.getViewport(viewportId)
+      );
+      const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
+      setDotPos([canvasCoord[0],  canvasCoord[1] ]);
+
+    }
+  }, [coordData]);
 
   useEffect(()=>{
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
@@ -173,6 +190,7 @@ export default function Viewport(props) {
  
       loadImagesAndDisplay().then(() => {
         if (initalLoad){
+          setViewportReady(true);
           addCornerstoneTools()
         }
         setIsLoading(false)
@@ -183,10 +201,21 @@ export default function Viewport(props) {
 
 
   return (
-   <>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%'}} >
         {(isRequestLoading)?<LoadingPage/>:null}
+        {coordData && coordData.viewport ==`${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && <Circle style={{
+            position: 'absolute',
+            left: `${dotPos[0]}px`,
+            top: `${dotPos[1]}px`,
+            transform: 'translate(-50%, -50%)',
+            color: 'red',
+            width: 15,
+            height: 15,
+            zIndex: 1000,
+          }}/>}
+        
         </div>
-    </>
+    </div>
   );
 }

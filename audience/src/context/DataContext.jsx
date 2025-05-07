@@ -361,8 +361,9 @@ export const DataProvider = ({ children }) => {
                     'broadcast',
                     { event: 'pointer-changed' },
                     (payload) => {
+                        console.log(payload)
                        dispatch({type: 'set_pointer', payload: {coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ,viewport: payload.payload.viewport}})
-            
+                       
                     }
                 )
         }
@@ -425,6 +426,7 @@ export const DataProvider = ({ children }) => {
                         })
                     } else {
                         data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
+                           
                             const eventData = event.detail;
                             const { currentPoints } = eventData;
                             if (currentPoints && currentPoints.world) {
@@ -504,8 +506,8 @@ export function dataReducer(data, action) {
         case 'sharer_status_changed':{
                 // This can become more elegant for sure. This function should really just write globalSharingStatus to state
                 // and the components that care should make updates as necessary
-              
                 let { globalSharingStatus,userData } = action.payload;
+                console.log(globalSharingStatus,userData)
                 const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
                 if (usersWhoAreSharing.length > 0) {
                     const mostRecentShare = usersWhoAreSharing
@@ -539,11 +541,13 @@ export function dataReducer(data, action) {
                 break;
             }
         case 'toggle_sharing':{
+            
 
             let {userData} = action.payload;
             if (data.shareController) {
                 // if the sharingUser is the same as the current user, share should be set to false
                 // if the sharingUser is not the same as the current user, share should be set to true
+                console.log(data.sharingUser,userData.id)
                 data.shareController.track({ share: data.sharingUser !== userData.id, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData,email:userData.email });
                 // there is an error here that will occur where data.sharingUser is only set once there is 1 and only 1 sharing user in presence state
                 // if there is a request to share that hasn't fully processed, data.sharingUser will be out of date

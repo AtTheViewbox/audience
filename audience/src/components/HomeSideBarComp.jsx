@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Search, Library, User, Settings, Globe, Moon } from "lucide-react"
+import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack } from "lucide-react"
 import { Filter, Visibility } from "../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -92,17 +92,26 @@ function HomeSideBar({ filter, setFilter }) {
                                 : "",
                         )}>
                             <Globe className="mr-2 h-4 w-4" />
-                            Public Studies
+                            Everyone's Viewbox
                         </Button>
                         {!userData || userData.is_anonymous ? null :
+                        <div>
                             <Button onClick={() => setFilter(Filter.MYSTUDIES)} variant="ghost" className={cn("w-full justify-start",
                                 filter === Filter.MYSTUDIES
                                     ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
                                     : "",
                             )}>
-                                <Library className="mr-2 h-4 w-4" />
-                                Your Studies
+                                <Monitor className="mr-2 h-4 w-4" />
+                                Your Viewbox
                             </Button>
+
+                            <Button onClick={() => setFilter(Filter.PACSBIN)} variant="ghost" className={cn("w-full justify-start",
+
+                            )}>
+                                <FileStack className="mr-2 h-4 w-4" />
+                                Pacsbin Studies
+                            </Button>
+                            </div>
                         }
                     </nav>
                 </div>
