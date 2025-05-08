@@ -42,8 +42,9 @@ export default function Viewport(props) {
   useEffect(()=>{
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    
 
-    if (isLoading || mobile) return;
+    if (isLoading ) return;
     
     const {
       PanTool,
@@ -52,6 +53,7 @@ export default function Viewport(props) {
       StackScrollMouseWheelTool,
       ZoomTool,
       PlanarRotateTool,
+      ProbeTool,
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
@@ -65,26 +67,38 @@ export default function Viewport(props) {
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
+      case "zoom":
+          toolGroup.setToolPassive(WindowLevelTool.toolName);
+          toolGroup.setToolPassive(PanTool.toolName);
+          toolGroup.setToolPassive(StackScrollTool.toolName);
+          toolGroup.setToolPassive(ProbeTool.toolName);
+          toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+          break;
       case "window":
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
-        break;
-      case "zoom":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "scroll":
         toolGroup.setToolPassive(WindowLevelTool.toolName);
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
+        toolGroup.setToolPassive(ProbeTool.toolName);
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
+      case "pointer":
+          toolGroup.setToolPassive(WindowLevelTool.toolName);
+          toolGroup.setToolPassive(ZoomTool.toolName);
+          toolGroup.setToolPassive(PanTool.toolName);
+          toolGroup.setToolPassive(StackScrollTool.toolName);
+          //if (mobile){toolGroup.setToolActive(ProbeTool.toolName,{ bindings: [{ mouseButton: MouseBindings.Primary }], });}
+          toolGroup.setToolActive(ProbeTool.toolName);
+          break;
     }
 
   },[toolSelected])
@@ -159,22 +173,21 @@ export default function Viewport(props) {
     ToolGroupManager.createToolGroup(toolGroupId);
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
 
-    if (mobile) {
-      toolGroup.addTool(WindowLevelTool.toolName);
-      toolGroup.addTool(ZoomTool.toolName);
-      toolGroup.addTool(StackScrollTool.toolName);
+    toolGroup.addTool(WindowLevelTool.toolName);
+    toolGroup.addTool(PanTool.toolName);
+    toolGroup.addTool(ZoomTool.toolName);
+    toolGroup.addTool(StackScrollTool.toolName, { loop: false });
 
+    if (mobile) {
+  
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
+      toolGroup.setToolActive(PanTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
       toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
 
-    } else {
-      toolGroup.addTool(WindowLevelTool.toolName);
-      toolGroup.addTool(PanTool.toolName);
-      toolGroup.addTool(ZoomTool.toolName);
-      toolGroup.addTool(StackScrollTool.toolName, { loop: false });
-      toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
 
+    } else {
+      toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
       toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
