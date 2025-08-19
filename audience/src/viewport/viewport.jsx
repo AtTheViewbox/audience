@@ -88,39 +88,50 @@ export default function Viewport(props) {
   
 
   const loadImagesAndDisplay = async () => {
-    //setIsLoading(true)
+    console.time('loadImagesAndDisplay'); // Start timing the function
+
     const viewportId = `${viewport_idx}-vp`;
     const viewportInput = {
-      viewportId,
-      type: cornerstone.Enums.ViewportType.STACK,
-      element: elementRef.current,
-      defaultOptions: {
-
-      },
+        viewportId,
+        type: cornerstone.Enums.ViewportType.STACK,
+        element: elementRef.current,
+        defaultOptions: {},
     };
 
     rendering_engine.enableElement(viewportInput);
-    console.log(viewportId, "enabled")
-    dispatch({type: 'viewport_ready', payload: {viewportId: viewport_idx}})
+    console.log(viewportId, "enabled");
 
-    const viewport = (
-      rendering_engine.getViewport(viewportId)
-    );
+    dispatch({ type: 'viewport_ready', payload: { viewportId: viewport_idx } });
+
+    const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
 
-    s.map((imageId) => {
-      cornerstone.imageLoader.loadAndCacheImage(imageId);
+    console.time('imageLoading'); // Time the image loading
+    const imagePromises = s.map(imageId => {
+        return cornerstone.imageLoader.loadAndCacheImage(imageId,{ 
+          progressive: true 
+      }); // Load and cache images in parallel
     });
     
-    const stack = s;
-    await viewport.setStack(stack);
+    await Promise.all(imagePromises); // Wait for all images to load
+
+    console.timeEnd('imageLoading'); // End image loading time
+
+    console.time('setStack'); // Time setting the stack
+    await viewport.setStack(s);
+    console.timeEnd('setStack'); // End setStack time
 
     viewport.setProperties({
-      voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
-      isComputedVOI: false,
+        voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
+        isComputedVOI: false,
     });
 
-  };
+    console.timeEnd('loadImagesAndDisplay'); // End overall function time
+
+    console.log("Images loaded and stack set");
+};
+
+
 
   const addCornerstoneTools = () => {
   
