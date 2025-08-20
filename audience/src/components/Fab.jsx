@@ -15,7 +15,7 @@ import {
 
 function Fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  const { sharingUser } = useContext(DataContext).data;
+  const { sharingUser,sharingPending } = useContext(DataContext).data;
   const  {userData}= useContext(UserContext).data;
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -37,6 +37,7 @@ function Fab() {
   return !userData ? null : (
     <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
       <Button
+      disabled={sharingPending}
         size={"icon"}
         {...mergeProps(pressProps, longPressProps)}
         style={{
