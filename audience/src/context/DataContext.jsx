@@ -293,10 +293,7 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
-<<<<<<< HEAD
 
-=======
->>>>>>> reftogglestate
 
             if (data.sessionMeta.mode == "TEAM" || userData.id == data.sessionMeta.owner) {
 
@@ -325,14 +322,8 @@ export const DataProvider = ({ children }) => {
                     'broadcast',
                     { event: 'pointer-changed' },
                     (payload) => {
-<<<<<<< HEAD
-       
-                       dispatch({type: 'set_pointer', payload: {coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ,viewport: payload.payload.viewport}})
-                       
-=======
                         dispatch({ type: 'set_pointer', payload: { coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ, viewport: payload.payload.viewport } })
 
->>>>>>> reftogglestate
                     }
                 )
             }
@@ -394,21 +385,6 @@ export const DataProvider = ({ children }) => {
                             event: 'voi-changed',
                             payload: { ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` },
                         })
-<<<<<<< HEAD
-                    } else {
-                        data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
-                           
-                            const eventData = event.detail;
-                            const { currentPoints } = eventData;
-                            if (currentPoints && currentPoints.world) {
-                                data.interactionChannel.send({
-                                    type: 'broadcast',
-                                    event: 'pointer-changed',
-                                    payload: { coordX: currentPoints.world[0], coordY: currentPoints.world[1], coordZ: currentPoints.world[2], viewport: `${viewport_idx}-vp` },
-                                })
-                            }
-=======
->>>>>>> reftogglestate
 
                     })
                     if (data.toolSelected == "pointer") {
@@ -497,47 +473,6 @@ export function dataReducer(data, action) {
             }
             new_data = { ...data, sessionId: sessionId, sessionMeta: sessionMeta2 }
             break;
-<<<<<<< HEAD
-        case 'sharer_status_changed':{
-                // This can become more elegant for sure. This function should really just write globalSharingStatus to state
-                // and the components that care should make updates as necessary
-                let { globalSharingStatus,userData } = action.payload;
-     
-                const usersWhoAreSharing = globalSharingStatus.filter(sharer => sharer.shareStatus === true)
-                if (usersWhoAreSharing.length > 0) {
-                    const mostRecentShare = usersWhoAreSharing
-                        .reduce((prev, current) => (prev.timeOfLastShareStatusUpdated > current.timeOfLastShareStatusUpdated) ? prev : current);
-                    
-                    const nonRecentSharers = usersWhoAreSharing
-                        .filter(sharer => sharer.user !== mostRecentShare.user)
-                        .map(sharer => sharer.user);
-                    
-                    // if the current user is sharing, and someone else has requested
-                    // reset the listeners and update the presence state
-                    if (nonRecentSharers.includes(userData.id)) {
-                        data.eventListenerManager.reset()
-                        data.shareController.track({ share: false, lastShareRequest: new Date().toISOString(),discordData:  data.activeUsers.filter(user => user.user === userData.id)[0].discordData });
-                    }
-    
-                    if (nonRecentSharers.length !== 0) {
-                        //toast(`"${mostRecentShare.user} has requested control`);
-                        toast(`${mostRecentShare.discordData?.username??(mostRecentShare.email && !mostRecentShare.email=="")?mostRecentShare.email:mostRecentShare.user} has requested control`);
-                        new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
-                    } else {
-                        //toast(`"${mostRecentShare.user} has taken control`);
-                        toast(`${mostRecentShare.discordData?.username??(mostRecentShare.email && !mostRecentShare.email=="")?mostRecentShare.email:mostRecentShare.user} has taken control`);
-                        new_data = { ...data, sharingUser: mostRecentShare.user, activeUsers: globalSharingStatus };
-                    }
-                } else {
-                    data.eventListenerManager.reset()
-                    new_data = { ...data, sharingUser: null, activeUsers: globalSharingStatus };
-                }
-    
-                break;
-            }
-        case 'toggle_sharing':{
-            
-=======
 
         case 'apply_share_change': {
             const { user, ts, by } = action.payload;
@@ -559,7 +494,6 @@ export function dataReducer(data, action) {
                  data?.eventListenerManager?.reset();
                 toast(`Control released`);
             }
->>>>>>> reftogglestate
 
             new_data = { ...data, sharingUser, shareClock: ts, shareBy: by, activeUsers: updatedActive };
             break;
