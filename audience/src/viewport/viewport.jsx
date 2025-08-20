@@ -119,27 +119,9 @@ export default function Viewport(props) {
 
     dispatch({ type: 'viewport_ready', payload: { viewportId: viewport_idx } });
 
-    const viewport = (
-      rendering_engine.getViewport(viewportId)
-    );
-
-    const { s, ww, wc,z,px,py,ci } = viewport_data;
-
     const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
 
-    s.map((imageId) => {
-      cornerstone.imageLoader.loadAndCacheImage(imageId);
-    });
-    
-    const stack = s;
-
-    var currentIndex  = ci-smallestInStack(s)+1
-    
-    await viewport.setStack(stack,(isPreview||currentIndex<0)?0:currentIndex );
- 
-    viewport.setZoom(z); 
-    viewport.setPan([px*(viewport.canvas.width/400),py*(viewport.canvas.height/400)]);
     console.time('imageLoading'); // Time the image loading
     const imagePromises = s.map(imageId => {
         return cornerstone.imageLoader.loadAndCacheImage(imageId,{ 
@@ -159,10 +141,6 @@ export default function Viewport(props) {
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
         isComputedVOI: false,
     });
-   
-    
-    viewport.render();
-  };
 
     console.timeEnd('loadImagesAndDisplay'); // End overall function time
 
