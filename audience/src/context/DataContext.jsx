@@ -293,7 +293,6 @@ export const DataProvider = ({ children }) => {
                     return null
                 }
             })
-            console.log(data)
 
             if (data.sessionMeta.mode == "TEAM" || userData.id == data.sessionMeta.owner) {
 
@@ -496,7 +495,6 @@ export function dataReducer(data, action) {
             }
 
             new_data = { ...data, sharingUser, shareClock: ts, shareBy: by, activeUsers: updatedActive };
-            console.log(new_data)
             break;
         }
 
@@ -510,15 +508,12 @@ export function dataReducer(data, action) {
         }
         case 'toggle_sharing': {
             let { userData } = action.payload;
-            console.log(data.shareController)
             if (data.shareController) {
                 // If I'm not current owner, I'll take; else I'll release
-                console.log("sharing",data.sharingUser,userData.id)
                 const taking = data.sharingUser !== userData.id;
                 if (!taking) {
                     // releasing — stop emitting interaction events immediately
                     data?.eventListenerManager?.reset();
-                    console.log("resetting event listeners");
                 }
                 const ts = Date.now();
                 data.shareController.send({
