@@ -1,6 +1,7 @@
 import { createContext, useState,useReducer,useEffect } from 'react';
 import LoadingPage from '../components/LoadingPage.jsx';
 import { cl } from './SupabaseClient.jsx';
+import { generateRandomName } from '../lib/constants.js';
 
 
 // Create the context
@@ -19,11 +20,15 @@ export const UserProvider = ({ children }) => {
 
         // if there is a user logged in, store that as user
         let { data: { user }, error } = await cl.auth.getUser();
-       
         if (!user) {
             // otherwise, use anonymous login
             ({ data: { user }, error } = await cl.auth.signInAnonymously());
         }
+
+          const decoratedUser = user
+      ? { ...user, email: generateRandomName() }
+      : null;
+    console.log(decoratedUser)
         // TODO: error handling for auth
         const ss = cl.auth.onAuthStateChange(
             (event, session) => {
@@ -35,7 +40,7 @@ export const UserProvider = ({ children }) => {
             }
         )
 
-        userDispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: user}})
+        userDispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: decoratedUser}})
         setLoading(false);
     }
     setupSupabase()
