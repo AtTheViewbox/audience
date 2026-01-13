@@ -1,4 +1,4 @@
-import { ChevronRight,Search,X} from "lucide-react"
+import { ChevronRight, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { UploaderComp } from "./UploaderComp"
@@ -11,9 +11,9 @@ import {
     DialogContent,
     DialogTitle
 } from "@/components/ui/dialog";
-import { LoginDialog} from "../login/LoginDialog.jsx";
+import { LoginDialog } from "../login/LoginDialog.jsx";
 
-function HomeHeaderComp({setSearch}) {
+function HomeHeaderComp({ setSearch, onUploadComplete }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
     const [isOpen, setIsOpen] = useState(false)
     let [dialogIsOpen, setDialogIsOpen] = useState(false);
@@ -61,25 +61,25 @@ function HomeHeaderComp({setSearch}) {
                                 className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
                                 onClick={() => setIsOpen(false)}
                                 aria-label="Close search"
-              >
-                <X onClick = {()=>{ setSearch("")}}className="h-4 w-4" />
-              </Button>
-            </div>
-    
-        </div>
-      )}
+                            >
+                                <X onClick={() => { setSearch("") }} className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                    </div>
+                )}
             </div>
             {!userData?.is_anonymous ?
                 <div className="flex items-center gap-4">
-                    {/**<UploaderComp />*/}
+                    <UploaderComp />
                     <Button variant="outline" onClick={logOut}>Log Out</Button>
-                </div>:
+                </div> :
                 <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
-                <Button variant="outline" onClick={() => setDialogIsOpen(true)}>Login</Button>
-                <DialogContent>
-                    <LoginDialog />
-                </DialogContent>
-            </Dialog>
+                    <Button variant="outline" onClick={() => setDialogIsOpen(true)}>Login</Button>
+                    <DialogContent>
+                        <LoginDialog />
+                    </DialogContent>
+                </Dialog>
             }
         </header>
     )

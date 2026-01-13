@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Heart, Trash2, Copy, Check,MoreHorizontal,ExternalLink } from "lucide-react"
+import { Heart, Trash2, Copy, Check, MoreHorizontal, ExternalLink } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,236 +12,242 @@ import { Input } from "@/components/ui/input"
 import { Filter } from "../lib/constants"
 import { unflatten, flatten } from "flat";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
-    DropdownMenuItem,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem
 } from "@/components/ui/dropdown-menu"
 
 const basename = import.meta.env.BASE_URL
 export default function HomePage() {
-    const [selectedSeries, setSelectedSeries] = useState([])
-    const [filter, setFilter] = useState(Filter.ALL)
-    const [search, setSearch] = useState("")
-    const [seriesList, setSeriesList] = useState([])
-    const [displaySeriesList, setdisplaySeriesList] = useState([])
-    const [pacsbinStudyList, setPacsbinStudyList] = useState([])
-    const { supabaseClient, userData } = useContext(UserContext).data;
-    const [rightPanelWidth, setRightPanelWidth] = useState(400) // 80 * 4 = 320px (w-80)
-    const [isResizingRight, setIsResizingRight] = useState(false)
-    const [copyClicked, setCopyClicked] = useState(false);
-    const minRightWidth = 240
-    const maxRightWidth = 500
+  const [selectedSeries, setSelectedSeries] = useState([])
+  const [filter, setFilter] = useState(Filter.ALL)
+  const [search, setSearch] = useState("")
+  const [seriesList, setSeriesList] = useState([])
+  const [displaySeriesList, setdisplaySeriesList] = useState([])
+  const [pacsbinStudyList, setPacsbinStudyList] = useState([])
+  const { supabaseClient, userData } = useContext(UserContext).data;
+  const [rightPanelWidth, setRightPanelWidth] = useState(400) // 80 * 4 = 320px (w-80)
+  const [isResizingRight, setIsResizingRight] = useState(false)
+  const [copyClicked, setCopyClicked] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState("");
+  const minRightWidth = 240
+  const maxRightWidth = 500
 
-    // Handle mouse events for resizing
-    useEffect(() => {
-        const handleMouseMove = (e) => {
-            const containerWidth = window.innerWidth
-            const newWidth = Math.min(Math.max(containerWidth - e.clientX, minRightWidth), maxRightWidth)
-            setRightPanelWidth(newWidth)
-        }
+  const handleUploadComplete = (url) => {
+    setUploadedUrl(url);
+    // Optionally select no series to show the uploaded URL prominently
+    setSelectedSeries(null);
+  };
 
-        const handleMouseUp = () => {
-            setIsResizingRight(false)
-        }
-
-        if (isResizingRight) {
-            document.addEventListener("mousemove", handleMouseMove)
-            document.addEventListener("mouseup", handleMouseUp)
-            // Add a class to the body to prevent text selection during resize
-            document.body.classList.add("resize-cursor")
-        }
-
-        return () => {
-            document.removeEventListener("mousemove", handleMouseMove)
-            document.removeEventListener("mouseup", handleMouseUp)
-            document.body.classList.remove("resize-cursor")
-        }
-    }, [isResizingRight])
-
-
-    const handleDelete = async (series_id) => {
-        try {
-            const { data, error } = await supabaseClient
-                .from("studies")
-                .delete()
-                .eq("id", series_id);
-
-            if (error) throw error;
-
-            // Refresh the study list after deletion
-            getSeries();
-
-        } catch (error) {
-            console.log(error)
-        }
-    };
-
-    const deleteStudy= async (study_id) => {
-        try {
-            const { data, error } = await supabaseClient
-                .from("pacsbinStudies")
-                .delete()
-                .eq("id", study_id);
-
-            if (error) throw error;
-            getSeries()
-
-        } catch (error) {
-            console.log(error)
-        }
-    };
-    const getIframeURL = (url_params, preview = false) => {
-        const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
-        const url = new URL(url_params);
-        var params = new URLSearchParams(url.search);
-        const initialData = unflatten(Object.fromEntries(new URLSearchParams(url.search)));
-        
-        if (preview) {
-            if (initialData.vd) {
-                initialData.vd.forEach((vdItem) => {
-                    if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
-                        var newD = vdItem.s.D * Math.floor((vdItem.s.e - vdItem.s.s) / (10 * vdItem.s.D))
-                        if (newD < 1) {
-                            newD = 1
-                        }
-                        vdItem.s.D = newD;
-                    }
-                })
-            }
-            const updatedFlatData = flatten(initialData);
-            var params = new URLSearchParams(updatedFlatData);
-            params.set('preview', 'true');
-        }
-        const newSearch = '?' + params.toString();
-        const fullUrl = rootUrl + newSearch;
-        return fullUrl;
+  // Handle mouse events for resizing
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const containerWidth = window.innerWidth
+      const newWidth = Math.min(Math.max(containerWidth - e.clientX, minRightWidth), maxRightWidth)
+      setRightPanelWidth(newWidth)
     }
-    const getSeries = async () => {
-        try {
-            let data, error;
 
-            if(filter === Filter.PACSBIN){
-                ({ data, error } = await supabaseClient
-                .from("pacsbinStudies")
-                .select("*"));
-                if (error) throw error;
-                setPacsbinStudyList(data)
+    const handleMouseUp = () => {
+      setIsResizingRight(false)
+    }
+
+    if (isResizingRight) {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+      // Add a class to the body to prevent text selection during resize
+      document.body.classList.add("resize-cursor")
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+      document.body.classList.remove("resize-cursor")
+    }
+  }, [isResizingRight])
+
+
+  const handleDelete = async (series_id) => {
+    try {
+      const { data, error } = await supabaseClient
+        .from("studies")
+        .delete()
+        .eq("id", series_id);
+
+      if (error) throw error;
+
+      // Refresh the study list after deletion
+      getSeries();
+
+    } catch (error) {
+      console.log(error)
+    }
+  };
+
+  const deleteStudy = async (study_id) => {
+    try {
+      const { data, error } = await supabaseClient
+        .from("pacsbinStudies")
+        .delete()
+        .eq("id", study_id);
+
+      if (error) throw error;
+      getSeries()
+
+    } catch (error) {
+      console.log(error)
+    }
+  };
+  const getIframeURL = (url_params, preview = false) => {
+    const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+    const url = new URL(url_params);
+    var params = new URLSearchParams(url.search);
+    const initialData = unflatten(Object.fromEntries(new URLSearchParams(url.search)));
+
+    if (preview) {
+      if (initialData.vd) {
+        initialData.vd.forEach((vdItem) => {
+          if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
+            var newD = vdItem.s.D * Math.floor((vdItem.s.e - vdItem.s.s) / (10 * vdItem.s.D))
+            if (newD < 1) {
+              newD = 1
             }
-            
-            if (filter === Filter.PUBLIC) {
-                ({ data, error } = await supabaseClient
-                    .from("studies")
-                    .select("*")
-                    .eq("visibility", "PUBLIC"));
-            }
-            else if (filter === Filter.MYSTUDIES) {
-                ({ data, error } = await supabaseClient
-                    .from("studies")
-                    .select("*")
-                    .eq("owner", userData.id));
-            } else if (filter === Filter.ALL) {
-                ({ data, error } = await supabaseClient
-                    .from("studies")
-                    .select("*"));
-            }else{
-                data=[]
-            }
+            vdItem.s.D = newD;
+          }
+        })
+      }
+      const updatedFlatData = flatten(initialData);
+      var params = new URLSearchParams(updatedFlatData);
+      params.set('preview', 'true');
+    }
+    const newSearch = '?' + params.toString();
+    const fullUrl = rootUrl + newSearch;
+    return fullUrl;
+  }
+  const getSeries = async () => {
+    try {
+      let data, error;
 
-            if (error) throw error;
+      if (filter === Filter.PACSBIN) {
+        ({ data, error } = await supabaseClient
+          .from("pacsbinStudies")
+          .select("*"));
+        if (error) throw error;
+        setPacsbinStudyList(data)
+      }
 
-            setSeriesList(data);
-            setdisplaySeriesList(data)
-            setSelectedSeries(data[0]);
+      if (filter === Filter.PUBLIC) {
+        ({ data, error } = await supabaseClient
+          .from("studies")
+          .select("*")
+          .eq("visibility", "PUBLIC"));
+      }
+      else if (filter === Filter.MYSTUDIES) {
+        ({ data, error } = await supabaseClient
+          .from("studies")
+          .select("*")
+          .eq("owner", userData.id));
+      } else if (filter === Filter.ALL) {
+        ({ data, error } = await supabaseClient
+          .from("studies")
+          .select("*"));
+      } else {
+        data = []
+      }
 
-        } catch (error) {
-            console.log(error);
-        }
-    };
+      if (error) throw error;
 
-    useEffect(() => {
-        getSeries();
-    }, [filter]);
+      setSeriesList(data);
+      setdisplaySeriesList(data)
+      setSelectedSeries(data[0]);
 
-    useEffect(() => {
-        function searchItems(query, list) {
-            return list.filter(item =>
-                Object.values(item).some(value =>
-                    value.toString().toLowerCase().includes(query.toLowerCase())
-                )
-            );
-        }
-        setdisplaySeriesList(searchItems(search, seriesList));
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
-    }, [search,seriesList]);
+  useEffect(() => {
+    getSeries();
+  }, [filter]);
 
-    return (
-      <div className="flex h-screen bg-background">
-        <HomeSideBar filter={filter} setFilter={setFilter} />
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <HomeHeaderComp setSearch={setSearch} />
+  useEffect(() => {
+    function searchItems(query, list) {
+      return list.filter(item =>
+        Object.values(item).some(value =>
+          value.toString().toLowerCase().includes(query.toLowerCase())
+        )
+      );
+    }
+    setdisplaySeriesList(searchItems(search, seriesList));
 
-          <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 overflow-auto p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold ">Studies</h2>
+  }, [search, seriesList]);
+
+  return (
+    <div className="flex h-screen bg-background">
+      <HomeSideBar filter={filter} setFilter={setFilter} />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} />
+
+        <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 overflow-auto p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold ">Studies</h2>
+              <div className="flex items-center gap-4">
+                {!userData?.is_anonymous ? (
+                  <AddCaseDialog onStudyAdded={getSeries} />
+                ) : null}
+              </div>
+            </div>
+
+            {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
+              <div
+                key={study.id}
+                className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
+              >
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="font-medium">{study.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Created by: {study.userID}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-4">
-                  {!userData?.is_anonymous ? (
-                    <AddCaseDialog onStudyAdded={getSeries} />
-                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => window.open(study.metadata[0].url)}
+                  >
+                    <ExternalLink className="size-4 text-muted-foreground" />
+                    <span className="sr-only">Open in new tab</span>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-8">
+                        <MoreHorizontal className="size-4" />
+                        <span className="sr-only">More options</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => deleteStudy(study.id)}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
-
-              {filter ==Filter.PACSBIN?<div>{pacsbinStudyList.map((study) => (
-                <div
-                  key={study.id}
-                  className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <p className="font-medium">{study.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Created by: {study.userID}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      onClick={() => window.open(study.metadata[0].url)}
-                    >
-                      <ExternalLink className="size-4 text-muted-foreground" />
-                      <span className="sr-only">Open in new tab</span>
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
-                          <MoreHorizontal className="size-4" />
-                          <span className="sr-only">More options</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={()=>deleteStudy(study.id)}
-                        >
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              ))}</div>: <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {displaySeriesList.map((series) => (
                 <Card
                   key={series.id}
-                  className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${
-                    selectedSeries.id === series.id ? "border-primary" : ""
-                  }`}
+                  className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${selectedSeries.id === series.id ? "border-primary" : ""
+                    }`}
                   onClick={() => setSelectedSeries(series)}
                 >
                   {filter === Filter.MYSTUDIES ? (
@@ -280,106 +286,150 @@ export default function HomePage() {
                 </Card>
               ))}
             </div>}
-             
 
-              
-            </div>
 
-            <div className="space-y-1"></div>
 
-            {/* Resize handle for right panel */}
-            <div
-              className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors"
-              onMouseDown={() => setIsResizingRight(true)}
-            />
+          </div>
 
-            {/* Preview Panel */}
-            <div
-              className="bg-background border-l border-border overflow-hidden flex flex-col"
-              style={{ width: `${rightPanelWidth}px` }}
-            >
-              {selectedSeries && (
-                <>
-                  <div className="p-6 border-b">
-                    <div className="flex flex-col items-center text-center mb-4">
-                      <iframe
-                        src={
-                          selectedSeries?.url_params
-                            ? getIframeURL(selectedSeries?.url_params, true)
-                            : ""
-                        }
-                        title={`${selectedSeries.name}`}
-                        className="w-full h-[300px] border-0"
-                        allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      ></iframe>
+          <div className="space-y-1"></div>
 
-                      <h3 className="text-xl font-bold">
-                        {selectedSeries.name}
-                      </h3>
+          {/* Resize handle for right panel */}
+          <div
+            className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors"
+            onMouseDown={() => setIsResizingRight(true)}
+          />
 
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Created by {selectedSeries.owner}
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1"
-                          onClick={() => {
-                            window.open(
-                              selectedSeries?.url_params
-                                ? getIframeURL(selectedSeries?.url_params)
-                                : "",
-                              "_blank"
-                            );
-                          }}
-                        >
-                          Launch to New Tab
-                        </Button>
-                      </div>
-                      <div className="flex gap-2">
-                        <Input
-                          value={
-                            selectedSeries?.url_params
-                              ? getIframeURL(selectedSeries?.url_params)
-                              : "" ?? ""
-                          }
-                          readOnly
-                        />
-                        <Button
-                          size="icon"
-                          onClick={() => {
-                            navigator.clipboard.writeText(
-                              selectedSeries?.url_params
-                                ? getIframeURL(selectedSeries?.url_params)
-                                : ""
-                            );
-                            setCopyClicked(true);
-                          }}
-                        >
-                          {copyClicked ? (
-                            <Check className="h-4" />
-                          ) : (
-                            <Copy className="h-4" />
-                          )}
-                        </Button>
-                      </div>
+          {/* Preview Panel */}
+          <div
+            className="bg-background border-l border-border overflow-hidden flex flex-col"
+            style={{ width: `${rightPanelWidth}px` }}
+          >
+            {uploadedUrl && !selectedSeries ? (
+              <>
+                <div className="p-6 border-b">
+                  <div className="flex flex-col items-center text-center mb-4">
+                    <h3 className="text-xl font-bold mb-2">
+                      Uploaded DICOM Study
+                    </h3>
+                    <div className="text-sm text-muted-foreground mb-4">
+                      Your DICOM files have been uploaded successfully!
                     </div>
                   </div>
-                  <ScrollArea className="flex-1">
-                    <div className="p-4">
-                      <h4 className="font-medium mb-2">Description</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedSeries.description}
-                      </p>
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          window.open(uploadedUrl, "_blank");
+                        }}
+                      >
+                        Launch to New Tab
+                      </Button>
                     </div>
-                  </ScrollArea>
-                </>
-              )}
-            </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={uploadedUrl}
+                        readOnly
+                      />
+                      <Button
+                        size="icon"
+                        onClick={() => {
+                          navigator.clipboard.writeText(uploadedUrl);
+                          setCopyClicked(true);
+                        }}
+                      >
+                        {copyClicked ? (
+                          <Check className="h-4" />
+                        ) : (
+                          <Copy className="h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : selectedSeries && (
+              <>
+                <div className="p-6 border-b">
+                  <div className="flex flex-col items-center text-center mb-4">
+                    <iframe
+                      src={
+                        selectedSeries?.url_params
+                          ? getIframeURL(selectedSeries?.url_params, true)
+                          : ""
+                      }
+                      title={`${selectedSeries.name}`}
+                      className="w-full h-[300px] border-0"
+                      allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+
+                    <h3 className="text-xl font-bold">
+                      {selectedSeries.name}
+                    </h3>
+
+                    <div className="text-xs text-muted-foreground mt-2">
+                      Created by {selectedSeries.owner}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          window.open(
+                            selectedSeries?.url_params
+                              ? getIframeURL(selectedSeries?.url_params)
+                              : "",
+                            "_blank"
+                          );
+                        }}
+                      >
+                        Launch to New Tab
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={
+                          selectedSeries?.url_params
+                            ? getIframeURL(selectedSeries?.url_params)
+                            : "" ?? ""
+                        }
+                        readOnly
+                      />
+                      <Button
+                        size="icon"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            selectedSeries?.url_params
+                              ? getIframeURL(selectedSeries?.url_params)
+                              : ""
+                          );
+                          setCopyClicked(true);
+                        }}
+                      >
+                        {copyClicked ? (
+                          <Check className="h-4" />
+                        ) : (
+                          <Copy className="h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="p-4">
+                    <h4 className="font-medium mb-2">Description</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedSeries.description}
+                    </p>
+                  </div>
+                </ScrollArea>
+              </>
+            )}
           </div>
         </div>
       </div>
-    );
+    </div>
+  );
 }

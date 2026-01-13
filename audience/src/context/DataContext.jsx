@@ -114,6 +114,34 @@ export const DataProvider = ({ children }) => {
             window.cornerstoneTools = cornerstoneTools;
             cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
             cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
+
+            // Configure DICOM image loader with web workers for codec support
+            cornerstoneDICOMImageLoader.configure({
+                useWebWorkers: true,
+                decodeConfig: {
+                    convertFloatPixelDataToInt: false,
+                    use16BitDataType: true
+                }
+            });
+
+            // Initialize web workers with codec support for JPEG compressed DICOMs
+            cornerstoneDICOMImageLoader.webWorkerManager.initialize({
+                maxWebWorkers: navigator.hardwareConcurrency || 1,
+                startWebWorkersOnDemand: true,
+                taskConfiguration: {
+                    decodeTask: {
+                        initializeCodecsOnStartup: false,
+                        strict: false,
+                    },
+                },
+            });
+
+            // Register the wadouri image loader
+            cornerstone.imageLoader.registerImageLoader(
+                'wadouri',
+                cornerstoneDICOMImageLoader.wadouri.loadImage
+            );
+
             await cornerstone.init();
             await cornerstoneTools.init();
 
@@ -361,7 +389,7 @@ export const DataProvider = ({ children }) => {
         //data.renderingEngine.getViewports()
         if (data.sessionMeta.mode == "TEAM" || userData.id != data.sessionMeta.owner) {
             if (data.shareController && data.renderingEngine && data.sharingUser === userData?.id && data.sessionId) {
-                
+
                 data.renderingEngine.getViewports().sort((a, b) => {
                     const idA = Number(a.id.split("-")[0])
                     const idB = Number(b.id.split("-")[0])
@@ -491,7 +519,7 @@ export function dataReducer(data, action) {
             if (sharingUser && sharingUser !== data.sharingUser) {
                 toast(`${sharingUser} has taken control`);
             } else if (!sharingUser && data.sharingUser) {
-                 data?.eventListenerManager?.reset();
+                data?.eventListenerManager?.reset();
                 toast(`Control released`);
             }
 
