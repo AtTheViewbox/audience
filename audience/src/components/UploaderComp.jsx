@@ -61,6 +61,7 @@ export function UploaderComp() {
           delete dataset['001021B0']; // Additional Patient History
           delete dataset['00104000']; // Patient Comments
 
+
           // Write back to file
           const outputBuffer = dicomData.write();
           const blob = new Blob([outputBuffer], { type: 'application/dicom' });
