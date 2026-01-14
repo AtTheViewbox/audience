@@ -14,7 +14,7 @@ import {
 function ToolsTab() {
     const { dispatch } = useContext(DataDispatchContext);
 
-    const [position, setPosition] = useState("window")
+    const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
 
     const selectTool = (value) => {

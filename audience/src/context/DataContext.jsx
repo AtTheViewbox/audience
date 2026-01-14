@@ -124,17 +124,20 @@ export const DataProvider = ({ children }) => {
                 }
             });
 
-            // Initialize web workers with codec support for JPEG compressed DICOMs
+
+            const workerCount = navigator.hardwareConcurrency || 4;
+   
             cornerstoneDICOMImageLoader.webWorkerManager.initialize({
-                maxWebWorkers: navigator.hardwareConcurrency || 1,
-                startWebWorkersOnDemand: true,
+                maxWebWorkers: workerCount,
+                startWebWorkersOnDemand: false,  // Pre-spawn workers
                 taskConfiguration: {
                     decodeTask: {
-                        initializeCodecsOnStartup: false,
+                        initializeCodecsOnStartup: true,  // Initialize codecs early
                         strict: false,
                     },
                 },
             });
+
 
             // Register the wadouri image loader
             cornerstone.imageLoader.registerImageLoader(
@@ -143,6 +146,10 @@ export const DataProvider = ({ children }) => {
             );
 
             await cornerstone.init();
+            
+            const cacheSizeBytes = 3000 * 1024 * 1024; // 3GB
+            cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
+            
             await cornerstoneTools.init();
 
             const renderingEngineId = 'myRenderingEngine';

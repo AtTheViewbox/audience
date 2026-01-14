@@ -25,6 +25,7 @@ export default function Viewport(props) {
   const { dispatch } = useContext(DataDispatchContext);
   const [isLoading, setIsLoading] = useState(true);
   const [initalLoad, SetInitalLoad] = useState(true);
+  const [perfMetrics, setPerfMetrics] = useState(null);
 
   useEffect(() => {
     if (viewport_data && !isRequestLoading && viewportReady) {
@@ -104,7 +105,18 @@ export default function Viewport(props) {
   }, [toolSelected])
 
   const loadImagesAndDisplay = async () => {
-    console.time('loadImagesAndDisplay'); // Start timing the function
+    const perfStart = performance.now();
+    const metrics = {
+      totalStart: perfStart,
+      firstImageLoadTime: 0,
+      firstImageDisplayTime: 0,
+      totalImageLoadTime: 0,
+      stackSetTime: 0,
+      totalTime: 0,
+      imageCount: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
 
     const viewportId = `${viewport_idx}-vp`;
     const viewportInput = {
@@ -121,30 +133,65 @@ export default function Viewport(props) {
 
     const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
-    console.log(s)
-    console.time('imageLoading'); // Time the image loading
-    const imagePromises = s.map(imageId => {
-      return cornerstone.imageLoader.loadAndCacheImage(imageId, {
-        progressive: true
-      }); // Load and cache images in parallel
+    metrics.imageCount = s.length;
+
+
+    // OPTIMIZATION 2: Progressive Loading - Load first image immediately
+    const firstImageStart = performance.now();
+    
+    const firstImage = await cornerstone.imageLoader.loadAndCacheImage(s[0], {
+      priority: 0,
+      requestType: 'interaction'
     });
+    
+    metrics.firstImageLoadTime = performance.now() - firstImageStart;
+    console.log(`%c✅ First image loaded in ${metrics.firstImageLoadTime.toFixed(2)}ms`, 'color: #4CAF50; font-weight: bold');
 
-    await Promise.all(imagePromises); // Wait for all images to load
-
-    console.timeEnd('imageLoading'); // End image loading time
-
-    console.time('setStack'); // Time setting the stack
-    await viewport.setStack(s);
-    console.timeEnd('setStack'); // End setStack time
+    // Display first image immediately
+    const stackSetStart = performance.now();
+    await viewport.setStack(s, 0);
+    metrics.stackSetTime = performance.now() - stackSetStart;
+    metrics.firstImageDisplayTime = performance.now() - perfStart;
+    
+    console.log(`%c🎨 First image DISPLAYED in ${metrics.firstImageDisplayTime.toFixed(2)}ms`, 'color: #FF9800; font-weight: bold; font-size: 13px');
 
     viewport.setProperties({
       voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
       isComputedVOI: false,
     });
 
-    console.timeEnd('loadImagesAndDisplay'); // End overall function time
+    const prefetchStart = performance.now();
+    let loadedCount = 1; // First image already loaded
+    
+    const prefetchPromises = s.slice(1).map((imageId, idx) => {
+      return cornerstone.imageLoader.loadAndCacheImage(imageId, {
+        priority: idx + 1,
+        requestType: 'prefetch'
+      }).then(() => {
+        loadedCount++;
+        if (loadedCount % 10 === 0 || loadedCount === s.length) {
+          console.log(`%c   📊 Progress: ${loadedCount}/${s.length} images loaded`, 'color: #607D8B');
+        }
+      });
+    });
 
-    console.log("Images loaded and stack set");
+    await Promise.all(prefetchPromises);
+    metrics.totalImageLoadTime = performance.now() - prefetchStart;
+    metrics.totalTime = performance.now() - perfStart;
+
+    // Display performance metrics
+    console.log(`%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'color: #4CAF50; font-weight: bold');
+    console.log(`%c📊 PERFORMANCE METRICS - VIEWPORT ${viewport_idx}`, 'color: #4CAF50; font-weight: bold; font-size: 14px');
+    console.log(`%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'color: #4CAF50; font-weight: bold');
+    console.log(`%c⚡ First Image Display: ${metrics.firstImageDisplayTime.toFixed(2)}ms`, 'color: #FF9800; font-weight: bold');
+    console.log(`%c🎯 First Image Load: ${metrics.firstImageLoadTime.toFixed(2)}ms`, 'color: #2196F3');
+    console.log(`%c📦 Stack Set Time: ${metrics.stackSetTime.toFixed(2)}ms`, 'color: #2196F3');
+    console.log(`%c🔄 Remaining Images Load: ${metrics.totalImageLoadTime.toFixed(2)}ms`, 'color: #9C27B0');
+    console.log(`%c⏱️  Total Time: ${metrics.totalTime.toFixed(2)}ms`, 'color: #4CAF50; font-weight: bold');
+    console.log(`%c📊 Images Loaded: ${s.length} images`, 'color: #607D8B');
+    console.log(`%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'color: #4CAF50; font-weight: bold');
+
+    setPerfMetrics(metrics);
   };
 
 
@@ -189,10 +236,11 @@ export default function Viewport(props) {
 
     } else {
       toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
-      toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+      toolGroup.setToolActive(WindowLevelTool.toolName);
       toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
       toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
       toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
+      toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
     }
 
     toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
