@@ -26,7 +26,7 @@ export default function Layout() {
   }, [sessionId,toast]);
 
   useEffect(() => {
-    console.log("layout rerendering");
+
     const handleResize = () => {
       renderingEngine.resize(true);
     };

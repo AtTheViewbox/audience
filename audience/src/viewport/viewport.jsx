@@ -15,7 +15,7 @@ export default function Viewport(props) {
   const { viewport_idx, rendering_engine } = props;
   const [viewportReady, setViewportReady] = useState(false);
   const viewport_data = vd[viewport_idx];
-  const [dotPos, setDotPos] = useState([0, 0]);
+  const pointerRef = useRef(null);
 
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -25,17 +25,34 @@ export default function Viewport(props) {
   const [allImagesLoaded, setAllImagesLoaded] = useState(false);
 
   useEffect(() => {
-    // Only update dot position if everything is ready
-    if (viewport_data && viewportReady) {
-      const viewportId = `${viewport_idx}-vp`;
-      const viewport = rendering_engine.getViewport(viewportId);
-      if (viewport && coordData?.coord) {
-        // Check valid coords before mapping
-        const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
-        setDotPos([canvasCoord[0], canvasCoord[1]]);
+    // Imperative update for cursor position to avoid re-renders
+    if (viewport_data && viewportReady && pointerRef.current) {
+      // Logic to determine visibility
+      const shouldShow = coordData && 
+                         coordData.viewport == `${viewport_idx}-vp` && 
+                         sharingUser && 
+                         userData.id != sharingUser;
+
+      if (shouldShow && coordData?.coord) {
+        const viewportId = `${viewport_idx}-vp`;
+        const viewport = rendering_engine.getViewport(viewportId);
+        
+        if (viewport) {
+           const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
+           
+           // Use transform for performant updates
+           // existing transform was translate(-8px, -2px)
+           pointerRef.current.style.transform = `translate(${canvasCoord[0] - 8}px, ${canvasCoord[1] - 2}px)`;
+           pointerRef.current.style.display = 'block';
+           return;
+        }
       }
+      
+      // Hide if conditions not met
+      pointerRef.current.style.display = 'none';
+      
     }
-  }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx]);
+  }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData.id]);
 
   useEffect(() => {
     if (!viewportReady) return;
@@ -285,18 +302,21 @@ export default function Viewport(props) {
 
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
 
-        {coordData && coordData.viewport == `${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && (
+        {/* Shared Pointer - Always rendered but toggled via ref for performance */}
           <svg 
+            ref={pointerRef}
             style={{
               position: 'absolute',
-              left: `${dotPos[0]}px`,
-              top: `${dotPos[1]}px`,
-              transform: 'translate(-8px, -2px)',
+              left: 0,
+              top: 0,
+              // Initial state hidden
+              display: 'none', 
               width: 24,
               height: 24,
               zIndex: 1000,
               pointerEvents: 'none',
-              filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))'
+              filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
+              transition: 'display 0.1s' // smooth toggle
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -318,7 +338,6 @@ export default function Viewport(props) {
               strokeLinejoin="round"
             />
           </svg>
-        )}
 
       </div>
     </div>

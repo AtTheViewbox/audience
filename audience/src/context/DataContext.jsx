@@ -240,7 +240,7 @@ export const DataProvider = ({ children }) => {
 
         return () => {
             if (!isEmbedded) {
-                console.log("cleaning up supabase")
+
                 userDispatch({ type: 'clean_up_supabase' })
             }
         }
@@ -357,17 +357,18 @@ export const DataProvider = ({ children }) => {
                     }
                 )
 
-                interaction_channel.on(
+                {/*  interaction_channel.on(
                     'broadcast',
                     { event: 'camera-changed' },
                     (payload) => {
                         const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
                         if (payload.payload.camera) {
-                            viewport.setCamera(payload.payload.camera);
-                            viewport.render();
+                            // viewport.setCamera(payload.payload.camera);
+                            // viewport.render();
                         }
                     }
-                )
+                ) */}
+               
 
                 interaction_channel.on(
                     'broadcast',
@@ -476,7 +477,7 @@ export const DataProvider = ({ children }) => {
 
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', (event) => {
                         const camera = vp.getCamera();
-                        sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
+                        // sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
                     })
 
                     if (data.toolSelected == "pointer") {
@@ -510,6 +511,7 @@ export const DataProvider = ({ children }) => {
                             })
                         }
                         data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE);
+                        data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.TOUCH_DRAG);
                     }
 
                 })
@@ -518,6 +520,49 @@ export const DataProvider = ({ children }) => {
         }
     }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected]);
 
+
+    useEffect(() => {
+        // BroadCast Initial State when taking control
+        if (data.sharingUser === userData?.id && data.renderingEngine && data.interactionChannel && data.sessionId) {
+            
+            console.log("Taking control - syncing initial state to viewers");
+
+            try {
+                data.renderingEngine.getViewports().sort((a, b) => {
+                    const idA = Number(a.id.split("-")[0])
+                    const idB = Number(b.id.split("-")[0])
+                    if (idA < idB) { return -1; }
+                    if (idA > idB) { return 1; }
+                    return 0
+                }).forEach((vp, viewport_idx) => {
+                    // 1. Sync Frame/Slice
+                    if (vp.getCurrentImageIdIndex) {
+                        const currentImageIndex = vp.getCurrentImageIdIndex();
+                        data.interactionChannel.send({
+                            type: 'broadcast',
+                            event: 'frame-changed',
+                            payload: { frame: currentImageIndex, viewport: `${viewport_idx}-vp` },
+                        });
+                    }
+
+                    // 2. Sync Window/Level (VOI)
+                    const { voiRange } = vp.getProperties();
+                    if (voiRange) {
+                         const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper)
+                         data.interactionChannel.send({
+                            type: 'broadcast',
+                            event: 'voi-changed',
+                            payload: { ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` }
+                        });
+                    }
+                    
+                    // 3. Explicitly NO Camera/Zoom sync here
+                })
+            } catch (error) {
+                console.error("Error syncing initial state:", error);
+            }
+        }
+    }, [data.sharingUser, data.renderingEngine, data.interactionChannel, userData, data.sessionId]);
 
     return (
         <DataContext.Provider value={{ data }}>
@@ -633,7 +678,7 @@ export function dataReducer(data, action) {
             }
             break;
         case 'viewport_ready':
-            console.log("viewport ready!", action.payload)
+
 
             const viewport = (
                 data.renderingEngine.getViewport(`${action.payload.viewportId}-vp`)

@@ -5,7 +5,9 @@
 .App {
   background-color: #282c34;
   height: 100%;
-  touch-action:none;
+  width: 100%;
+  overflow: hidden;
+  touch-action: none;
 }
 
 
@@ -13,4 +15,3 @@
 [class*="cursor-col-resize"] {
   transition: background-color 0.15s;
 }
-
