@@ -295,7 +295,7 @@ export default function HomePage() {
 
           {/* Resize handle for right panel */}
           <div
-            className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors"
+            className="w-1 cursor-col-resize bg-transparent hover:bg-border transition-colors"
             onMouseDown={() => setIsResizingRight(true)}
           />
 

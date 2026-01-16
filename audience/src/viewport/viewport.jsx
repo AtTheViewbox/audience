@@ -26,6 +26,9 @@ export default function Viewport(props) {
   const [isLoading, setIsLoading] = useState(true);
   const [initalLoad, SetInitalLoad] = useState(true);
   const [perfMetrics, setPerfMetrics] = useState(null);
+  const [loadedImages, setLoadedImages] = useState(new Set());
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [allImagesLoaded, setAllImagesLoaded] = useState(false);
 
   useEffect(() => {
     if (viewport_data && !isRequestLoading && viewportReady) {
@@ -144,6 +147,8 @@ export default function Viewport(props) {
       requestType: 'interaction'
     });
     
+    setLoadedImages(new Set([0]));
+    
     metrics.firstImageLoadTime = performance.now() - firstImageStart;
     console.log(`%c✅ First image loaded in ${metrics.firstImageLoadTime.toFixed(2)}ms`, 'color: #4CAF50; font-weight: bold');
 
@@ -169,6 +174,7 @@ export default function Viewport(props) {
         requestType: 'prefetch'
       }).then(() => {
         loadedCount++;
+        setLoadedImages(prev => new Set([...prev, idx + 1]));
         if (loadedCount % 10 === 0 || loadedCount === s.length) {
           console.log(`%c   📊 Progress: ${loadedCount}/${s.length} images loaded`, 'color: #607D8B');
         }
@@ -178,6 +184,9 @@ export default function Viewport(props) {
     await Promise.all(prefetchPromises);
     metrics.totalImageLoadTime = performance.now() - prefetchStart;
     metrics.totalTime = performance.now() - perfStart;
+
+    // Mark all images as loaded
+    setAllImagesLoaded(true);
 
     // Display performance metrics
     console.log(`%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'color: #4CAF50; font-weight: bold');
@@ -253,17 +262,64 @@ export default function Viewport(props) {
       loadImagesAndDisplay().then(() => {
         if (initalLoad) {
           setViewportReady(true);
-          addCornerstoneTools()
+          addCornerstoneTools();
+          
+          // Add event listener to track current image index
+          const viewportId = `${viewport_idx}-vp`;
+          const viewport = rendering_engine.getViewport(viewportId);
+          
+          const handleImageChange = (event) => {
+            setCurrentImageIndex(event.detail.imageIdIndex);
+          };
+          
+          elementRef.current?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
         }
         setIsLoading(false)
       });
     }
-    return () => { console.log("unmounting viewport"); };
+    return () => { 
+      elementRef.current?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+      console.log("unmounting viewport"); 
+    };
   }, [vd, isRequestLoading]);
 
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Segmented Progress Bar */}
+      {viewport_data && !allImagesLoaded && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          display: 'flex',
+          gap: '1px',
+          zIndex: 1000,
+          pointerEvents: 'none',
+          opacity: allImagesLoaded ? 0 : 1,
+          transition: 'opacity 0.5s ease-out'
+        }}>
+          {Array.from({ length: viewport_data.s.length }).map((_, idx) => (
+            <div
+              key={idx}
+              style={{
+                flex: 1,
+                height: '100%',
+                backgroundColor: 
+                  idx === currentImageIndex 
+                    ? '#FF9800'  // Current image - orange
+                    : loadedImages.has(idx) 
+                    ? '#4CAF50'  // Loaded - green
+                    : 'rgba(255, 255, 255, 0.2)',  // Not loaded - transparent white
+                transition: 'background-color 0.3s ease'
+              }}
+            />
+          ))}
+        </div>
+      )}
+      
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
         {(isRequestLoading) ? <LoadingPage /> : null}
         {coordData && coordData.viewport == `${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && <Circle style={{
