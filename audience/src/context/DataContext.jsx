@@ -336,8 +336,12 @@ export const DataProvider = ({ children }) => {
                     'broadcast',
                     { event: 'frame-changed' },
                     (payload) => {
-                        data.renderingEngine.getViewport(payload.payload.viewport).setImageIdIndex(payload.payload.frame)
-                        data.renderingEngine.getViewport(payload.payload.viewport).render()
+                        const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
+                        // Preserve camera state (zoom/pan) during frame changes
+                        const currentCamera = viewport.getCamera();
+                        viewport.setImageIdIndex(payload.payload.frame);
+                        viewport.setCamera(currentCamera);
+                        viewport.render();
                     }
                 )
 
@@ -350,6 +354,18 @@ export const DataProvider = ({ children }) => {
                             isComputedVOI: false,
                         });
                         data.renderingEngine.getViewport(payload.payload.viewport).render()
+                    }
+                )
+
+                interaction_channel.on(
+                    'broadcast',
+                    { event: 'camera-changed' },
+                    (payload) => {
+                        const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
+                        if (payload.payload.camera) {
+                            viewport.setCamera(payload.payload.camera);
+                            viewport.render();
+                        }
                     }
                 )
 
@@ -380,14 +396,52 @@ export const DataProvider = ({ children }) => {
         }
     }, [data.sessionId, supabaseClient]);
 
-    let lastSend = 0;
+    let lastSendPointer = 0;
     const sendPointer = (payload) => {
+        if (!data.interactionChannel) return;
         const now = performance.now();
-        if (now - lastSend < 50) return; // ~20 Hz
-        lastSend = now;
+        if (now - lastSendPointer < 50) return; // ~20 Hz
+        lastSendPointer = now;
         data.interactionChannel.send({
             type: 'broadcast',
             event: 'pointer-changed',
+            payload
+        });
+    };
+
+    let lastSendCamera = 0;
+    let cameraDebounceTimeout = null;
+    const sendCamera = (payload) => {
+        if (!data.interactionChannel) return;
+        const now = performance.now();
+        if (now - lastSendCamera < 50) return; // ~20 Hz throttle
+        
+        // Debounce to prevent sending transient states during scroll
+        if (cameraDebounceTimeout) {
+            clearTimeout(cameraDebounceTimeout);
+        }
+        
+        cameraDebounceTimeout = setTimeout(() => {
+            lastSendCamera = now;
+            if (data.interactionChannel) {
+                data.interactionChannel.send({
+                    type: 'broadcast',
+                    event: 'camera-changed',
+                    payload
+                });
+            }
+        }, 150); // 150ms debounce
+    };
+
+    let lastSendVOI = 0;
+    const sendVOI = (payload) => {
+        if (!data.interactionChannel) return;
+        const now = performance.now();
+        if (now - lastSendVOI < 100) return; // ~10 Hz
+        lastSendVOI = now;
+        data.interactionChannel.send({
+            type: 'broadcast',
+            event: 'voi-changed',
             payload
         });
     };
@@ -406,22 +460,25 @@ export const DataProvider = ({ children }) => {
                 }).forEach((vp, viewport_idx) => {
 
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                        data.interactionChannel.send({
-                            type: 'broadcast',
-                            event: 'frame-changed',
-                            payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
-                        })
+                        if (data.interactionChannel) {
+                            data.interactionChannel.send({
+                                type: 'broadcast',
+                                event: 'frame-changed',
+                                payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                            })
+                        }
                     })
 
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_VOI_MODIFIED', (event) => {
                         const window = cornerstone.utilities.windowLevel.toWindowLevel(event.detail.range.lower, event.detail.range.upper)
-                        data.interactionChannel.send({
-                            type: 'broadcast',
-                            event: 'voi-changed',
-                            payload: { ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` },
-                        })
-
+                        sendVOI({ ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` })
                     })
+
+                    data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', (event) => {
+                        const camera = vp.getCamera();
+                        sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
+                    })
+
                     if (data.toolSelected == "pointer") {
                         if (mobile) {
                             data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.TOUCH_DRAG, (event) => {
@@ -445,11 +502,13 @@ export const DataProvider = ({ children }) => {
                         }
                     }
                     else {
-                        data.interactionChannel.send({
-                            type: 'broadcast',
-                            event: 'pointer-changed',
-                            payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
-                        })
+                        if (data.interactionChannel) {
+                            data.interactionChannel.send({
+                                type: 'broadcast',
+                                event: 'pointer-changed',
+                                payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
+                            })
+                        }
                         data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE);
                     }
 

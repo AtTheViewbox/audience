@@ -91,7 +91,7 @@ export default function Viewport(props) {
         toolGroup.setToolPassive(ZoomTool.toolName);
         toolGroup.setToolPassive(PanTool.toolName);
         toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolActive(ProbeTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        toolGroup.setToolActive(ProbeTool.toolName);
         break;
     }
 
@@ -138,11 +138,13 @@ export default function Viewport(props) {
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
         toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
-        toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        toolGroup.setToolActive(StackScrollTool.toolName);
       }
-
-      toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
     }
+    
+    // Always ensure the viewport is added to the toolGroup (handle re-mounts/Strict Mode)
+    // This fixes the issue where tools are not attached if the group already exists
+    toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
   };
 
 
@@ -283,16 +285,40 @@ export default function Viewport(props) {
 
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
 
-        {coordData && coordData.viewport == `${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && <Circle style={{
-          position: 'absolute',
-          left: `${dotPos[0]}px`,
-          top: `${dotPos[1]}px`,
-          transform: 'translate(-50%, -50%)',
-          color: 'red',
-          width: 15,
-          height: 15,
-          zIndex: 1000,
-        }} />}
+        {coordData && coordData.viewport == `${viewport_idx}-vp` && sharingUser && userData.id != sharingUser && dotPos && (
+          <svg 
+            style={{
+              position: 'absolute',
+              left: `${dotPos[0]}px`,
+              top: `${dotPos[1]}px`,
+              transform: 'translate(-8px, -2px)',
+              width: 24,
+              height: 24,
+              zIndex: 1000,
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))'
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            {/* Outer white stroke for contrast */}
+            <path
+              d="M5 3L19 12L12 13L9 20L5 3Z"
+              fill="white"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            {/* Inner red pointer */}
+            <path
+              d="M5 3L19 12L12 13L9 20L5 3Z"
+              fill="#EF4444"
+              stroke="#DC2626"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
 
       </div>
     </div>

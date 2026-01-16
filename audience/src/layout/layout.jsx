@@ -7,9 +7,10 @@ import {
 } from "../context/DataContext.jsx";
 import Viewport from "../viewport/viewport.jsx";
 import { toast } from "sonner";
+import LoadingPage from "../components/LoadingPage.jsx";
 
 export default function Layout() {
-  const { ld, renderingEngine, sessionId } = useContext(DataContext).data;
+  const { ld, renderingEngine, sessionId, isRequestLoading } = useContext(DataContext).data;
   const { r, c } = ld;
 
   const { dispatch } = useContext(DataDispatchContext);
@@ -42,6 +43,10 @@ export default function Layout() {
       <Viewport viewport_idx={idx} rendering_engine={renderingEngine} />
     </div>
   ));
+
+  if (isRequestLoading) {
+    return <LoadingPage />;
+  }
 
   return renderingEngine ? (
     <div
