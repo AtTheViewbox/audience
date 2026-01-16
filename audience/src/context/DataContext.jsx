@@ -40,7 +40,7 @@ initialData.userData = null;
 initialData.sharingUser = null;
 initialData.sessionMeta = { mode: "TEAM", owner: "" }
 initialData.activeUsers = [];
-initialData.toolSelected = "window";
+initialData.toolSelected = "scroll";
 
 // Added for Broadcast-based ownership arbitration
 initialData.shareClock = 0;  // last share change timestamp (ms since epoch)
@@ -126,7 +126,7 @@ export const DataProvider = ({ children }) => {
 
 
             const workerCount = navigator.hardwareConcurrency || 4;
-   
+
             cornerstoneDICOMImageLoader.webWorkerManager.initialize({
                 maxWebWorkers: workerCount,
                 startWebWorkersOnDemand: false,  // Pre-spawn workers
@@ -146,10 +146,10 @@ export const DataProvider = ({ children }) => {
             );
 
             await cornerstone.init();
-            
+
             const cacheSizeBytes = 3000 * 1024 * 1024; // 3GB
             cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
-            
+
             await cornerstoneTools.init();
 
             const renderingEngineId = 'myRenderingEngine';
