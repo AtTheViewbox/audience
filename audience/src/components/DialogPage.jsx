@@ -23,31 +23,46 @@ import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
 
 function DialogPage() {
-  const { userData} = useContext(UserContext).data;
-  return (
+  const { userData } = useContext(UserContext).data;
+  const isAnonymous = !userData || userData.is_anonymous;
 
-    (!userData || userData.is_anonymous)?<LoginDialog />: <>
-    <DialogHeader>
-    <DialogTitle>Settings</DialogTitle>
-    <DialogDescription>
-        Eventually will have buttons for layout and interactions along with a tab for sharing w/ interaction
-    </DialogDescription>
-    </DialogHeader>
-    <Tabs defaultValue="sharing">
-    <TabsList className="">
-        <TabsTrigger value="sharing">Share</TabsTrigger>
-        {userData.is_anonymous?null:<TabsTrigger value="setting">Setting</TabsTrigger>}
-    </TabsList>
-    <TabsContent value="sharing">
-        <ShareTab/>
-    </TabsContent>
-    <TabsContent value="setting">
-        <SettingTab/>
-    </TabsContent>
-  </Tabs>
-</>
-   
-  )
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>{isAnonymous ? "Login" : "Share"}</DialogTitle>
+        <DialogDescription>
+          {isAnonymous 
+            ? "Log in to access sharing and advanced features." 
+            : "Manage your sharing settings and application preferences."}
+        </DialogDescription>
+      </DialogHeader>
+      
+      <Tabs defaultValue={isAnonymous ? "login" : "sharing"}>
+        <TabsList className="grid w-full grid-cols-2">
+          {isAnonymous ? (
+             <TabsTrigger value="login">Login</TabsTrigger>
+          ) : (
+             <TabsTrigger value="sharing">Share</TabsTrigger>
+          )}
+          <TabsTrigger value="setting">Setting</TabsTrigger>
+        </TabsList>
+
+        {isAnonymous ? (
+          <TabsContent value="login" className="mt-4">
+            <LoginDialog />
+          </TabsContent>
+        ) : (
+          <TabsContent value="sharing">
+            <ShareTab />
+          </TabsContent>
+        )}
+
+        <TabsContent value="setting">
+          <SettingTab />
+        </TabsContent>
+      </Tabs>
+    </>
+  );
 }
 
 export default DialogPage;

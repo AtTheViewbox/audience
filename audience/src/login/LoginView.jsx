@@ -22,18 +22,6 @@ export default function LoginView({ onLogin, loginError, switchToSignUp, switchT
   return (
   
     <>
-      <DialogHeader>
-          <DialogTitle>Login</DialogTitle>
-          <DialogDescription>
-          Login to View Your Cases and Start Sessions
-          </DialogDescription>
-        </DialogHeader>
-        {userData?.is_anonymous && (
-            <div className="flex items-center justify-center p-2 mb-2 text-sm rounded-md bg-muted">
-              <User className="h-4 w-4 mr-2" />
-              <span className="text-muted-foreground">Playing as guest: <span className="font-medium text-foreground">{userData.email}</span></span>
-            </div>
-          )}
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>

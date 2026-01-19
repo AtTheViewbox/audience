@@ -160,7 +160,12 @@ export default function HomePage() {
 
       setSeriesList(data);
       setdisplaySeriesList(data)
-      setSelectedSeries(data[0]);
+      // Only auto-select first series on desktop
+      if (window.innerWidth >= 768) {
+        setSelectedSeries(data[0]);
+      } else {
+        setSelectedSeries(null);
+      }
 
     } catch (error) {
       console.log(error);
