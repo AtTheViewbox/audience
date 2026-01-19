@@ -373,9 +373,9 @@ function ShareTab() {
   switch (shareSessionState) {
     case ShareSessionState.EXISTING_SAME_SESSION:
     case ShareSessionState.NO_EXISTING_SESSION:
-      return <ShareView />;
+      return ShareView();
     case ShareSessionState.EXISTING_OTHER_SESSION:
-      return <DifferentExistingShareView />;
+      return DifferentExistingShareView();
     default:
       return <div>Loading...</div>;
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Heart, Trash2, Copy, Check, MoreHorizontal, ExternalLink } from "lucide-react"
+import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,7 +20,6 @@ import {
   DropdownMenuRadioItem
 } from "@/components/ui/dropdown-menu"
 
-const basename = import.meta.env.BASE_URL
 export default function HomePage() {
   const [selectedSeries, setSelectedSeries] = useState([])
   const [filter, setFilter] = useState(Filter.ALL)
@@ -103,7 +102,7 @@ export default function HomePage() {
   const getIframeURL = (url_params, preview = false) => {
     const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
     const url = new URL(url_params);
-    var params = new URLSearchParams(url.search);
+    let params = new URLSearchParams(url.search);
     const initialData = unflatten(Object.fromEntries(new URLSearchParams(url.search)));
 
     if (preview) {
@@ -119,7 +118,7 @@ export default function HomePage() {
         })
       }
       const updatedFlatData = flatten(initialData);
-      var params = new URLSearchParams(updatedFlatData);
+      params = new URLSearchParams(updatedFlatData);
       params.set('preview', 'true');
     }
     const newSearch = '?' + params.toString();
@@ -173,26 +172,32 @@ export default function HomePage() {
   }, [filter]);
 
   useEffect(() => {
-    function searchItems(query, list) {
-      return list.filter(item =>
+    const results = seriesList.filter(item =>
         Object.values(item).some(value =>
-          value.toString().toLowerCase().includes(query.toLowerCase())
+          value.toString().toLowerCase().includes(search.toLowerCase())
         )
       );
-    }
-    setdisplaySeriesList(searchItems(search, seriesList));
+    setdisplaySeriesList(results);
 
   }, [search, seriesList]);
 
-  return (
-    <div className="flex h-screen bg-background">
-      <HomeSideBar filter={filter} setFilter={setFilter} />
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} />
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-auto p-6">
+  // Close mobile menu when filter changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [filter]);
+
+  return (
+    <div className="flex h-screen bg-background relative">
+      <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden w-full">
+        <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
+
+        <div className="flex-1 flex overflow-hidden relative">
+          <div className="flex-1 overflow-auto p-6 w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold ">Studies</h2>
               <div className="flex items-center gap-4">
@@ -246,7 +251,7 @@ export default function HomePage() {
               {displaySeriesList.map((series) => (
                 <Card
                   key={series.id}
-                  className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${selectedSeries.id === series.id ? "border-primary" : ""
+                  className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${selectedSeries?.id === series.id ? "border-primary" : ""
                     }`}
                   onClick={() => setSelectedSeries(series)}
                 >
@@ -255,7 +260,10 @@ export default function HomePage() {
                       variant="ghost"
                       size="icon"
                       className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                      onClick={() => handleDelete(series.id)}
+                      onClick={(e) => {
+                         e.stopPropagation();
+                         handleDelete(series.id);
+                      }}
                       aria-label="Delete series"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -286,24 +294,32 @@ export default function HomePage() {
                 </Card>
               ))}
             </div>}
-
-
-
           </div>
 
-          <div className="space-y-1"></div>
-
-          {/* Resize handle for right panel */}
+          {/* Desktop Resize Handle */}
           <div
-            className="w-1 cursor-col-resize bg-transparent hover:bg-border transition-colors"
+            className="w-1 cursor-col-resize bg-transparent hover:bg-border transition-colors hidden md:block"
             onMouseDown={() => setIsResizingRight(true)}
           />
 
-          {/* Preview Panel */}
+          {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
           <div
-            className="bg-background border-l border-border overflow-hidden flex flex-col"
-            style={{ width: `${rightPanelWidth}px` }}
+            className={`bg-background border-l border-border overflow-hidden flex flex-col 
+                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 md:static md:z-auto' : 'hidden md:flex'}
+            `}
+            style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
           >
+              {/* Mobile Back Button */}
+            <div className="md:hidden p-4 border-b flex items-center">
+                 <Button variant="ghost" onClick={() => {
+                     setSelectedSeries(null);
+                     setUploadedUrl("");
+                 }}>
+                    <ChevronRight className="h-4 w-4 rotate-180 mr-2" />
+                    Back to List
+                 </Button>
+            </div>
+
             {uploadedUrl && !selectedSeries ? (
               <>
                 <div className="p-6 border-b">

@@ -1,4 +1,4 @@
-import { ChevronRight, Search, X } from "lucide-react"
+import { ChevronRight, Search, X, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { UploaderComp } from "./UploaderComp"
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { LoginDialog } from "../login/LoginDialog.jsx";
 
-function HomeHeaderComp({ setSearch, onUploadComplete }) {
+function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
     const [isOpen, setIsOpen] = useState(false)
     let [dialogIsOpen, setDialogIsOpen] = useState(false);
@@ -33,24 +33,33 @@ function HomeHeaderComp({ setSearch, onUploadComplete }) {
 
     return (
         <header className="h-16 border-b flex items-center justify-between px-6">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full md:w-auto">
+                 <Button
+                    variant="ghost" 
+                    size="icon" 
+                    className="md:hidden mr-2"
+                    onClick={() => setMobileMenuOpen(true)}
+                >
+                    <Menu className="h-5 w-5" />
+                </Button>
+
                 {!isOpen ? (
                     <Button variant="outline" size="sm" className="gap-1" onClick={() => setIsOpen(true)}>
                         <ChevronRight className="h-4 w-4" />
                         Browse
                     </Button>
                 ) : (
-                    <div className="relative">
+                    <div className="relative flex-1 md:flex-none">
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-md" aria-hidden="true" />
 
-                        <div className="relative flex items-center">
+                        <div className="relative flex items-center w-full">
                             <div className="absolute left-3 text-muted-foreground">
                                 <Search className="h-4 w-4" />
                             </div>
                             <Input
                                 type="text"
                                 placeholder="Search..."
-                                className="w-[400px] pl-9 pr-10 h-10 rounded-md border-slate-200 shadow-sm focus-visible:ring-slate-300 focus-visible:ring-offset-0 transition-all duration-300 animate-in fade-in slide-in-from-left-4"
+                                className="w-full md:w-[400px] pl-9 pr-10 h-10 rounded-md border-slate-200 shadow-sm focus-visible:ring-slate-300 focus-visible:ring-offset-0 transition-all duration-300 animate-in fade-in slide-in-from-left-4"
                                 autoComplete="off"
                                 onChange={(e) => setSearch(e.target.value)}
                             />

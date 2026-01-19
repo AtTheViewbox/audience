@@ -61,21 +61,34 @@ export const DataProvider = ({ children }) => {
 
         //Can be optimized if session_id is a primary key
         const getSession = async (cl, session_id) => {
+            if (!session_id) return [];
             const { data, error } = await cl
                 .from("viewbox")
                 .select("session_id")
                 .eq("session_id", session_id)
-            return data
+            
+            if (error) {
+                // It is expected that we might not find the session or get an error if it was just deleted
+                // It is expected that we might not find the session or get an error if it was just deleted
+                return [];
+            }
+            return data || [];
         }
 
         if (updateSession?.eventType === "DELETE") {
             dispatch({ type: 'loading_request' })
-            getSession(supabaseClient, updateSession.old.session_id).then((payload) => {
-                if (payload.length == 0) {
-                    userDispatch({ type: "clean_up_supabase" });
-                }
-            })
+            if (updateSession.old && updateSession.old.session_id) {
+                 getSession(supabaseClient, updateSession.old.session_id).then((payload) => {
+                    if (payload.length == 0) {
+                        userDispatch({ type: "clean_up_supabase" });
+                    }
+                })
+            } else {
+                 // Fallback if we can't identify the session, just cleanup
+                 userDispatch({ type: "clean_up_supabase" });
+            }
         }
+
         if (updateSession?.eventType === "UPDATE") {
             dispatch({ type: 'loading_request' })
             var currentURL = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
@@ -98,7 +111,7 @@ export const DataProvider = ({ children }) => {
         }
         setUpdateSession(null)
 
-    }, [updateSession])
+    }, [updateSession, data, supabaseClient, userDispatch])
 
     useEffect(() => {
         // use effect to do basic house keeping on initial start
@@ -205,7 +218,8 @@ export const DataProvider = ({ children }) => {
                             }
                         })
                     }
-                    dispatch({ type: "update_viewport_data", payload: { ...newData, mode: data[0].mode } })
+                    // Explicitly pass owner here to ensure it is set even if not previously in state
+                    dispatch({ type: "update_viewport_data", payload: { ...newData, mode: data[0].mode, owner: data[0].user } })
                 }
             }
 
@@ -277,7 +291,6 @@ export const DataProvider = ({ children }) => {
 
             share_controller.subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log("share-controller subscribed")
                     return null
                 }
             })
@@ -324,7 +337,6 @@ export const DataProvider = ({ children }) => {
 
             interaction_channel.subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log("I think I'm subscribed?");
                     return null
                 }
             })
@@ -393,7 +405,6 @@ export const DataProvider = ({ children }) => {
                 data.rosterChannel.unsubscribe();
             }
             if (data.interactionChannel) data.interactionChannel.unsubscribe();
-            console.log("share_controller unsubscribed");
         }
     }, [data.sessionId, supabaseClient]);
 
@@ -525,7 +536,7 @@ export const DataProvider = ({ children }) => {
         // BroadCast Initial State when taking control
         if (data.sharingUser === userData?.id && data.renderingEngine && data.interactionChannel && data.sessionId) {
             
-            console.log("Taking control - syncing initial state to viewers");
+            
 
             try {
                 data.renderingEngine.getViewports().sort((a, b) => {
@@ -592,8 +603,8 @@ export function dataReducer(data, action) {
             var m = action.payload.m;
 
             var sessionMeta = {
-                owner: action.payload.owner,
-                mode: action.payload.mode
+                owner: action.payload.owner ?? data.sessionMeta?.owner,
+                mode: action.payload.mode ?? data.sessionMeta?.mode
             }
             new_data = {
                 ...data, ld: ld, vd: vd, m: m,
@@ -607,10 +618,10 @@ export function dataReducer(data, action) {
         case 'connect_to_sharing_session':
             var sessionId = action.payload.sessionId;
             var sessionMeta2 = {
-                owner: action.payload.owner,
-                mode: action.payload.mode
+                owner: action.payload.owner ?? data.sessionMeta?.owner,
+                mode: action.payload.mode ?? data.sessionMeta?.mode
             }
-            new_data = { ...data, sessionId: sessionId, sessionMeta: sessionMeta2 }
+            new_data = { ...data, sessionId: sessionId, sessionMeta: sessionMeta2, isRequestLoading: false }
             break;
 
         case 'apply_share_change': {

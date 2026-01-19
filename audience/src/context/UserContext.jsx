@@ -2,6 +2,7 @@ import { createContext, useState,useReducer,useEffect } from 'react';
 import LoadingPage from '../components/LoadingPage.jsx';
 import { cl } from './SupabaseClient.jsx';
 import { generateRandomName } from '../lib/constants.js';
+import { toast } from "sonner";
 
 
 // Create the context
@@ -25,10 +26,16 @@ export const UserProvider = ({ children }) => {
             ({ data: { user }, error } = await cl.auth.signInAnonymously());
         }
 
-          const decoratedUser = user
-      ? { ...user, email: generateRandomName() }
-      : null;
-    console.log(decoratedUser)
+          let decoratedUser = null;
+          if (user) {
+             if (user.is_anonymous) {
+                 const randomName = generateRandomName();
+                 decoratedUser = { ...user, email: randomName };
+                 toast(`You are playing as guest: ${randomName}`);
+             } else {
+                 decoratedUser = user;
+             }
+          }
         // TODO: error handling for auth
         const ss = cl.auth.onAuthStateChange(
             (event, session) => {

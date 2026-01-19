@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack } from "lucide-react"
+import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack, X } from "lucide-react"
 import { Filter, Visibility } from "../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -13,7 +13,7 @@ import SettingTab from "./SettingTab.jsx"
 import { UserContext } from "../context/UserContext"
 
 
-function HomeSideBar({ filter, setFilter }) {
+function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
     const [leftPanelWidth, setLeftPanelWidth] = useState(256) // 64 * 4 = 256px (w-64)
     const [open, setOpen] = useState(false)
     const { userData } = useContext(UserContext).data;
@@ -67,12 +67,35 @@ function HomeSideBar({ filter, setFilter }) {
 
     return (
         <>
-            {/* Left Sidebar */}
-            <div className="bg-background border-r border-border flex flex-col" style={{ width: `${leftPanelWidth}px` }}>
-                <div className="p-4">
-                    <div className="flex items-center gap-2 mb-6">
+            {/* Mobile Overlay */}
+             {mobileMenuOpen && (
+                <div 
+                    className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden"
+                    onClick={() => setMobileMenuOpen(false)}
+                />
+            )}
 
+            {/* Left Sidebar */}
+            <div 
+                className={cn(
+                    "bg-background border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0",
+                    // Mobile: Fixed, Full Height, Slide in
+                    "fixed inset-y-0 left-0 z-50 w-64 md:static md:z-auto",
+                     mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                )}
+                style={{ width: (window.innerWidth >= 768) ? `${leftPanelWidth}px` : undefined }} 
+            >
+                <div className="p-4">
+                    <div className="flex items-center justify-between mb-6">
                         <h1 className="text-xl font-semibold">AtTheViewBox</h1>
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="md:hidden"
+                            onClick={() => setMobileMenuOpen(false)}
+                        >
+                            <X className="h-4 w-4"/>
+                        </Button>
                     </div>
 
                     <nav className="space-y-1">
@@ -141,9 +164,9 @@ function HomeSideBar({ filter, setFilter }) {
 
             </div>
 
-            {/* Resize handle for left panel */}
+            {/* Resize handle for left panel - Desktop Only */}
             <div
-                className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors"
+                className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors hidden md:block"
                 onMouseDown={() => setIsResizingLeft(true)}
             />
         </>

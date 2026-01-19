@@ -4,30 +4,24 @@ import { DataProvider } from './context/DataContext';
 import { UserProvider } from './context/UserContext';
 import HomePage from "./components/HomePage"
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { useLocation } from 'react-router-dom';
 import UpdatePassword from './login/UpdatePassword';
 
+const AudienceRoute = () => {
+  const { search } = useLocation();
+  return search ? 
+  <UserProvider>
+    <DataProvider>
+      <MainPage /> 
+    </DataProvider>
+    </UserProvider>: 
+    <UserProvider> <HomePage /></UserProvider>;
+};
+
 function App() {
 
   const basename = import.meta.env.BASE_URL
-
-
-  useEffect(() => {
-    console.log("App loaded")
-  }, []);
-
-  const AudienceRoute = () => {
-    const { search } = useLocation();
-    return search ? 
-    <UserProvider>
-      <DataProvider>
-        <MainPage /> 
-      </DataProvider>
-      </UserProvider>: 
-      <UserProvider> <HomePage /></UserProvider>;
-  };
 
   return (
     <div className="App overflow-y-scroll no-scrollbar">

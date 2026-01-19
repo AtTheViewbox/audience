@@ -1,4 +1,6 @@
 // components/Login/LoginView.jsx
+import { useContext } from "react";
+import { UserContext } from "../context/UserContext.jsx";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,7 +9,7 @@ import {
   CardFooter, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, User } from "lucide-react";
 import {
     DialogDescription,
     DialogFooter,
@@ -16,6 +18,7 @@ import {
   } from "@/components/ui/dialog"
 
 export default function LoginView({ onLogin, loginError, switchToSignUp, switchToReset }) {
+  const { userData } = useContext(UserContext).data;
   return (
   
     <>
@@ -25,6 +28,12 @@ export default function LoginView({ onLogin, loginError, switchToSignUp, switchT
           Login to View Your Cases and Start Sessions
           </DialogDescription>
         </DialogHeader>
+        {userData?.is_anonymous && (
+            <div className="flex items-center justify-center p-2 mb-2 text-sm rounded-md bg-muted">
+              <User className="h-4 w-4 mr-2" />
+              <span className="text-muted-foreground">Playing as guest: <span className="font-medium text-foreground">{userData.email}</span></span>
+            </div>
+          )}
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
