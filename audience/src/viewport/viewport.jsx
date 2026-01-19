@@ -186,12 +186,22 @@ export default function Viewport(props) {
     const { s, ww, wc } = viewport_data;
 
       let initialIndex = 0;
-      // Use viewport_data.ci directly as requested
-      if (viewport_data.ci !== undefined) {
-        const parsedIndex = parseInt(viewport_data.ci, 10);
-        if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < s.length) {
-          initialIndex = parsedIndex;
-        }
+      // Match absolute instance number from URL
+      if (viewport_data.ci !== undefined && s.length > 0) {
+          const targetNumber = parseInt(viewport_data.ci, 10);
+           if (!isNaN(targetNumber)) {
+              const getNumber = (str) => {
+                  const match = str.match(/(\d+)(?!.*\d)/); // Last sequence of digits
+                  return match ? parseInt(match[0], 10) : null;
+              };
+
+              // Look for the image that has this specific number
+              const foundIndex = s.findIndex(url => getNumber(url) === targetNumber);
+              
+              if (foundIndex !== -1) {
+                  initialIndex = foundIndex;
+              }
+           }
       }
       
       setLoadedImages(new Set([initialIndex]));
