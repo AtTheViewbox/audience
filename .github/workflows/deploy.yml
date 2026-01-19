@@ -1,67 +1,37 @@
-name: Deploy Production and Staging to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches:
-      - prod
-      - staging
+      - main
 
 permissions:
-  contents: write 
+  contents: write
 
 jobs:
-  deploy:
+  build-and-deploy:
+    concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: audience
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v3
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: audience/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: audience
 
-      - name: Build frontend
-        run: |
-          if [[ "${{ github.ref_name }}" == "staging" ]]; then
-            npm run build:staging
-            export TARGET_DIR="staging"
-          else
-            npm run build:prod
-            export TARGET_DIR="."
-          fi
-          echo "TARGET_DIR=$TARGET_DIR" >> $GITHUB_ENV
-          mkdir -p ../deploy/$TARGET_DIR
-          cp -r dist/* ../deploy/$TARGET_DIR/
+      - name: Build
+        run: npm run build
+        working-directory: audience
 
-      - name: Checkout gh-pages branch
-        run: |
-          git fetch origin gh-pages || echo "No gh-pages branch yet"
-          git worktree add ../gh-pages gh-pages || git worktree add -B gh-pages ../gh-pages origin/gh-pages
-
-      - name: Copy built files into gh-pages
-        run: |
-          if [[ "${{ github.ref_name }}" == "staging" ]]; then
-            rm -rf ../gh-pages/staging
-            cp -r ../deploy/staging ../gh-pages/staging
-          else
-            rm -rf ../gh-pages/*
-            cp -r ../deploy/. ../gh-pages/
-          fi
-          
-      - name: Deploy to GitHub Pages
-        run: |
-          cd ../gh-pages
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .
-          git commit -m "Deploy from ${{ github.ref_name }}"
-          git push --force origin gh-pages
-
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: audience/dist
