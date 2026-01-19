@@ -185,15 +185,24 @@ export default function Viewport(props) {
     const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
 
-    setLoadedImages(new Set([0]));
-    setAllImagesLoaded(false);
+      let initialIndex = 0;
+      // Use viewport_data.ci directly as requested
+      if (viewport_data.ci !== undefined) {
+        const parsedIndex = parseInt(viewport_data.ci, 10);
+        if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < s.length) {
+          initialIndex = parsedIndex;
+        }
+      }
+      
+      setLoadedImages(new Set([initialIndex]));
+      setAllImagesLoaded(false);
 
-    try {
-      await cornerstone.imageLoader.loadAndCacheImage(s[0], { priority: 100 });
-      setLoadedImages(new Set([0]));
+      try {
+      await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100 });
+      setLoadedImages(new Set([initialIndex]));
 
-      // Initial Stack: Only image 0
-      await viewport.setStack([s[0]], 0);
+      // Initial Stack: Only image at initialIndex
+      await viewport.setStack([s[initialIndex]], 0);
 
       viewport.setProperties({
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
@@ -202,10 +211,10 @@ export default function Viewport(props) {
 
       addCornerstoneTools();
       setViewportReady(true);
-      setSortedLoadedIndices([0]);
+      setSortedLoadedIndices([initialIndex]);
 
       // Start the intelligent queue
-      startQueue(s, viewportId);
+      startQueue(s, viewportId, initialIndex);
 
       const handleImageChange = (event) => {
         // Find real index 
@@ -238,7 +247,7 @@ export default function Viewport(props) {
     }
   };
 
-  const startQueue = (allImageIds, viewportId) => {
+  const startQueue = (allImageIds, viewportId, initialIndex = 0) => {
     // 3 concurrent requests
     const queue = new ImageLoaderQueue(allImageIds, 3, (loadedIndex) => {
       setLoadedImages(prev => {
@@ -251,6 +260,7 @@ export default function Viewport(props) {
       });
     });
     queueRef.current = queue;
+    queue.updateFocus(initialIndex);
     queue.start();
   };
 
