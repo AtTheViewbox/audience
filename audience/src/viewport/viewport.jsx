@@ -4,6 +4,7 @@ import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import { Circle } from "lucide-react"
+import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts'; // Import the new class
 
 
 export default function Viewport(props) {
@@ -16,6 +17,10 @@ export default function Viewport(props) {
   const [viewportReady, setViewportReady] = useState(false);
   const viewport_data = vd[viewport_idx];
   const pointerRef = useRef(null);
+
+  // State for sparse stack management
+  const [sortedLoadedIndices, setSortedLoadedIndices] = useState([0]);
+  const queueRef = useRef(null);
 
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -180,75 +185,97 @@ export default function Viewport(props) {
     const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
 
-    // Reset progress state
-    setLoadedImages(new Set());
+    setLoadedImages(new Set([0]));
     setAllImagesLoaded(false);
 
-    // OPTIMIZATION: Progressive Loading - Load first image immediately
     try {
-      await cornerstone.imageLoader.loadAndCacheImage(s[0], {
-        priority: 0,
-        requestType: 'interaction'
-      });
-
-      // Update loaded state for first image
+      await cornerstone.imageLoader.loadAndCacheImage(s[0], { priority: 100 });
       setLoadedImages(new Set([0]));
 
-      // Display first image immediately
-      // IMPORTANT: We set the stack but don't await the FULL load if we want to proceed.
-      await viewport.setStack(s, 0);
+      // Initial Stack: Only image 0
+      await viewport.setStack([s[0]], 0);
 
       viewport.setProperties({
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
         isComputedVOI: false,
       });
 
-      // Unlock readiness immediately after first image
       addCornerstoneTools();
       setViewportReady(true);
+      setSortedLoadedIndices([0]);
 
-      // Setup listener for image navigation (from upstream)
+      // Start the intelligent queue
+      startQueue(s, viewportId);
+
       const handleImageChange = (event) => {
-        setCurrentImageIndex(event.detail.imageIdIndex);
+        // Find real index 
+        const imageId = viewport.getCurrentImageId();
+        const realIndex = s.indexOf(imageId);
+        setCurrentImageIndex(realIndex);
+
+        if (queueRef.current) {
+          queueRef.current.updateFocus(realIndex);
+        }
+
+        if (ww && wc) {
+          const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
+          if (viewport) {
+            viewport.setProperties({
+              voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
+              isComputedVOI: false,
+            });
+          }
+        }
       };
       elementRef.current?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
 
-      // Continue loading the rest in background (non-blocking)
-      loadRestOfImages(s);
-
-      // Return cleanup function for the listener
       return () => {
         elementRef.current?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+        queueRef.current?.destroy();
       };
-
     } catch (e) {
       console.error("Error loading first image", e);
     }
   };
 
-  const loadRestOfImages = async (imageIds) => {
-    const prefetchPromises = imageIds.slice(1).map((imageId, idx) => {
-      // Lower priority for background images
-      return cornerstone.imageLoader.loadAndCacheImage(imageId, {
-        priority: idx + 1,
-        requestType: 'prefetch'
-      }).then(() => {
-        // Update loaded images set for progress bar
-        setLoadedImages(prev => {
-          const newSet = new Set(prev);
-          newSet.add(idx + 1);
-          return newSet;
-        });
+  const startQueue = (allImageIds, viewportId) => {
+    // 3 concurrent requests
+    const queue = new ImageLoaderQueue(allImageIds, 3, (loadedIndex) => {
+      setLoadedImages(prev => {
+        const newSet = new Set(prev);
+        newSet.add(loadedIndex);
+        if (newSet.size === allImageIds.length) {
+          setAllImagesLoaded(true);
+        }
+        return newSet;
       });
     });
-
-    try {
-      await Promise.all(prefetchPromises);
-      setAllImagesLoaded(true);
-    } catch (e) {
-      console.error("Error prefetching images", e);
-    }
+    queueRef.current = queue;
+    queue.start();
   };
+
+  // Effect: When loadedImages changes, update the stack
+  useEffect(() => {
+    if (rendering_engine && viewportReady && viewport_data) {
+      const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
+      if (!viewport) return;
+
+      const sortedIndices = Array.from(loadedImages).sort((a, b) => a - b);
+      // Only update if count changed
+      if (sortedIndices.length !== sortedLoadedIndices.length) {
+        const denseStack = sortedIndices.map(idx => viewport_data.s[idx]);
+
+        // Find where the current image is in the NEW stack
+        const currentId = viewport.getCurrentImageId();
+        const newIndex = denseStack.indexOf(currentId);
+
+        // Keep position if possible, otherwise default to 0
+        viewport.setStack(denseStack, newIndex !== -1 ? newIndex : 0);
+
+        setSortedLoadedIndices(sortedIndices);
+      }
+    }
+  }, [loadedImages, viewportReady, rendering_engine]);
 
 
   useEffect(() => {
