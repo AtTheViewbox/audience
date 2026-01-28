@@ -6,20 +6,6 @@ interface QueueItem {
     priority: number;
 }
 
-interface PerformanceMetrics {
-    totalImages: number;
-    imagesLoaded: number;
-    startTime: number;
-    firstImageLoadTime: number | null;
-    allImagesLoadTime: number | null;
-    priorityRecalculations: number;
-    scrollEvents: number;
-    throttledScrollEvents: number;
-    averageConcurrency: number;
-    peakConcurrency: number;
-    idleBoostActivations: number;
-}
-
 export class ImageLoaderQueue {
     private queue: QueueItem[] = [];
     private processing = new Set<string>();
@@ -44,10 +30,6 @@ export class ImageLoaderQueue {
     // Prefetch window
     private readonly PREFETCH_WINDOW = 30;
 
-    // Performance metrics
-    private metrics: PerformanceMetrics;
-    private concurrencySamples: number[] = [];
-
     constructor(
         imageIds: string[],
         _legacyConcurrency: number, // Kept for backward compatibility but unused
@@ -64,44 +46,12 @@ export class ImageLoaderQueue {
 
         this.onImageLoaded = onImageLoaded;
 
-        // Initialize performance metrics
-        this.metrics = {
-            totalImages: imageIds.length,
-            imagesLoaded: 0,
-            startTime: Date.now(),
-            firstImageLoadTime: null,
-            allImagesLoadTime: null,
-            priorityRecalculations: 0,
-            scrollEvents: 0,
-            throttledScrollEvents: 0,
-            averageConcurrency: 0,
-            peakConcurrency: 0,
-            idleBoostActivations: 0
-        };
-
         // Populate initial queue
         this.queue = imageIds.map((id, idx) => ({
             id,
             idx,
             priority: this.calculatePriority(idx, 0)
         }));
-
-        // Start concurrency sampling
-        this.startConcurrencySampling();
-    }
-
-    private startConcurrencySampling() {
-        const sampleInterval = setInterval(() => {
-            if (this.isDestroyed) {
-                clearInterval(sampleInterval);
-                return;
-            }
-            const current = this.processing.size;
-            this.concurrencySamples.push(current);
-            if (current > this.metrics.peakConcurrency) {
-                this.metrics.peakConcurrency = current;
-            }
-        }, 100);
     }
 
     private calculatePriority(index: number, focusIndex: number): number {
@@ -129,8 +79,6 @@ export class ImageLoaderQueue {
     }
 
     public updateFocus(focusIndex: number) {
-        this.metrics.scrollEvents++;
-
         // Throttle scroll events
         this.pendingFocusIndex = focusIndex;
 
@@ -141,7 +89,6 @@ export class ImageLoaderQueue {
 
         this.throttleTimeout = setTimeout(() => {
             if (this.pendingFocusIndex !== null) {
-                this.metrics.throttledScrollEvents++;
                 this.applyFocusUpdate(this.pendingFocusIndex);
                 this.pendingFocusIndex = null;
             }
@@ -170,7 +117,6 @@ export class ImageLoaderQueue {
             this.isScrolling = false;
             // Boost concurrency when idle
             this.concurrency = this.idleConcurrency;
-            this.metrics.idleBoostActivations++;
 
             // Re-prioritize with idle strategy
             if (this.currentFocusIndex !== null) {
@@ -181,7 +127,6 @@ export class ImageLoaderQueue {
 
     private applyFocusUpdate(focusIndex: number) {
         this.currentFocusIndex = focusIndex;
-        this.metrics.priorityRecalculations++;
 
         // Re-calculate priorities
         this.queue.forEach(item => {
@@ -200,21 +145,6 @@ export class ImageLoaderQueue {
         this.processNext();
     }
 
-    public pause() {
-        this.isDestroyed = true; // Reuse destroyed flag to stop processing
-    }
-
-    public resume() {
-        if (this.isDestroyed) {
-            this.isDestroyed = false;
-            this.processNext(); // Resume processing
-        }
-    }
-
-    public isPaused(): boolean {
-        return this.isDestroyed;
-    }
-
     public destroy() {
         this.isDestroyed = true;
         this.queue = [];
@@ -225,9 +155,6 @@ export class ImageLoaderQueue {
         if (this.idleTimeout) {
             clearTimeout(this.idleTimeout);
         }
-
-        // Log final metrics
-        this.logMetrics();
     }
 
     private async processNext() {
@@ -235,6 +162,8 @@ export class ImageLoaderQueue {
 
         // While we have slots open and items in queue
         while (this.processing.size < this.concurrency && this.queue.length > 0) {
+            // Double check inside loop in case state changed async
+            if (this.isDestroyed) return;
 
             // Sort to get highest priority
             this.queue.sort((a, b) => b.priority - a.priority);
@@ -255,18 +184,6 @@ export class ImageLoaderQueue {
 
                 if (!this.isDestroyed) {
                     this.loaded.add(item.idx);
-                    this.metrics.imagesLoaded++;
-
-                    // Track first image load time
-                    if (this.metrics.firstImageLoadTime === null) {
-                        this.metrics.firstImageLoadTime = Date.now() - this.metrics.startTime;
-                    }
-
-                    // Track all images loaded time
-                    if (this.metrics.imagesLoaded === this.metrics.totalImages) {
-                        this.metrics.allImagesLoadTime = Date.now() - this.metrics.startTime;
-                    }
-
                     this.onImageLoaded(item.idx);
                 }
             } catch (e) {
@@ -277,36 +194,5 @@ export class ImageLoaderQueue {
                 this.processNext();
             }
         }
-    }
-
-    public getMetrics(): PerformanceMetrics {
-        // Calculate average concurrency
-        if (this.concurrencySamples.length > 0) {
-            const sum = this.concurrencySamples.reduce((a, b) => a + b, 0);
-            this.metrics.averageConcurrency = sum / this.concurrencySamples.length;
-        }
-
-        return { ...this.metrics };
-    }
-
-    private logMetrics() {
-        const metrics = this.getMetrics();
-
-        console.group('📊 Image Loading Performance Metrics');
-        console.log(`📦 Total Images: ${metrics.totalImages}`);
-        console.log(`✅ Images Loaded: ${metrics.imagesLoaded}`);
-        console.log(`⏱️  First Image: ${metrics.firstImageLoadTime}ms`);
-        console.log(`🏁 All Images: ${metrics.allImagesLoadTime || 'N/A'}ms`);
-        console.log(`📈 Scroll Events: ${metrics.scrollEvents} (throttled to ${metrics.throttledScrollEvents})`);
-        console.log(`🔄 Priority Recalculations: ${metrics.priorityRecalculations}`);
-        console.log(`⚡ Idle Boost Activations: ${metrics.idleBoostActivations}`);
-        console.log(`🔢 Average Concurrency: ${metrics.averageConcurrency.toFixed(2)}`);
-        console.log(`📊 Peak Concurrency: ${metrics.peakConcurrency}`);
-
-        // Calculate efficiency
-        const efficiency = ((metrics.throttledScrollEvents / Math.max(1, metrics.scrollEvents)) * 100).toFixed(1);
-        console.log(`💡 Throttle Efficiency: ${efficiency}% reduction in processing`);
-
-        console.groupEnd();
     }
 }

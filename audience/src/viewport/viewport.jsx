@@ -33,29 +33,29 @@ export default function Viewport(props) {
     // Imperative update for cursor position to avoid re-renders
     if (viewport_data && viewportReady && pointerRef.current) {
       // Logic to determine visibility
-      const shouldShow = coordData && 
-                         coordData.viewport == `${viewport_idx}-vp` && 
-                         sharingUser && 
-                         userData.id != sharingUser;
+      const shouldShow = coordData &&
+        coordData.viewport == `${viewport_idx}-vp` &&
+        sharingUser &&
+        userData.id != sharingUser;
 
       if (shouldShow && coordData?.coord) {
         const viewportId = `${viewport_idx}-vp`;
         const viewport = rendering_engine.getViewport(viewportId);
-        
+
         if (viewport) {
-           const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
-           
-           // Use transform for performant updates
-           // existing transform was translate(-8px, -2px)
-           pointerRef.current.style.transform = `translate(${canvasCoord[0] - 8}px, ${canvasCoord[1] - 2}px)`;
-           pointerRef.current.style.display = 'block';
-           return;
+          const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
+
+          // Use transform for performant updates
+          // existing transform was translate(-8px, -2px)
+          pointerRef.current.style.transform = `translate(${canvasCoord[0] - 8}px, ${canvasCoord[1] - 2}px)`;
+          pointerRef.current.style.display = 'block';
+          return;
         }
       }
-      
+
       // Hide if conditions not met
       pointerRef.current.style.display = 'none';
-      
+
     }
   }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData.id]);
 
@@ -163,7 +163,7 @@ export default function Viewport(props) {
         toolGroup.setToolActive(StackScrollTool.toolName);
       }
     }
-    
+
     // Always ensure the viewport is added to the toolGroup (handle re-mounts/Strict Mode)
     // This fixes the issue where tools are not attached if the group already exists
     toolGroup.addViewport(`${viewport_idx}-vp`, 'myRenderingEngine');
@@ -185,29 +185,29 @@ export default function Viewport(props) {
     const viewport = rendering_engine.getViewport(viewportId);
     const { s, ww, wc } = viewport_data;
 
-      let initialIndex = 0;
-      // Match absolute instance number from URL
-      if (viewport_data.ci !== undefined && s.length > 0) {
-          const targetNumber = parseInt(viewport_data.ci, 10);
-           if (!isNaN(targetNumber)) {
-              const getNumber = (str) => {
-                  const match = str.match(/(\d+)(?!.*\d)/); // Last sequence of digits
-                  return match ? parseInt(match[0], 10) : null;
-              };
+    let initialIndex = 0;
+    // Match absolute instance number from URL
+    if (viewport_data.ci !== undefined && s.length > 0) {
+      const targetNumber = parseInt(viewport_data.ci, 10);
+      if (!isNaN(targetNumber)) {
+        const getNumber = (str) => {
+          const match = str.match(/(\d+)(?!.*\d)/); // Last sequence of digits
+          return match ? parseInt(match[0], 10) : null;
+        };
 
-              // Look for the image that has this specific number
-              const foundIndex = s.findIndex(url => getNumber(url) === targetNumber);
-              
-              if (foundIndex !== -1) {
-                  initialIndex = foundIndex;
-              }
-           }
+        // Look for the image that has this specific number
+        const foundIndex = s.findIndex(url => getNumber(url) === targetNumber);
+
+        if (foundIndex !== -1) {
+          initialIndex = foundIndex;
+        }
       }
-      
-      setLoadedImages(new Set([initialIndex]));
-      setAllImagesLoaded(false);
+    }
 
-      try {
+    setLoadedImages(new Set([initialIndex]));
+    setAllImagesLoaded(false);
+
+    try {
       await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100 });
       setLoadedImages(new Set([initialIndex]));
 
@@ -250,11 +250,9 @@ export default function Viewport(props) {
 
       return () => {
         elementRef.current?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
-        
+
         // Log performance metrics before destroying
         if (queueRef.current) {
-          const metrics = queueRef.current.getMetrics();
-          console.log('📊 Final loading metrics:', metrics);
           queueRef.current.destroy();
         }
       };
@@ -267,7 +265,7 @@ export default function Viewport(props) {
     // Detect device type
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    
+
     const queue = new ImageLoaderQueue(allImageIds, 3, (loadedIndex) => {
       setLoadedImages(prev => {
         const newSet = new Set(prev);
@@ -278,7 +276,7 @@ export default function Viewport(props) {
         return newSet;
       });
     }, isMobile);
-    
+
     queueRef.current = queue;
     queue.updateFocus(initialIndex);
     queue.start();
@@ -315,27 +313,9 @@ export default function Viewport(props) {
       setViewportReady(false); // Reset ready state on new data
       loadImagesAndDisplay().then(c => cleanup = c);
     }
-    
-    // Add visibility change listener for multi-tab memory management
-    const handleVisibilityChange = () => {
-      if (queueRef.current) {
-        if (document.hidden) {
-          // Tab hidden - pause loading to free WASM instances
-          queueRef.current.pause();
-          console.log('📴 Tab hidden - paused image loading');
-        } else {
-          // Tab visible - resume loading
-          queueRef.current.resume();
-          console.log('▶️ Tab visible - resumed image loading');
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       if (cleanup) cleanup();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [vd]);
 
@@ -379,41 +359,41 @@ export default function Viewport(props) {
       <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
 
         {/* Shared Pointer - Always rendered but toggled via ref for performance */}
-          <svg 
-            ref={pointerRef}
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              // Initial state hidden
-              display: 'none', 
-              width: 24,
-              height: 24,
-              zIndex: 1000,
-              pointerEvents: 'none',
-              filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
-              transition: 'display 0.1s' // smooth toggle
-            }}
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            {/* Outer white stroke for contrast */}
-            <path
-              d="M5 3L19 12L12 13L9 20L5 3Z"
-              fill="white"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-            {/* Inner red pointer */}
-            <path
-              d="M5 3L19 12L12 13L9 20L5 3Z"
-              fill="#EF4444"
-              stroke="#DC2626"
-              strokeWidth="1"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <svg
+          ref={pointerRef}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            // Initial state hidden
+            display: 'none',
+            width: 24,
+            height: 24,
+            zIndex: 1000,
+            pointerEvents: 'none',
+            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
+            transition: 'display 0.1s' // smooth toggle
+          }}
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          {/* Outer white stroke for contrast */}
+          <path
+            d="M5 3L19 12L12 13L9 20L5 3Z"
+            fill="white"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          {/* Inner red pointer */}
+          <path
+            d="M5 3L19 12L12 13L9 20L5 3Z"
+            fill="#EF4444"
+            stroke="#DC2626"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+        </svg>
 
       </div>
     </div>
