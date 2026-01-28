@@ -10,3 +10,16 @@
     width: 100%;
     height: 100%;
 }
+
+/* Responsive layout: swap grid on portrait/square screens */
+@media (max-aspect-ratio: 6/5) {
+    .grid-container[style*="repeat(2, 1fr)"][style*="repeat(1, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+        grid-template-rows: repeat(1, 1fr) !important;
+    }
+
+    .grid-container[style*="repeat(1, 1fr)"][style*="repeat(2, 1fr)"] {
+        grid-template-columns: repeat(1, 1fr) !important;
+        grid-template-rows: repeat(2, 1fr) !important;
+    }
+}
