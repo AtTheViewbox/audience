@@ -138,7 +138,9 @@ export const DataProvider = ({ children }) => {
             });
 
 
-            const workerCount = navigator.hardwareConcurrency || 4;
+            // Cap at 4 workers to prevent WASM memory exhaustion
+            // (concurrency is 3-6, so 4 workers is plenty)
+            const workerCount = Math.min(navigator.hardwareConcurrency || 4, 4);
 
             cornerstoneDICOMImageLoader.webWorkerManager.initialize({
                 maxWebWorkers: workerCount,
@@ -160,7 +162,12 @@ export const DataProvider = ({ children }) => {
 
             await cornerstone.init();
 
-            const cacheSizeBytes = 3000 * 1024 * 1024; // 3GB
+            // Reduce cache size on mobile to prevent WASM memory exhaustion
+            const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const cacheSizeBytes = isMobile 
+                ? 512 * 1024 * 1024  // 512MB for mobile
+                : 3000 * 1024 * 1024; // 3GB for desktop
             cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
 
             await cornerstoneTools.init();

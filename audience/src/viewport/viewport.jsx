@@ -250,7 +250,13 @@ export default function Viewport(props) {
 
       return () => {
         elementRef.current?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
-        queueRef.current?.destroy();
+        
+        // Log performance metrics before destroying
+        if (queueRef.current) {
+          const metrics = queueRef.current.getMetrics();
+          console.log('📊 Final loading metrics:', metrics);
+          queueRef.current.destroy();
+        }
       };
     } catch (e) {
       console.error("Error loading first image", e);
@@ -258,7 +264,10 @@ export default function Viewport(props) {
   };
 
   const startQueue = (allImageIds, viewportId, initialIndex = 0) => {
-    // 3 concurrent requests
+    // Detect device type
+    const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    
     const queue = new ImageLoaderQueue(allImageIds, 3, (loadedIndex) => {
       setLoadedImages(prev => {
         const newSet = new Set(prev);
@@ -268,7 +277,8 @@ export default function Viewport(props) {
         }
         return newSet;
       });
-    });
+    }, isMobile);
+    
     queueRef.current = queue;
     queue.updateFocus(initialIndex);
     queue.start();
@@ -305,8 +315,27 @@ export default function Viewport(props) {
       setViewportReady(false); // Reset ready state on new data
       loadImagesAndDisplay().then(c => cleanup = c);
     }
+    
+    // Add visibility change listener for multi-tab memory management
+    const handleVisibilityChange = () => {
+      if (queueRef.current) {
+        if (document.hidden) {
+          // Tab hidden - pause loading to free WASM instances
+          queueRef.current.pause();
+          console.log('📴 Tab hidden - paused image loading');
+        } else {
+          // Tab visible - resume loading
+          queueRef.current.resume();
+          console.log('▶️ Tab visible - resumed image loading');
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
       if (cleanup) cleanup();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [vd]);
 
