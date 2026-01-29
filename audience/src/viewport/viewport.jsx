@@ -332,7 +332,7 @@ export default function Viewport(props) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Segmented Progress Bar (from Remote Staging) */}
-      {viewport_data && !allImagesLoaded && (
+      {viewport_data && !allImagesLoaded && viewport_data.s.length > 1 && (
         <div style={{
           position: 'absolute',
           top: 0,
@@ -341,7 +341,7 @@ export default function Viewport(props) {
           height: '3px',
           display: 'flex',
           gap: '1px',
-          zIndex: 1000,
+          zIndex: 10, // Lower z-index to appear underneath dialogs
           pointerEvents: 'none',
           opacity: allImagesLoaded ? 0 : 1,
           transition: 'opacity 0.5s ease-out'
