@@ -306,6 +306,7 @@ export default function Viewport(props) {
   }, [loadedImages, viewportReady, rendering_engine]);
 
 
+
   useEffect(() => {
     let cleanup;
     // Only load if data exists
@@ -337,22 +338,48 @@ export default function Viewport(props) {
           opacity: allImagesLoaded ? 0 : 1,
           transition: 'opacity 0.5s ease-out'
         }}>
-          {Array.from({ length: viewport_data.s.length }).map((_, idx) => (
-            <div
-              key={idx}
-              style={{
-                flex: 1,
-                height: '100%',
-                backgroundColor:
-                  idx === currentImageIndex
-                    ? '#F87171'  // Current image - red/orange (using tailwind red-400 roughly)
-                    : loadedImages.has(idx)
-                      ? '#4CAF50'  // Loaded - green
-                      : 'rgba(255, 255, 255, 0.2)',  // Not loaded - transparent white
-                transition: 'background-color 0.3s ease'
-              }}
-            />
-          ))}
+          {(() => {
+            // Calculate optimal segment count to prevent clutter on small screens
+            const MAX_SEGMENTS = 100;
+            const totalImages = viewport_data.s.length;
+            const segmentCount = Math.min(totalImages, MAX_SEGMENTS);
+            const imagesPerSegment = Math.ceil(totalImages / segmentCount);
+
+            return Array.from({ length: segmentCount }).map((_, segmentIdx) => {
+              const startIdx = segmentIdx * imagesPerSegment;
+              const endIdx = Math.min(startIdx + imagesPerSegment, totalImages);
+
+              // Check if current image is in this segment
+              const isCurrent = currentImageIndex >= startIdx && currentImageIndex < endIdx;
+
+              // Check if any image in this segment is loaded
+              let hasLoaded = false;
+              for (let i = startIdx; i < endIdx; i++) {
+                if (loadedImages.has(i)) {
+                  hasLoaded = true;
+                  break;
+                }
+              }
+
+              const backgroundColor = isCurrent
+                ? '#F87171'  // Current segment - red/orange
+                : hasLoaded
+                  ? '#4CAF50'  // At least one loaded - green
+                  : 'rgba(255, 255, 255, 0.2)';  // None loaded - transparent white
+
+              return (
+                <div
+                  key={segmentIdx}
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    backgroundColor,
+                    transition: 'background-color 0.3s ease'
+                  }}
+                />
+              );
+            });
+          })()}
         </div>
       )}
 

@@ -20,10 +20,10 @@ export default function Layout() {
       new URLSearchParams(window.location.search)
     );
 
-    if (sessionId == null && urlData?.s != null && sessionId!==undefined) {
+    if (sessionId == null && urlData?.s != null && sessionId !== undefined) {
       toast("The session does not exist or you do not have access");
     }
-  }, [sessionId,toast]);
+  }, [sessionId, toast]);
 
   useEffect(() => {
 

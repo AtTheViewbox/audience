@@ -66,7 +66,7 @@ export const DataProvider = ({ children }) => {
                 .from("viewbox")
                 .select("session_id")
                 .eq("session_id", session_id)
-            
+
             if (error) {
                 // It is expected that we might not find the session or get an error if it was just deleted
                 // It is expected that we might not find the session or get an error if it was just deleted
@@ -78,14 +78,14 @@ export const DataProvider = ({ children }) => {
         if (updateSession?.eventType === "DELETE") {
             dispatch({ type: 'loading_request' })
             if (updateSession.old && updateSession.old.session_id) {
-                 getSession(supabaseClient, updateSession.old.session_id).then((payload) => {
+                getSession(supabaseClient, updateSession.old.session_id).then((payload) => {
                     if (payload.length == 0) {
                         userDispatch({ type: "clean_up_supabase" });
                     }
                 })
             } else {
-                 // Fallback if we can't identify the session, just cleanup
-                 userDispatch({ type: "clean_up_supabase" });
+                // Fallback if we can't identify the session, just cleanup
+                userDispatch({ type: "clean_up_supabase" });
             }
         }
 
@@ -165,7 +165,7 @@ export const DataProvider = ({ children }) => {
             // Reduce cache size on mobile to prevent WASM memory exhaustion
             const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-            const cacheSizeBytes = isMobile 
+            const cacheSizeBytes = isMobile
                 ? 512 * 1024 * 1024  // 512MB for mobile
                 : 3000 * 1024 * 1024; // 3GB for desktop
             cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
@@ -356,11 +356,22 @@ export const DataProvider = ({ children }) => {
                     { event: 'frame-changed' },
                     (payload) => {
                         const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
-                        // Preserve camera state (zoom/pan) during frame changes
-                        const currentCamera = viewport.getCamera();
-                        viewport.setImageIdIndex(payload.payload.frame);
-                        viewport.setCamera(currentCamera);
-                        viewport.render();
+                        const sharedImageId = payload.payload.imageId;
+
+                        // Find the imageId in local stack
+                        const localStack = viewport.getImageIds();
+                        const localIndex = localStack.indexOf(sharedImageId);
+
+                        if (localIndex !== -1) {
+                            // Image loaded locally, display it
+                            const currentCamera = viewport.getCamera();
+                            viewport.setImageIdIndex(localIndex);
+                            viewport.setCamera(currentCamera);
+                            viewport.render();
+                        } else {
+                            // Image not loaded yet, skip gracefully
+                            console.log('Shared image not loaded yet:', sharedImageId);
+                        }
                     }
                 )
 
@@ -387,7 +398,7 @@ export const DataProvider = ({ children }) => {
                         }
                     }
                 ) */}
-               
+
 
                 interaction_channel.on(
                     'broadcast',
@@ -434,12 +445,12 @@ export const DataProvider = ({ children }) => {
         if (!data.interactionChannel) return;
         const now = performance.now();
         if (now - lastSendCamera < 50) return; // ~20 Hz throttle
-        
+
         // Debounce to prevent sending transient states during scroll
         if (cameraDebounceTimeout) {
             clearTimeout(cameraDebounceTimeout);
         }
-        
+
         cameraDebounceTimeout = setTimeout(() => {
             lastSendCamera = now;
             if (data.interactionChannel) {
@@ -480,10 +491,12 @@ export const DataProvider = ({ children }) => {
 
                     data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
                         if (data.interactionChannel) {
+                            // Send actual imageId instead of sparse array index
+                            const currentImageId = vp.getCurrentImageId();
                             data.interactionChannel.send({
                                 type: 'broadcast',
                                 event: 'frame-changed',
-                                payload: { frame: event.detail.imageIdIndex, viewport: `${viewport_idx}-vp` },
+                                payload: { imageId: currentImageId, viewport: `${viewport_idx}-vp` },
                             })
                         }
                     })
@@ -542,8 +555,8 @@ export const DataProvider = ({ children }) => {
     useEffect(() => {
         // BroadCast Initial State when taking control
         if (data.sharingUser === userData?.id && data.renderingEngine && data.interactionChannel && data.sessionId) {
-            
-            
+
+
 
             try {
                 data.renderingEngine.getViewports().sort((a, b) => {
@@ -553,27 +566,27 @@ export const DataProvider = ({ children }) => {
                     if (idA > idB) { return 1; }
                     return 0
                 }).forEach((vp, viewport_idx) => {
-                    // 1. Sync Frame/Slice
-                    if (vp.getCurrentImageIdIndex) {
-                        const currentImageIndex = vp.getCurrentImageIdIndex();
+                    // 1. Sync Frame/Slice using absolute imageId
+                    const currentImageId = vp.getCurrentImageId();
+                    if (currentImageId) {
                         data.interactionChannel.send({
                             type: 'broadcast',
                             event: 'frame-changed',
-                            payload: { frame: currentImageIndex, viewport: `${viewport_idx}-vp` },
+                            payload: { imageId: currentImageId, viewport: `${viewport_idx}-vp` },
                         });
                     }
 
                     // 2. Sync Window/Level (VOI)
                     const { voiRange } = vp.getProperties();
                     if (voiRange) {
-                         const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper)
-                         data.interactionChannel.send({
+                        const window = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper)
+                        data.interactionChannel.send({
                             type: 'broadcast',
                             event: 'voi-changed',
                             payload: { ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` }
                         });
                     }
-                    
+
                     // 3. Explicitly NO Camera/Zoom sync here
                 })
             } catch (error) {
