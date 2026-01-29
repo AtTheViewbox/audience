@@ -659,7 +659,10 @@ export function dataReducer(data, action) {
             }));
 
             if (sharingUser && sharingUser !== data.sharingUser) {
-                toast(`${sharingUser} has taken control`);
+                // Find the user's name from the active users roster
+                const sharingUserInfo = updatedActive.find(u => u.user === sharingUser);
+                const displayName = sharingUserInfo?.name || sharingUser;
+                toast(`${displayName} has taken control`);
             } else if (!sharingUser && data.sharingUser) {
                 data?.eventListenerManager?.reset();
                 toast(`Control released`);

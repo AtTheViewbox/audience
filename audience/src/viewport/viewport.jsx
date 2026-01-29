@@ -266,18 +266,26 @@ export default function Viewport(props) {
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 
-    const queue = new ImageLoaderQueue(allImageIds, 3, (loadedIndex) => {
-      setLoadedImages(prev => {
-        const newSet = new Set(prev);
-        newSet.add(loadedIndex);
-        if (newSet.size === allImageIds.length) {
-          setAllImagesLoaded(true);
-        }
-        return newSet;
-      });
-    }, isMobile);
+    const queue = new ImageLoaderQueue(
+      allImageIds,
+      3,
+      (loadedIndex) => {
+        // When image finishes loading
+        setLoadedImages(prev => {
+          const newSet = new Set(prev);
+          newSet.add(loadedIndex);
+          if (newSet.size === allImageIds.length) {
+            setAllImagesLoaded(true);
+          }
+          return newSet;
+        });
+      },
+      () => { }, // Empty callback for onImageLoadStart (not used)
+      isMobile
+    );
 
     queueRef.current = queue;
+    queue.markAsLoaded(initialIndex); // Mark initial image as already loaded
     queue.updateFocus(initialIndex);
     queue.start();
   };
@@ -361,8 +369,9 @@ export default function Viewport(props) {
                 }
               }
 
+              // Two states: Current (red) or Loaded (green) or Unloaded (gray)
               const backgroundColor = isCurrent
-                ? '#F87171'  // Current segment - red/orange
+                ? '#F87171'  // Current segment - red
                 : hasLoaded
                   ? '#4CAF50'  // At least one loaded - green
                   : 'rgba(255, 255, 255, 0.2)';  // None loaded - transparent white

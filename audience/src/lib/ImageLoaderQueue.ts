@@ -15,6 +15,7 @@ export class ImageLoaderQueue {
     private idleConcurrency: number;
     private currentFocusIndex: number = 0;
     private onImageLoaded: (index: number) => void;
+    private onImageLoadStart: (index: number) => void;
     private isDestroyed = false;
 
     // Scroll throttling
@@ -34,6 +35,7 @@ export class ImageLoaderQueue {
         imageIds: string[],
         _legacyConcurrency: number, // Kept for backward compatibility but unused
         onImageLoaded: (index: number) => void,
+        onImageLoadStart: (index: number) => void,
         isMobile: boolean = false
     ) {
 
@@ -45,6 +47,7 @@ export class ImageLoaderQueue {
         this.concurrency = this.baseConcurrency;
 
         this.onImageLoaded = onImageLoaded;
+        this.onImageLoadStart = onImageLoadStart;
 
         // Populate initial queue
         this.queue = imageIds.map((id, idx) => ({
@@ -59,13 +62,13 @@ export class ImageLoaderQueue {
 
         // During scrolling: tight focus on nearby images only
         if (this.isScrolling) {
-            // Outside prefetch window = very low priority
+            // Outside prefetch window = very low priority, but always at least 1
             if (distance > this.PREFETCH_WINDOW) {
-                return Math.max(0, 10 - distance); // Very low, but not zero
+                return Math.max(1, 10 - distance); // Minimum priority of 1
             }
 
             // Within window: exponential proximity boost
-            const proximityScore = Math.max(0, 1000 - (distance * distance));
+            const proximityScore = Math.max(1, 1000 - (distance * distance));
             return proximityScore;
         }
 
@@ -73,7 +76,7 @@ export class ImageLoaderQueue {
         const isKeyframe = index % 10 === 0;
         const strideScore = isKeyframe ? 1000 : 0;
 
-        const proximityScore = Math.max(0, 500 - distance);
+        const proximityScore = Math.max(1, 500 - distance); // Minimum priority of 1
 
         return strideScore + proximityScore;
     }
@@ -128,12 +131,28 @@ export class ImageLoaderQueue {
     private applyFocusUpdate(focusIndex: number) {
         this.currentFocusIndex = focusIndex;
 
-        // Re-calculate priorities
-        this.queue.forEach(item => {
-            item.priority = this.calculatePriority(item.idx, this.currentFocusIndex);
-        });
+        // OPTIMIZATION: Only re-prioritize items near the focus during scrolling
+        // During idle state, re-prioritize everything
+        const shouldFullReprioritize = !this.isScrolling;
 
-        // Sort: Highest priority first
+        if (shouldFullReprioritize) {
+            // Full re-prioritization when idle (broader coverage strategy)
+            this.queue.forEach(item => {
+                item.priority = this.calculatePriority(item.idx, this.currentFocusIndex);
+            });
+        } else {
+            // Selective re-prioritization during scroll (only visible window)
+            // This reduces O(n) operations during rapid scrolling
+            const REPRIORITIZE_WINDOW = this.PREFETCH_WINDOW * 2;
+            this.queue.forEach(item => {
+                const distance = Math.abs(item.idx - this.currentFocusIndex);
+                if (distance <= REPRIORITIZE_WINDOW) {
+                    item.priority = this.calculatePriority(item.idx, this.currentFocusIndex);
+                }
+            });
+        }
+
+        // Sort once: Highest priority first
         this.queue.sort((a, b) => b.priority - a.priority);
 
         this.processNext();
@@ -143,6 +162,11 @@ export class ImageLoaderQueue {
         // Trigger initial idle state
         this.handleScrollActivity();
         this.processNext();
+    }
+
+    public markAsLoaded(index: number) {
+        // Mark an image as already loaded (e.g., the initial image)
+        this.loaded.add(index);
     }
 
     public destroy() {
@@ -165,15 +189,17 @@ export class ImageLoaderQueue {
             // Double check inside loop in case state changed async
             if (this.isDestroyed) return;
 
-            // Sort to get highest priority
-            this.queue.sort((a, b) => b.priority - a.priority);
-
+            // OPTIMIZATION: Queue is already sorted by applyFocusUpdate, no need to sort again
+            // Just shift the highest priority item (at index 0)
             const item = this.queue.shift();
             if (!item) break;
 
             if (this.loaded.has(item.idx)) continue;
 
             this.processing.add(item.id);
+
+            // Notify that loading is starting
+            this.onImageLoadStart(item.idx);
 
             // Fetch
             try {
