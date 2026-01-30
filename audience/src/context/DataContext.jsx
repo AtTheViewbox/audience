@@ -103,6 +103,10 @@ export const DataProvider = ({ children }) => {
                 }
                 dispatch({ type: "update_viewport_data", payload: { ...newData } })
 
+                // Log before reload to help diagnose mobile refresh issues
+                console.warn('SESSION UPDATE RELOAD TRIGGERED - Session transfer detected');
+                console.warn('If you see this on mobile during normal loading, this is the bug!');
+
                 //TODO: Fix buggy tranfering sessions, but reloading works for now.
                 window.location.reload();
             } else {
@@ -166,7 +170,7 @@ export const DataProvider = ({ children }) => {
             const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
             const cacheSizeBytes = isMobile
-                ? 512 * 1024 * 1024  // 512MB for mobile
+                ? 384 * 1024 * 1024  // 384MB for mobile (reduced from 512MB)
                 : 3000 * 1024 * 1024; // 3GB for desktop
             cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
 

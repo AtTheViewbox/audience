@@ -4,7 +4,8 @@ import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import { Circle } from "lucide-react"
-import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts'; // Import the new class
+import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
+import { CacheEvictionManager } from '../lib/CacheEvictionManager.ts';
 
 
 export default function Viewport(props) {
@@ -21,6 +22,7 @@ export default function Viewport(props) {
   // State for sparse stack management
   const [sortedLoadedIndices, setSortedLoadedIndices] = useState([0]);
   const queueRef = useRef(null);
+  const cacheManagerRef = useRef(null);
 
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -236,15 +238,13 @@ export default function Viewport(props) {
           queueRef.current.updateFocus(realIndex);
         }
 
-        if (ww && wc) {
-          const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
-          if (viewport) {
-            viewport.setProperties({
-              voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
-              isComputedVOI: false,
-            });
-          }
+        // Update cache manager focus
+        if (cacheManagerRef.current) {
+          cacheManagerRef.current.updateFocus(realIndex);
         }
+
+        // Window/level settings are preserved across images
+        // Only set during initial load (lines 219-222), not on every scroll
       };
       elementRef.current?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
 
@@ -266,11 +266,34 @@ export default function Viewport(props) {
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 
+    // Initialize cache eviction manager with mobile-specific settings
+    const cacheSizeBytes = isMobile
+      ? 512 * 1024 * 1024  // 512MB for mobile
+      : 3000 * 1024 * 1024; // 3GB for desktop
+
+    // Mobile: More aggressive eviction at 60% (vs 80% desktop)
+    // Mobile browsers kill tabs aggressively, so we need to stay well below limits
+    const evictionThreshold = isMobile ? 0.6 : 0.8;
+
+    if (!cacheManagerRef.current) {
+      cacheManagerRef.current = new CacheEvictionManager(cacheSizeBytes, evictionThreshold);
+    }
+    cacheManagerRef.current.setImageStack(allImageIds, initialIndex);
+
     const queue = new ImageLoaderQueue(
       allImageIds,
       3,
       (loadedIndex) => {
         // When image finishes loading
+        const imageId = allImageIds[loadedIndex];
+
+        // Record access in cache manager
+        if (cacheManagerRef.current) {
+          cacheManagerRef.current.recordAccess(imageId);
+          // Check and evict if necessary
+          cacheManagerRef.current.checkAndEvict();
+        }
+
         setLoadedImages(prev => {
           const newSet = new Set(prev);
           newSet.add(loadedIndex);
@@ -286,6 +309,12 @@ export default function Viewport(props) {
 
     queueRef.current = queue;
     queue.markAsLoaded(initialIndex); // Mark initial image as already loaded
+
+    // Record initial image access
+    if (cacheManagerRef.current) {
+      cacheManagerRef.current.recordAccess(allImageIds[initialIndex]);
+    }
+
     queue.updateFocus(initialIndex);
     queue.start();
   };
@@ -305,8 +334,22 @@ export default function Viewport(props) {
         const currentId = viewport.getCurrentImageId();
         const newIndex = denseStack.indexOf(currentId);
 
+        // CRITICAL: Preserve window/level settings before setStack()
+        // setStack() resets VOI to computed defaults, so we save and restore
+        const currentProperties = viewport.getProperties();
+        const savedVoiRange = currentProperties.voiRange;
+        const savedIsComputedVOI = currentProperties.isComputedVOI;
+
         // Keep position if possible, otherwise default to 0
         viewport.setStack(denseStack, newIndex !== -1 ? newIndex : 0);
+
+        // Restore the window/level settings immediately
+        if (savedVoiRange) {
+          viewport.setProperties({
+            voiRange: savedVoiRange,
+            isComputedVOI: savedIsComputedVOI ?? false,
+          });
+        }
 
         setSortedLoadedIndices(sortedIndices);
       }
