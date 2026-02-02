@@ -23,6 +23,11 @@ function ToolsTab() {
         dispatch({ type: 'select_tool', payload: value })
     }
 
+    // Sync local position state with global toolSelected state
+    useEffect(() => {
+        setPosition(toolSelected);
+    }, [toolSelected]);
+
     // Auto-switch from pointer to scroll when sharing stops
     useEffect(() => {
         if (!sharingUser && toolSelected === "pointer") {
