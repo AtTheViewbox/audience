@@ -251,7 +251,9 @@ export const DataProvider = ({ children }) => {
 
 
         setupCornerstone()
-        if ((!isEmbedded)) {
+        // Set up Supabase if not embedded, OR if embedded but user is the session owner
+        const isOwner = userData && initialData.sessionMeta.owner === userData.id;
+        if (!isEmbedded || isOwner) {
 
             setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
 
@@ -264,7 +266,8 @@ export const DataProvider = ({ children }) => {
 
 
         return () => {
-            if (!isEmbedded) {
+            // Clean up if we set up Supabase (not embedded OR is owner)
+            if (!isEmbedded || isOwner) {
 
                 userDispatch({ type: 'clean_up_supabase' })
             }
@@ -272,6 +275,39 @@ export const DataProvider = ({ children }) => {
 
     }, []);
 
+    // Update session owner when user logs in
+    useEffect(() => {
+        if (userData && data.sessionId && supabaseClient) {
+            // Check if this user owns the current session
+            supabaseClient
+                .from("viewbox")
+                .select("user")
+                .eq("session_id", data.sessionId)
+                .eq("user", userData.id)
+                .single()
+                .then(({ data: sessionData, error }) => {
+                    if (sessionData && !error) {
+                        // This user owns the session - update sessionMeta.owner
+                        console.log('Updating session owner to:', userData.id);
+                        console.log('shareController exists:', !!data.shareController);
+                        dispatch({ type: 'update_session_owner', payload: userData.id });
+                        
+                        // If Supabase not set up yet, set it up now
+                        if (!data.shareController) {
+                            console.log('Setting up Supabase after login');
+                            dispatch({ 
+                                type: 'connect_to_sharing_session', 
+                                payload: { 
+                                    sessionId: data.sessionId, 
+                                    mode: data.sessionMeta?.mode, 
+                                    owner: userData.id 
+                                } 
+                            });
+                        }
+                    }
+                });
+        }
+    }, [userData?.id, data.sessionId]);
 
 
     useEffect(() => {
@@ -721,6 +757,16 @@ export function dataReducer(data, action) {
             const viewport = (
                 data.renderingEngine.getViewport(`${action.payload.viewportId}-vp`)
             );
+            break;
+        case 'update_session_owner':
+            // Update session owner when user logs in
+            new_data = {
+                ...data,
+                sessionMeta: {
+                    ...data.sessionMeta,
+                    owner: action.payload
+                }
+            };
             break;
         default:
             throw Error('Unknown action: ' + action.type);
