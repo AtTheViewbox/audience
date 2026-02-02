@@ -13,6 +13,7 @@ import {
 
 function ToolsTab() {
     const { dispatch } = useContext(DataDispatchContext);
+    const { sharingUser, toolSelected } = useContext(DataContext).data;
 
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
@@ -21,6 +22,13 @@ function ToolsTab() {
         setPosition(value)
         dispatch({ type: 'select_tool', payload: value })
     }
+
+    // Auto-switch from pointer to scroll when sharing stops
+    useEffect(() => {
+        if (!sharingUser && toolSelected === "pointer") {
+            selectTool("scroll");
+        }
+    }, [sharingUser, toolSelected]);
 
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
@@ -59,10 +67,13 @@ function ToolsTab() {
                         <ArrowDownUp strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Scroll</span>
                     </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="pointer">
-                        <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
-                        <span>&nbsp;Pointer</span>
-                    </DropdownMenuRadioItem>
+                    
+                    {sharingUser && (
+                        <DropdownMenuRadioItem value="pointer">
+                            <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                            <span>&nbsp;Pointer</span>
+                        </DropdownMenuRadioItem>
+                    )}
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>
         </DropdownMenu>

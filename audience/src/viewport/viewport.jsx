@@ -5,6 +5,7 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import { Circle } from "lucide-react"
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
+import { toast } from "sonner";
 
 
 export default function Viewport(props) {
@@ -21,7 +22,7 @@ export default function Viewport(props) {
   // State for sparse stack management
   const [sortedLoadedIndices, setSortedLoadedIndices] = useState([0]);
   const queueRef = useRef(null);
-  const cacheManagerRef = useRef(null);
+  const lastTapTimeRef = useRef(0);
 
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -237,10 +238,7 @@ export default function Viewport(props) {
           queueRef.current.updateFocus(realIndex);
         }
 
-        // Update cache manager focus
-        if (cacheManagerRef.current) {
-          cacheManagerRef.current.updateFocus(realIndex);
-        }
+
 
         // Window/level settings are preserved across images
         // Only set during initial load (lines 219-222), not on every scroll
@@ -265,19 +263,7 @@ export default function Viewport(props) {
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 
-    // Initialize cache eviction manager with mobile-specific settings
-    const cacheSizeBytes = isMobile
-      ? 512 * 1024 * 1024  // 512MB for mobile
-      : 3000 * 1024 * 1024; // 3GB for desktop
 
-    // Mobile: More aggressive eviction at 60% (vs 80% desktop)
-    // Mobile browsers kill tabs aggressively, so we need to stay well below limits
-    const evictionThreshold = isMobile ? 0.6 : 0.8;
-
-    if (!cacheManagerRef.current) {
-      cacheManagerRef.current = new CacheEvictionManager(cacheSizeBytes, evictionThreshold);
-    }
-    cacheManagerRef.current.setImageStack(allImageIds, initialIndex);
 
     const queue = new ImageLoaderQueue(
       allImageIds,
@@ -286,12 +272,7 @@ export default function Viewport(props) {
         // When image finishes loading
         const imageId = allImageIds[loadedIndex];
 
-        // Record access in cache manager
-        if (cacheManagerRef.current) {
-          cacheManagerRef.current.recordAccess(imageId);
-          // Check and evict if necessary
-          cacheManagerRef.current.checkAndEvict();
-        }
+
 
         setLoadedImages(prev => {
           const newSet = new Set(prev);
@@ -309,10 +290,7 @@ export default function Viewport(props) {
     queueRef.current = queue;
     queue.markAsLoaded(initialIndex); // Mark initial image as already loaded
 
-    // Record initial image access
-    if (cacheManagerRef.current) {
-      cacheManagerRef.current.recordAccess(allImageIds[initialIndex]);
-    }
+
 
     queue.updateFocus(initialIndex);
     queue.start();
@@ -355,6 +333,55 @@ export default function Viewport(props) {
     }
   }, [loadedImages, viewportReady, rendering_engine]);
 
+  // Double-tap detection for pointer tool selection (only when sharing is active)
+  useEffect(() => {
+    if (!elementRef.current || !viewportReady || !sharingUser) return;
+
+    const DOUBLE_TAP_DELAY = 300; // milliseconds
+    let lastToastTime = 0;
+
+    const handleDoubleTap = (event) => {
+      const currentTime = new Date().getTime();
+      const tapInterval = currentTime - lastTapTimeRef.current;
+      if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0) {
+        // Double-tap detected - toggle between pointer and scroll
+        const newTool = toolSelected === 'pointer' ? 'scroll' : 'pointer';
+        dispatch({ type: 'select_tool', payload: newTool });
+        
+        // Show toast notification for tool changes
+        // Use fixed ID to prevent duplicates from multiple viewports
+        if (currentTime - lastToastTime > 500) {
+          lastToastTime = currentTime;
+          if (newTool === 'pointer') {
+            toast.success('Pointer tool selected', {
+              id: 'pointer-tool-toggle',
+              duration: 1500,
+              position: 'bottom-center'
+            });
+          } else {
+            toast.info('Scroll tool selected', {
+              id: 'pointer-tool-toggle',
+              duration: 1500,
+              position: 'bottom-center'
+            });
+          }
+        }
+      }
+
+      lastTapTimeRef.current = currentTime;
+    };
+
+    // Add listeners for both touch and mouse events
+    elementRef.current.addEventListener('touchstart', handleDoubleTap);
+    elementRef.current.addEventListener('click', handleDoubleTap);
+
+    return () => {
+      if (elementRef.current) {
+        elementRef.current.removeEventListener('touchstart', handleDoubleTap);
+        elementRef.current.removeEventListener('click', handleDoubleTap);
+      }
+    };
+  }, [viewportReady, dispatch, toolSelected, sharingUser]);
 
 
   useEffect(() => {
