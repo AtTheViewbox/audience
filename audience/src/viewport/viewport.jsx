@@ -5,7 +5,6 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 import { Circle } from "lucide-react"
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
-import { CacheEvictionManager } from '../lib/CacheEvictionManager.ts';
 
 
 export default function Viewport(props) {
