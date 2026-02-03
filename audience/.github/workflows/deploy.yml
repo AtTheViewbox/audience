@@ -27,9 +27,16 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/staging" ]; then
+            export BUILD_ENV=staging
+          fi
+          npm run build
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
+          target-folder: ${{ github.ref == 'refs/heads/staging' && 'staging' || '.' }}
+          clean: true
+          clean-exclude: ${{ github.ref == 'refs/heads/main' && 'staging' || '' }}
