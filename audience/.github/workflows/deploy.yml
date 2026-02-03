@@ -1,9 +1,8 @@
-name: Deploy to GitHub Pages
+name: Deploy Staging
 
 on:
   push:
     branches:
-      - main
       - staging
   workflow_dispatch:
 
@@ -12,7 +11,6 @@ permissions:
 
 jobs:
   build-and-deploy:
-    concurrency: ci-${{ github.ref }} # Recommended for gh-pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,17 +25,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build Staging
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/staging" ]; then
-            export BUILD_ENV=staging
-          fi
+          export BUILD_ENV=staging
           npm run build
 
-      - name: Deploy
+      - name: Deploy to Staging
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
-          target-folder: ${{ github.ref == 'refs/heads/staging' && 'staging' || '.' }}
+          target-folder: staging
           clean: true
-          clean-exclude: ${{ github.ref == 'refs/heads/main' && 'staging' || '' }}
