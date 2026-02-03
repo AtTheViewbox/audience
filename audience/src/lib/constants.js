@@ -12,6 +12,7 @@ export const Filter = {
   MYSTUDIES: "MYSTUDIES",
   FAVORITE: "FAVORITE",
   PACSBIN:"PACSBIN",
+  BUILDER: "BUILDER",
 }
 
 

@@ -11,6 +11,7 @@ import { UserContext } from "../context/UserContext"
 import { Input } from "@/components/ui/input"
 import { Filter } from "../lib/constants"
 import { unflatten, flatten } from "flat";
+import BuilderPage from "./Builder/BuilderPage";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,7 +149,7 @@ export default function HomePage() {
           .from("studies")
           .select("*")
           .eq("owner", userData.id));
-      } else if (filter === Filter.ALL) {
+      } else if (filter === Filter.ALL || filter === Filter.BUILDER) {
         ({ data, error } = await supabaseClient
           .from("studies")
           .select("*"));
@@ -202,7 +203,14 @@ export default function HomePage() {
         <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
 
         <div className="flex-1 flex overflow-hidden relative">
-          <div className="flex-1 overflow-auto p-6 w-full">
+          {filter === Filter.BUILDER ? (
+              <BuilderPage 
+                  allSeries={seriesList} 
+                  filteredSeries={displaySeriesList} 
+              />
+          ) : (
+            <>
+              <div className="flex-1 overflow-auto p-6 w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold ">Studies</h2>
               <div className="flex items-center gap-4">
@@ -449,6 +457,8 @@ export default function HomePage() {
               </>
             )}
           </div>
+      </>
+          )}
         </div>
       </div>
     </div>

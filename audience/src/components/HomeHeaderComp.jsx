@@ -78,6 +78,9 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
                     </div>
                 )}
             </div>
+            
+
+
             {!userData?.is_anonymous ?
                 <div className="flex items-center gap-4">
                     <UploaderComp />

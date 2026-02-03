@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack, X } from "lucide-react"
+import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack, X, Hammer } from "lucide-react"
 import { Filter, Visibility } from "../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -134,6 +134,15 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                 <FileStack className="mr-2 h-4 w-4" />
                                 Pacsbin Studies
                             </Button>
+                            <Button onClick={() => setFilter(Filter.BUILDER)} variant="ghost" className={cn("w-full justify-start",
+                                filter === Filter.BUILDER
+                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                                    : "",
+                            )}>
+                                <Hammer className="mr-2 h-4 w-4" />
+                                Builder
+                            </Button>
+                            
                             </div>
                         }
                     </nav>
