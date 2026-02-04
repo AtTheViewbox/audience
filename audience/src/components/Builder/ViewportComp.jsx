@@ -38,9 +38,13 @@ const ViewportComp = ({
   const elementRef = useRef(null);
   const renderingEngineRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
 
   // Unpack metadata safely
   const currentMetadata = metadata || initalValues;
+
+
 
   const stack = useMemo(() => {
     if (!currentMetadata.prefix) return [];
@@ -106,18 +110,25 @@ const ViewportComp = ({
             // 1. Initialize Cornerstone (idempotent, safe to call multiple times)
             cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
             cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
-            
+
             cornerstoneDICOMImageLoader.configure({
-                useWebWorkers: true,
+                useWebWorkers: false, // Force main thread for reliability
                 decodeConfig: {
                     convertFloatPixelDataToInt: false,
                     use16BitDataType: true
                 }
             });
 
-            // Initialize web workers if not already running (might be redundant but safe)
-            // We skip explicit worker init here assuming DataContext did it, or default lazy init
+            console.log("[ViewportComp] Generated Stack URLs:", stack);
             
+            // Register loader
+            cornerstone.imageLoader.registerImageLoader('wadouri', cornerstoneDICOMImageLoader.wadouri.loadImage);
+
+
+            
+            // Register both schemes to be safe
+            
+            // Register both schemes to be safe
             // Register both schemes to be safe
             cornerstone.imageLoader.registerImageLoader('wadouri', cornerstoneDICOMImageLoader.wadouri.loadImage);
             cornerstone.imageLoader.registerImageLoader('dicomweb', cornerstoneDICOMImageLoader.wadouri.loadImage);
@@ -128,6 +139,13 @@ const ViewportComp = ({
             // 2. Create Rendering Engine
             renderingEngine = new cornerstone.RenderingEngine(renderingEngineId);
             renderingEngineRef.current = renderingEngine;
+
+            // CRITICAL: Prevent crash if stack is empty
+            if (!stack || stack.length === 0) {
+                console.warn("[ViewportComp] Stack is empty. Skipping viewport setup.");
+                setIsLoading(false);
+                return;
+            }
 
             const viewportInput = {
                 viewportId,
@@ -198,10 +216,15 @@ const ViewportComp = ({
 
             // 5. Load Images
             setIsLoading(true);
+            setLoadError(null);
             const limit = pLimit(5); 
 
             await Promise.all(
-                stack.map((id) => limit(() => cornerstone.imageLoader.loadAndCacheImage(id)))
+                stack.map((id) => limit(() => cornerstone.imageLoader.loadAndCacheImage(id).catch(e => {
+                    console.error("Failed to load image:", id, e);
+                    setLoadError(`Failed to load: ${id.split('/').pop()}`);
+                    throw e; // Rethrow to trigger main catch
+                })))
             );
 
             // Set Stack
@@ -344,18 +367,39 @@ const ViewportComp = ({
     update();
   }, [currentMetadata, stateFlag, stack]); // Depend on metadata and flag
 
+  if (loadError) {
+      return (
+          <div className="w-full h-full bg-black text-red-500 flex items-center justify-center flex-col gap-2 p-4 text-center">
+            <div className="font-bold">Image Load Failed</div>
+            <div className="text-xs break-all">{loadError}</div>
+          </div>
+      );
+  }
+
+  if (!stack || stack.length === 0) {
+      return (
+          <div className="w-full h-full bg-black text-white flex items-center justify-center flex-col gap-2">
+            <div className="text-muted-foreground text-sm">No Image Data</div>
+            <div className="text-xs text-muted-foreground/50">Prefix: {currentMetadata.prefix || "missing"}</div>
+          </div>
+      );
+  }
+
   return (
-    <div className="relative w-full h-full bg-black rounded-md overflow-hidden border border-border">
-      <div
-        ref={elementRef}
-        className="w-full h-full"
-        onContextMenu={(e) => e.preventDefault()}
-      />
+    <div className="relative w-full h-full group">
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-          <Loader2 className="w-8 h-8 animate-spin text-white" />
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )}
+      
+      {/* Viewport Element */}
+      <div
+        ref={elementRef}
+        id={`viewport-${currentMetadata.id}`}
+        className="w-full h-full bg-black"
+        onContextMenu={(e) => e.preventDefault()}
+      />
     </div>
   );
 };

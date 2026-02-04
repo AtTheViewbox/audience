@@ -37,7 +37,7 @@ export function generateURL(data) {
 
     URL_genereated.searchParams.append(
         "vd.0.s.pf",
-        encodeURI("dicomweb:" + data.prefix)
+        encodeURI("wadouri:" + data.prefix)
     );
     URL_genereated.searchParams.append("vd.0.s.sf", data.suffix);
     URL_genereated.searchParams.append("vd.0.s.s", data.start_slice.toString());
@@ -71,7 +71,7 @@ export function generateGridURL(
             let value = (data.cord[0] + 1 + col * data.cord[1] - 1).toString();
             URL_genereated.searchParams.append(
                 "vd." + value + ".s.pf",
-                encodeURI("dicomweb:" + data.prefix)
+                encodeURI("wadouri:" + data.prefix)
             );
             URL_genereated.searchParams.append("vd." + value + ".s.sf", data.suffix);
             URL_genereated.searchParams.append(
@@ -153,7 +153,7 @@ export function recreateUriStringList(
         String(end_str).padStart(pad, "0"),
         step
     );
-    return variableStringList.map((str) => "dicomweb:" + prefix + str + suffix);
+    return variableStringList.map((str) => "wadouri:" + prefix + str + suffix);
 }
 
 export function checkUrlQuery(object, search) {

@@ -21,32 +21,31 @@ import { toast } from "sonner";
 const mapSeriesToMetaData = (seriesList) => {
   // ... existing implementation ...
   return seriesList.map((series) => {
-      if (series.metadata && series.prefix) {
-          // New dicom_series format
+      // Prioritize existing metadata structure
+      if (series.metadata) {
           return {
               ...initalValues,
-              ...series.metadata,
+              ...series.metadata, // Spread metadata first (it might contain prefix, etc.)
               id: series.id,
-              label: series.name || series.folder_name || "Untitled",
-              prefix: series.prefix,
-              suffix: series.suffix,
-              start_slice: series.start_slice,
-              end_slice: series.end_slice,
-              ww: Number(series.window_width),
-              wc: Number(series.window_center),
+              // Ensure we don't overwrite if series.metadata already had them, or provide top-level fallback
+              label: series.name || series.folder_name || series.metadata.label || "Untitled",
+              prefix: series.prefix || series.metadata.prefix || "",
+              suffix: series.suffix || series.metadata.suffix || "",
+              start_slice: series.start_slice ?? series.metadata.start_slice ?? 0,
+              end_slice: series.end_slice ?? series.metadata.end_slice ?? 1,
               cord: [-1, -1]
           };
       }
       
-      // Fallback for older formats
+      // Fallback for raw series without pre-calculated metadata
       return {
           ...initalValues,
           id: series.id, 
-          label: series.name,
-          thumbnail: "", 
+          label: series.name || "Untitled",
           modality: series.modality || "CT",
-          url: series.url_params || "", 
-          cord: [-1, -1] // Default: not placed
+          // Try to map raw fields if they exist
+          prefix: series.prefix || "",
+          cord: [-1, -1]
       };
   });
 };
@@ -273,7 +272,7 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
                                 <Switch id="img-toggle" checked={imageToggle} onCheckedChange={setImageToggle} />
-                                <Label htmlFor="img-toggle" className="text-sm cursor-pointer text-muted-foreground">Thumbnails</Label>
+                                <Label htmlFor="img-toggle" className="text-sm cursor-pointer text-muted-foreground">Preview</Label>
                             </div>
                         </div>
                     </div>
