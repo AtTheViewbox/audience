@@ -1,9 +1,15 @@
-
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
+import ViewportComp from "./ViewportComp";
+import { 
+    getAdjustedWC, 
+    getAdjustedWW, 
+    getReveredAdjustedWC, 
+    getReveredAdjustedWW 
+} from "./builderUtils";
 
 const PropertyPanel = ({
   metadataId,
@@ -12,10 +18,12 @@ const PropertyPanel = ({
   setDrawerState
 }) => {
   const metadata = metaDataList.find(m => m.id === metadataId);
+  const [stateFlag, setStateFlag] = useState(false);
 
   if (!metadata) return null;
 
   const handleChange = (key, value) => {
+      setStateFlag(true); // Signal that input changed
       setMetaDataList(prev => prev.map(item => {
           if (item.id === metadataId) {
               return { ...item, [key]: value };
@@ -24,13 +32,35 @@ const PropertyPanel = ({
       }));
   };
 
+  const handleViewportUpdate = (updates) => {
+      // Updates from viewport interaction (don't set stateFlag to avoid loop)
+      setMetaDataList(prev => prev.map(item => {
+          if (item.id === metadataId) {
+              return { ...item, ...updates };
+          }
+          return item;
+      }));
+  };
+
   return (
-    <div className="h-full flex flex-col bg-background border-l">
+    <div className="h-full flex flex-col bg-background border-l w-full">
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="font-semibold">Edit Properties</h3>
         <Button variant="ghost" size="icon" onClick={() => setDrawerState(false)}>
           <X className="h-4 w-4" />
         </Button>
+      </div>
+      
+      {/* Viewport Preview */}
+      <div className="w-full aspect-square bg-black border-b relative">
+        <ViewportComp 
+            metadata={metadata} 
+            stateFlag={stateFlag} 
+            setStateFlag={setStateFlag} 
+            onUpdate={handleViewportUpdate}
+            // Key ensures we remount if switching items, cleaner state
+            key={metadataId} 
+        />
       </div>
       
       <div className="flex-1 overflow-auto p-4 space-y-4">
@@ -65,8 +95,13 @@ const PropertyPanel = ({
               <Label>Window Width (WW)</Label>
               <Input 
                   type="number" 
-                  value={metadata.ww} 
-                  onChange={(e) => handleChange("ww", Number(e.target.value))} 
+                  // "ReveredAdjusted" converts Raw (Stored) -> HU (Display)
+                  value={Math.round(getReveredAdjustedWW(metadata))} 
+                  onChange={(e) => {
+                      // "Adjusted" converts HU (Display) -> Raw (Stored)
+                      const val = Number(e.target.value);
+                      handleChange("ww", getAdjustedWW(val, metadata));
+                  }} 
               />
           </div>
 
@@ -74,8 +109,11 @@ const PropertyPanel = ({
               <Label>Window Center (WC)</Label>
               <Input 
                   type="number" 
-                  value={metadata.wc} 
-                  onChange={(e) => handleChange("wc", Number(e.target.value))} 
+                  value={Math.round(getReveredAdjustedWC(metadata))} 
+                  onChange={(e) => {
+                      const val = Number(e.target.value);
+                      handleChange("wc", getAdjustedWC(val, metadata));
+                  }} 
               />
           </div>
             <div className="space-y-2">

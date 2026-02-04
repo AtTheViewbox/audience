@@ -83,7 +83,7 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
 
             {!userData?.is_anonymous ?
                 <div className="flex items-center gap-4">
-                    <UploaderComp />
+                    <UploaderComp onUploadComplete={onUploadComplete} />
                     <Button variant="outline" onClick={logOut}>Log Out</Button>
                 </div> :
                 <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>

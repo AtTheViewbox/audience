@@ -18,9 +18,9 @@ import { Input } from "@/components/ui/input"
 import { FileIcon, FolderIcon, UploadCloudIcon, XIcon, ShieldCheck, AlertTriangle, Copy, CheckCircle2, Check } from "lucide-react"
 import * as dcmjs from "dcmjs"
 
-export function UploaderComp() {
+export function UploaderComp({ onUploadComplete }) {
   const [open, setOpen] = useState(false)
-  const { supabaseClient } = useContext(UserContext).data;
+  const { supabaseClient, userData } = useContext(UserContext).data;
   const [files, setFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -28,6 +28,7 @@ export function UploaderComp() {
   const [phiVerified, setPhiVerified] = useState(false)
   const [viewerUrl, setViewerUrl] = useState("")
   const [copyClicked, setCopyClicked] = useState(false)
+  const [seriesName, setSeriesName] = useState("")
 
   const handleFileChange = (e) => {
     if (e.target.files) {
@@ -183,8 +184,39 @@ export function UploaderComp() {
       console.log('Generating metadata from URLs:', uploadedUrls);
       const metadata = uploadedUrls.length > 0 ? generateMetaData(uploadedUrls, windowWidth, windowCenter, rescaleSlope, rescaleIntercept) : null;
 
+      if (metadata && userData?.id) {
+        try {
+          const { error: insertError } = await supabaseClient
+            .from('dicom_series')
+            .insert({
+              user_id: userData.id,
+              name: seriesName,
+              folder_name: folderName,
+              prefix: metadata.prefix,
+              suffix: metadata.suffix,
+              start_slice: metadata.start_slice,
+              end_slice: metadata.end_slice,
+              window_width: metadata.ww,
+              window_center: metadata.wc,
+              metadata: metadata
+            });
+
+          if (insertError) {
+            console.error("Error saving metadata to Supabase:", insertError);
+          } else {
+            console.log("Metadata saved to Supabase successfully");
+          }
+        } catch (dbError) {
+          console.error("Exception saving to Supabase:", dbError);
+        }
+      }
+
       // Generate viewer URL with row=1, col=1
       const viewerURL = metadata ? generateGridURL([metadata], 1, 1) : null;
+      
+      if (onUploadComplete && viewerURL) {
+          onUploadComplete(viewerURL);
+      }
 
       // Store the viewer URL in state
       if (viewerURL) {
@@ -214,6 +246,7 @@ export function UploaderComp() {
     setPhiVerified(false)
     setViewerUrl("")
     setCopyClicked(false)
+    setSeriesName("")
   }
 
   const closeDialog = () => {
@@ -441,7 +474,17 @@ export function UploaderComp() {
         </DialogHeader>
 
         <Card className="border-dashed border-2">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="series-name">Series Name (Optional)</Label>
+              <Input
+                id="series-name"
+                placeholder="Enter a name for this series..."
+                value={seriesName}
+                onChange={(e) => setSeriesName(e.target.value)}
+              />
+            </div>
+
             {/* Upload Box - Only show when no files selected */}
             {files.length === 0 && !uploading && !uploadComplete && (
               <div className="flex flex-col items-center justify-center space-y-4">

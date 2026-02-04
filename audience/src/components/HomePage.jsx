@@ -36,11 +36,13 @@ export default function HomePage() {
   const minRightWidth = 240
   const maxRightWidth = 500
 
+
   const handleUploadComplete = (url) => {
+    console.log("HomePage: handleUploadComplete triggered with URL:", url);
     setUploadedUrl(url);
-    // Optionally select no series to show the uploaded URL prominently
     setSelectedSeries(null);
   };
+
 
   // Handle mouse events for resizing
   useEffect(() => {
@@ -145,11 +147,22 @@ export default function HomePage() {
           .eq("visibility", "PUBLIC"));
       }
       else if (filter === Filter.MYSTUDIES) {
+        if (userData) {
+            ({ data, error } = await supabaseClient
+            .from("studies")
+            .select("*")
+            .eq("owner", userData.id));
+        } else {
+             // Should not happen if filtered efficiently, but safe fallback
+             data = [];
+        }
+      } else if (filter === Filter.BUILDER) {
         ({ data, error } = await supabaseClient
-          .from("studies")
-          .select("*")
-          .eq("owner", userData.id));
-      } else if (filter === Filter.ALL || filter === Filter.BUILDER) {
+          .from("dicom_series")
+          .select("*"));
+        console.log("Builder Filter - Fetched Data:", data);
+        console.log("Builder Filter - Error:", error);
+      } else if (filter === Filter.ALL) {
         ({ data, error } = await supabaseClient
           .from("studies")
           .select("*"));
@@ -206,7 +219,10 @@ export default function HomePage() {
           {filter === Filter.BUILDER ? (
               <BuilderPage 
                   allSeries={seriesList} 
-                  filteredSeries={displaySeriesList} 
+                  filteredSeries={displaySeriesList}
+                  uploadedUrl={uploadedUrl}
+                  onClearUpload={() => setUploadedUrl("")}
+                  onStudySaved={getSeries}
               />
           ) : (
             <>
@@ -289,9 +305,9 @@ export default function HomePage() {
                           {series.name}
                         </CardTitle>
                         <CardDescription className="text-xs line-clamp-2">
-                          {series.description.length > 100
+                          {series.description && series.description.length > 100
                             ? series.description.slice(0, 100) + "..."
-                            : series.description}
+                            : series.description || "No description"}
                         </CardDescription>
                       </div>
                     </div>
@@ -299,9 +315,11 @@ export default function HomePage() {
                   <CardFooter className="pt-2 text-xs text-muted-foreground">
                     Created on{" "}
                     {
-                      new Date(series.last_accessed)
+                      series.last_accessed ? new Date(series.last_accessed)
                         .toISOString()
-                        .split("T")[0]
+                        .split("T")[0] : series.created_at ? new Date(series.created_at)
+                        .toISOString()
+                        .split("T")[0] : "Unknown date"
                     }
                   </CardFooter>
                 </Card>
@@ -333,51 +351,7 @@ export default function HomePage() {
                  </Button>
             </div>
 
-            {uploadedUrl && !selectedSeries ? (
-              <>
-                <div className="p-6 border-b">
-                  <div className="flex flex-col items-center text-center mb-4">
-                    <h3 className="text-xl font-bold mb-2">
-                      Uploaded DICOM Study
-                    </h3>
-                    <div className="text-sm text-muted-foreground mb-4">
-                      Your DICOM files have been uploaded successfully!
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Button
-                        className="flex-1"
-                        onClick={() => {
-                          window.open(uploadedUrl, "_blank");
-                        }}
-                      >
-                        Launch to New Tab
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={uploadedUrl}
-                        readOnly
-                      />
-                      <Button
-                        size="icon"
-                        onClick={() => {
-                          navigator.clipboard.writeText(uploadedUrl);
-                          setCopyClicked(true);
-                        }}
-                      >
-                        {copyClicked ? (
-                          <Check className="h-4" />
-                        ) : (
-                          <Copy className="h-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : selectedSeries && (
+            {selectedSeries && (
               <>
                 <div className="p-6 border-b">
                   <div className="flex flex-col items-center text-center mb-4">

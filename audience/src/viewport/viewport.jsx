@@ -38,6 +38,7 @@ export default function Viewport(props) {
       const shouldShow = coordData &&
         coordData.viewport == `${viewport_idx}-vp` &&
         sharingUser &&
+        userData &&
         userData.id != sharingUser;
 
       if (shouldShow && coordData?.coord) {
@@ -59,7 +60,7 @@ export default function Viewport(props) {
       pointerRef.current.style.display = 'none';
 
     }
-  }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData.id]);
+  }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData]);
 
   useEffect(() => {
     if (!viewportReady) return;

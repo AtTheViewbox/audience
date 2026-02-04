@@ -17,8 +17,11 @@ import {
 
 
 function SettingTab() {
-    const { userData,supabaseClient} = useContext(UserContext).data;
+    const { userData, supabaseClient } = useContext(UserContext).data;
     const navigate = useNavigate();
+    
+    // Guard against null userData (e.g. during logout transition)
+    if (!userData) return null;
     
 async function logOut() {
 
