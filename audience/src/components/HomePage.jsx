@@ -103,10 +103,26 @@ export default function HomePage() {
     }
   };
   const getIframeURL = (url_params, preview = false) => {
-    const rootUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
-    const url = new URL(url_params);
-    let params = new URLSearchParams(url.search);
-    const initialData = unflatten(Object.fromEntries(new URLSearchParams(url.search)));
+    const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    
+    // Handle both full URLs and search params strings
+    let searchString = '';
+    try {
+      // Check if it's a full URL
+      if (url_params.startsWith('http')) {
+        const url = new URL(url_params);
+        searchString = url.search.substring(1); // Remove leading '?'
+      } else {
+        // It's already just search params
+        searchString = url_params;
+      }
+    } catch (e) {
+      // If parsing fails, assume it's search params
+      searchString = url_params;
+    }
+    
+    let params = new URLSearchParams(searchString);
+    const initialData = unflatten(Object.fromEntries(params));
 
     if (preview) {
       if (initialData.vd) {

@@ -309,17 +309,48 @@ export default function Viewport(props) {
         const denseStack = sortedIndices.map(idx => viewport_data.s[idx]);
 
         // Find where the current image is in the NEW stack
+        // Find where the current image is in the NEW stack
         const currentId = viewport.getCurrentImageId();
-        const newIndex = denseStack.indexOf(currentId);
+        let newIndex = denseStack.indexOf(currentId);
+
+        if (newIndex === -1 && currentId) {
+             console.warn("Current image ID not found in new stack during update!", { currentId, stackSize: denseStack.length, firstInStack: denseStack[0] });
+             
+             // Fuzzy match: ignore URL indices or schemes
+             const strip = (url) => {
+                 if (!url) return '';
+                 // Remove scheme
+                 let clean = url.replace(/^[a-z0-9]+:/i, '');
+                 // Remove query string
+                 clean = clean.split('?')[0];
+                 return clean;
+             }
+             
+             const cleanCurrent = strip(currentId);
+             newIndex = denseStack.findIndex(id => strip(id) === cleanCurrent);
+             
+             if (newIndex !== -1) {
+                 console.log("Fuzzy matched image ID:", { original: currentId, matched: denseStack[newIndex] });
+             }
+        }
 
         // CRITICAL: Preserve window/level settings before setStack()
-        // setStack() resets VOI to computed defaults, so we save and restore
         const currentProperties = viewport.getProperties();
         const savedVoiRange = currentProperties.voiRange;
         const savedIsComputedVOI = currentProperties.isComputedVOI;
 
-        // Keep position if possible, otherwise default to 0
-        viewport.setStack(denseStack, newIndex !== -1 ? newIndex : 0);
+        // Keep position if possible. If lost, try to stay at same relative percentage? 
+        // Or just don't update stack if we can't find current image (risky)?
+        // Better fallback: If we can't find exact ID, maybe we shouldn't reset to 0 blindly.
+        // But for now, let's use the found index, or default to currentImageIndex state if valid?
+        let targetIndex = newIndex;
+        if (targetIndex === -1) {
+            // Fallback: This usually shouldn't happen if denseStack is superset.
+            // Unless imageId format changed?
+             targetIndex = 0; 
+        }
+
+        viewport.setStack(denseStack, targetIndex);
 
         // Restore the window/level settings immediately
         if (savedVoiRange) {
@@ -344,7 +375,9 @@ export default function Viewport(props) {
     const handleDoubleTap = (event) => {
       const currentTime = new Date().getTime();
       const tapInterval = currentTime - lastTapTimeRef.current;
-      if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0) {
+      const isMultiTouch = event.type === 'touchstart' && event.touches.length > 1;
+      
+      if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0 && !isMultiTouch && sharingUser === userData?.id) {
         // Double-tap detected - toggle between pointer and scroll
         const newTool = toolSelected === 'pointer' ? 'scroll' : 'pointer';
         dispatch({ type: 'select_tool', payload: newTool });

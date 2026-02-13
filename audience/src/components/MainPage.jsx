@@ -2,6 +2,8 @@ import Layout from '../layout/layout';
 import Fab from './Fab'
 import ToolsTab from './ToolsTab'
 import SessionUsers from './SessionUsers'
+import SAM3SegmentButton from './SAM3SegmentButton'
+import MedGemmaButton from './MedGemmaButton'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
 
@@ -17,6 +19,8 @@ function MainPage() {
         <ToolsTab/>
         <Fab />
         <SessionUsers />
+        <SAM3SegmentButton />
+        <MedGemmaButton />
         <Toaster position="top-right"/>
     </>
   )

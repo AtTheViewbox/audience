@@ -36,12 +36,31 @@ export default function AddCaseDialog({ onStudyAdded }) {
     }
 
     async function addCase() {
-        try { // Create new case object
+        try { 
+            // Extract only the search params from the link URL
+            const linkValue = document.getElementById("link").value;
+            let searchParams = '';
+            
+            try {
+                // If it's a full URL, extract the search params
+                if (linkValue.startsWith('http')) {
+                    const url = new URL(linkValue);
+                    searchParams = url.search.substring(1); // Remove leading '?'
+                } else {
+                    // If it already looks like query params, use as is
+                    searchParams = linkValue;
+                }
+            } catch (e) {
+                // If URL parsing fails, use the value as is
+                searchParams = linkValue;
+            }
+            
+            // Create new case object
             const caseItem = {
                 owner: userData.id,
                 name: document.getElementById("name").value,
                 description: document.getElementById("description").value,
-                url_params: document.getElementById("link").value,
+                url_params: searchParams,
                 visibility: visibility,
             }
 

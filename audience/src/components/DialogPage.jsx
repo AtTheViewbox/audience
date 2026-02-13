@@ -60,6 +60,7 @@ function DialogPage() {
         <TabsContent value="setting">
           <SettingTab />
         </TabsContent>
+
       </Tabs>
     </>
   );
