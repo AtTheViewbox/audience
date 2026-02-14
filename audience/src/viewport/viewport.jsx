@@ -214,8 +214,9 @@ export default function Viewport(props) {
       await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100 });
       setLoadedImages(new Set([initialIndex]));
 
-      // Initial Stack: Only image at initialIndex
-      await viewport.setStack([s[initialIndex]], 0);
+      // Initial Stack: Use ALL image IDs to allow navigation/scrolling immediately
+      // Cornerstone handles lazy-loading pixels as needed.
+      await viewport.setStack(s, initialIndex);
 
       viewport.setProperties({
         voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
@@ -238,8 +239,19 @@ export default function Viewport(props) {
         if (queueRef.current) {
           queueRef.current.updateFocus(realIndex);
         }
-
-
+        
+        // Sync to Context (Debounced)
+        if (ciDebounceRef.current) clearTimeout(ciDebounceRef.current);
+        ciDebounceRef.current = setTimeout(() => {
+             const getNumber = (str) => {
+                const match = str.match(/(\d+)(?!.*\d)/); 
+                return match ? parseInt(match[0], 10) : null;
+             };
+             const ci = getNumber(imageId);
+             if (ci !== null) {
+                  dispatch({ type: 'update_viewport_ci', payload: { viewport_idx: viewport_idx, ci } });
+             }
+        }, 500);
 
         // Window/level settings are preserved across images
         // Only set during initial load (lines 219-222), not on every scroll
@@ -297,73 +309,14 @@ export default function Viewport(props) {
     queue.start();
   };
 
-  // Effect: When loadedImages changes, update the stack
+  // Effect: Sync state changes if needed (e.g. metadata updates)
   useEffect(() => {
     if (rendering_engine && viewportReady && viewport_data) {
-      const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
-      if (!viewport) return;
-
-      const sortedIndices = Array.from(loadedImages).sort((a, b) => a - b);
-      // Only update if count changed
-      if (sortedIndices.length !== sortedLoadedIndices.length) {
-        const denseStack = sortedIndices.map(idx => viewport_data.s[idx]);
-
-        // Find where the current image is in the NEW stack
-        // Find where the current image is in the NEW stack
-        const currentId = viewport.getCurrentImageId();
-        let newIndex = denseStack.indexOf(currentId);
-
-        if (newIndex === -1 && currentId) {
-             console.warn("Current image ID not found in new stack during update!", { currentId, stackSize: denseStack.length, firstInStack: denseStack[0] });
-             
-             // Fuzzy match: ignore URL indices or schemes
-             const strip = (url) => {
-                 if (!url) return '';
-                 // Remove scheme
-                 let clean = url.replace(/^[a-z0-9]+:/i, '');
-                 // Remove query string
-                 clean = clean.split('?')[0];
-                 return clean;
-             }
-             
-             const cleanCurrent = strip(currentId);
-             newIndex = denseStack.findIndex(id => strip(id) === cleanCurrent);
-             
-             if (newIndex !== -1) {
-                 console.log("Fuzzy matched image ID:", { original: currentId, matched: denseStack[newIndex] });
-             }
-        }
-
-        // CRITICAL: Preserve window/level settings before setStack()
-        const currentProperties = viewport.getProperties();
-        const savedVoiRange = currentProperties.voiRange;
-        const savedIsComputedVOI = currentProperties.isComputedVOI;
-
-        // Keep position if possible. If lost, try to stay at same relative percentage? 
-        // Or just don't update stack if we can't find current image (risky)?
-        // Better fallback: If we can't find exact ID, maybe we shouldn't reset to 0 blindly.
-        // But for now, let's use the found index, or default to currentImageIndex state if valid?
-        let targetIndex = newIndex;
-        if (targetIndex === -1) {
-            // Fallback: This usually shouldn't happen if denseStack is superset.
-            // Unless imageId format changed?
-             targetIndex = 0; 
-        }
-
-        viewport.setStack(denseStack, targetIndex);
-
-        // Restore the window/level settings immediately
-        if (savedVoiRange) {
-          viewport.setProperties({
-            voiRange: savedVoiRange,
-            isComputedVOI: savedIsComputedVOI ?? false,
-          });
-        }
-
-        setSortedLoadedIndices(sortedIndices);
-      }
+       // We no longer need to update the stack manually when images load
+       // because we use a dense stack from the start. 
+       // This allows the AI and user to scroll to any index instantly.
     }
-  }, [loadedImages, viewportReady, rendering_engine]);
+  }, [viewportReady, rendering_engine]);
 
   // Double-tap detection for pointer tool selection (only when sharing is active)
   useEffect(() => {
@@ -418,20 +371,56 @@ export default function Viewport(props) {
   }, [viewportReady, dispatch, toolSelected, sharingUser]);
 
 
+  // Ref to track previous data to prevent unnecessary reloads
+  const prevDataRef = useRef(null);
+  const ciDebounceRef = useRef(null);
+
   useEffect(() => {
     let cleanup;
     // Only load if data exists
     if (viewport_data) {
-      setViewportReady(false); // Reset ready state on new data
+      
+      const prev = prevDataRef.current;
+      const isStackSame = prev && prev.s === viewport_data.s;
+      const isWindowSame = prev && prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
+      const isCiChanged = prev && prev.ci !== viewport_data.ci;
+
+      // Guard: If nothing relevant changed, do nothing
+      if (prev && isStackSame && isWindowSame && !isCiChanged && viewportReady) {
+          prevDataRef.current = viewport_data;
+          return;
+      }
+
+      // Smart Update: If only CI changed and stack is same, just scroll
+      if (isStackSame && isWindowSame && isCiChanged && viewportReady) {
+          const viewportId = `${viewport_idx}-vp`;
+          const viewport = rendering_engine.getViewport(viewportId);
+          if (viewport) {
+             const targetNumber = parseInt(viewport_data.ci, 10);
+             if (!isNaN(targetNumber)) {
+                 const getNumber = (str) => {
+                    const match = str.match(/(\d+)(?!.*\d)/); 
+                    return match ? parseInt(match[0], 10) : null;
+                 };
+                 const foundIndex = viewport_data.s.findIndex(url => getNumber(url) === targetNumber);
+                 if (foundIndex !== -1) {
+                     // Just scroll
+                     viewport.setImageIdIndex(foundIndex);
+                     viewport.render();
+                 }
+             }
+          }
+          prevDataRef.current = viewport_data;
+          return;
+      }
+      
+      // Full Reload
+      setViewportReady(false); 
       loadImagesAndDisplay().then(c => cleanup = c);
+      prevDataRef.current = viewport_data;
     }
-
-    return () => {
-      if (cleanup) cleanup();
-    };
-  }, [vd]);
-
-
+    return cleanup;
+  }, [viewport_data, rendering_engine, viewport_idx, dispatch]);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Segmented Progress Bar (from Remote Staging) */}

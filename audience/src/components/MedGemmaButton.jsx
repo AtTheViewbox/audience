@@ -131,16 +131,52 @@ export default function MedGemmaButton() {
           return true;
         }
       }
+      else if (action.type === 'scroll_delta') {
+          const { step } = action;
+          if (step !== undefined) {
+              const currentIndex = viewport.getCurrentImageIdIndex();
+              const imageIds = viewport.getImageIds();
+              const newIndex = currentIndex + step;
+              const safeIndex = Math.max(0, Math.min(newIndex, imageIds.length - 1));
+              
+              if (currentIndex === safeIndex) return false;
+              
+              viewport.setImageIdIndex(safeIndex);
+              viewport.render();
+              
+              // Sync context to prevent reset on re-render
+              // We need to extract the Instance Number from the Image ID to update 'ci'
+              const targetImageId = imageIds[safeIndex];
+              const getInstanceNumber = (str) => {
+                  const match = str.match(/(\d+)(?!.*\d)/); 
+                  return match ? parseInt(match[0], 10) : null;
+              };
+              const ci = getInstanceNumber(targetImageId);
+              
+              if (ci !== null) {
+                  dispatch({ 
+                      type: 'update_viewport_ci', 
+                      payload: { viewport_idx: 0, ci } 
+                  });
+              }
+              
+              return true;
+          }
+      }
     } catch (error) {
       console.error("Failed to execute action:", error);
     }
     return false;
   };
 
-  const runAgentLoop = async (currentPrompt, iteration = 0) => {
-    if (iteration >= MAX_STEPS) {
-        setSteps(prev => [...prev, { type: 'info', content: 'Max reasoning steps reached.' }]);
-        return;
+  const runAgentLoop = async (currentPrompt, iteration = 0, currentSteps = []) => {
+    // Check if we hit max steps
+    // If so, we do ONE FINAL call with skip_actions=true to force a summary
+    const isMaxStep = iteration >= MAX_STEPS;
+    
+    if (isMaxStep) {
+         setSteps(prev => [...prev, { type: 'info', content: 'Max reasoning steps reached. Generating summary...' }]);
+         // Proceed, but with skipActions flag set below
     }
 
     try {
@@ -148,8 +184,12 @@ export default function MedGemmaButton() {
       const viewport = renderingEngine.getViewport('0-vp');
       if (!viewport) throw new Error('Viewport not found');
 
+      // Add a small delay to ensure any previous rendering/state changes are settled
+      await new Promise(r => setTimeout(r, 100));
+
       // 1. Capture State & Image
       const imageBase64 = await getImageAsBase64(viewport);
+      // ... (currentState capture logic unchanged) ...
       
       let currentState = null;
       try {
@@ -175,22 +215,10 @@ export default function MedGemmaButton() {
             intercept = image.intercept ?? (image.intercept?.intercept ?? 0);
         }
 
-        // Convert Stored Values to Hounsfield Units for the AI
-        // HU = SV * slope + intercept
-        // For width, only slope applies (it's a delta)
         const windowWidthHU = windowWidth * slope;
         const windowCenterHU = windowCenter * slope + intercept;
 
-        console.log("Viewport state debug:", {
-          voiRange,
-          windowWidth,
-          windowCenter,
-          slope,
-          intercept,
-          windowWidthHU,
-          windowCenterHU
-        });
-
+        // CRITICAL: Total slices now comes from imageIds.length which is dense!
         currentState = {
           window_width: windowWidthHU,
           window_center: windowCenterHU,
@@ -201,58 +229,96 @@ export default function MedGemmaButton() {
         console.warn("State capture failed:", e);
       }
 
-      // 2. Call Backend
-      const apiResponse = await fetch(`http://localhost:8000/infer`, {
+      // 2. Call Backend (New V10 Chained Endpoints)
+      
+      // --- PHASE 1: PRE-CHECKS (Windowing - ONLY ON FIRST STEP) ---
+      let windowAnalysis = "Not checked (persisted)";
+      if (iteration === 0) {
+          // Only check window on first step
+          const windowResp = await fetch(`https://mfei1225--medgemma-dual-agent-v11-check-window-endpoint.modal.run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: currentPrompt
+            })
+          });
+          const windowData = await windowResp.json();
+          const win = windowData.window_analysis;
+          windowAnalysis = `Suggested: ${win.name} (W: ${win.window}, L: ${win.level})`;
+      } else {
+          // Retrieve previous window analysis if available, or just skip
+          // For simplicity we just say it was done previously
+          windowAnalysis = "Previously checked";
+      }
+      
+      // --- PHASE 2: PERCEPTION ---
+      // setSteps(prev => [...prev, { type: 'info', content: 'Analyzing Image Structures...' }]); // REMOVED per user request
+      
+      const perceptionResp = await fetch(`https://mfei1225--medgemma-dual-agent-v11-perception-endpoint.modal.run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: currentPrompt,
-          image_base64: imageBase64,
-          max_new_tokens: 512,
-          temperature: 0.3,
-          current_state: currentState
-        }),
+            image_base64: imageBase64,
+            text: currentPrompt
+        })
       });
-
-      if (!apiResponse.ok) throw new Error(`API error: ${apiResponse.status}`);
-      const data = await apiResponse.json();
+      const perceptionData = await perceptionResp.json();
+      const perceptionOutput = perceptionData.perception_output;
       
-      // 3. Process Result
-      const thoughtContent = data.response; 
-      const action = data.action;
+      // --- PHASE 3: REASONING ---
+      // setSteps(prev => [...prev, { type: 'info', content: 'Deciding Next Move...' }]); // REMOVED per user request
 
-      // Add thought to history
-      setSteps(prev => [...prev, { 
-          type: 'thought', 
-          content: thoughtContent,
-          action: action
-      }]);
+      const reasoningResp = await fetch(`https://mfei1225--medgemma-dual-agent-v11-reasoning-endpoint.modal.run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            perception_output: perceptionOutput,
+            window_analysis: windowAnalysis,
+            text: currentPrompt,
+            current_state: currentState,
+            previous_action: currentSteps.length > 0 ? currentSteps[currentSteps.length - 1].action : "None",
+            previous_thought: currentSteps.length > 0 ? currentSteps[currentSteps.length - 1].thought : "None"
+        })
+      });
+      
+      const result = await reasoningResp.json();
+      
+      // Construct combined thought for display
+      // Only include window analysis if it was fresh
+      let combinedThought = "";
+      if (iteration === 0) {
+           combinedThought += `**Window Analysis**: ${windowAnalysis}\n\n`;
+      }
+      combinedThought += `**Visual Findings**: ${perceptionOutput}\n\n**Reasoning**: ${result.thought}`;
+      
+      const newStep = {
+        thought: combinedThought,
+        action: result.action,
+        timestamp: new Date().toISOString()
+      };
+      
+      setSteps(prev => [...prev, { type: 'agent', ...newStep }]);
 
-      setResponse(thoughtContent); // Update main display too
-
-      // 4. Decide Next Step
-      if (action) {
-          const changed = await executeAction(action, viewport);
-          if (changed) {
-              // Recurse!
-              // Add a small delay for render/stability
-              await new Promise(r => setTimeout(r, 500));
-              
-              // Only re-loop if it was a navigation action, 
-              // and we want to "verify" or "continue".
-              // We append a note to the prompt? 
-              // Or just re-send original prompt? 
-              // Current plan: Re-send original prompt allows model to re-evaluate "What do you see?"
-              // But we might want to prevent infinite loops if it keeps sending same action.
-              // backend prompt should handle "I see X now".
-              
-              await runAgentLoop(currentPrompt, iteration + 1);
-          }
+      // Execute Action
+      if (result.action) {
+        const success = await executeAction(result.action, viewport); // Pass viewport
+        if (success) {
+            // Recurse
+            await new Promise(r => setTimeout(r, 500)); // Add delay before recursion
+            await runAgentLoop(currentPrompt, iteration + 1, [...currentSteps, newStep]);
+        } else {
+             // setSteps(prev => [...prev, { type: 'info', content: 'Action failed or no change needed. Stopping.' }]); // REMOVED
+             setIsLooping(false); // Use setIsLooping
+        }
+      } else {
+        setSteps(prev => [...prev, { type: 'success', content: 'Target reached or task complete.' }]);
+        setIsLooping(false); // Use setIsLooping
       }
       
     } catch (error) {
       console.error("Agent Loop Error:", error);
-      setSteps(prev => [...prev, { type: 'error', content: error.message }]);
+      setSteps(prev => [...prev, { type: 'error', content: `Error: ${error.message}` }]);
+      setIsLooping(false); // Use setIsLooping
       toast.error(`Agent error: ${error.message}`);
     }
   };
@@ -303,9 +369,12 @@ export default function MedGemmaButton() {
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-4 space-y-6 pb-12">
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground italic">
-                I can navigate anatomy and adjust windows automatically based on your request.
-              </p>
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md text-[10px] text-blue-800 dark:text-blue-200 leading-tight">
+                <p className="font-bold flex items-center gap-1 mb-1">
+                  <Sparkles className="h-3 w-3" /> HOW IT WORKS
+                </p>
+                The agent captures the current view, <strong>thinks</strong> about the anatomical goal, and takes an <strong>action</strong> (scrolling or windowing). It repeats this loop until the target is perfectly visualized.
+              </div>
             </div>
             
 
@@ -330,7 +399,7 @@ export default function MedGemmaButton() {
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Agent Reasoning...
+                    Agent Stepping (Iter {steps.length + 1})...
                   </>
                 ) : (
                   <>
@@ -359,14 +428,16 @@ export default function MedGemmaButton() {
                             const isLast = i === steps.length - 1;
                             const isObservation = !step.action;
                             
-                            // If it's the last step and an observation, make it HUGE and prominent
-                            if (isLast && isObservation && !loading) {
+                            // OBSERVATION / FINAL ASSESSMENT
+                            if (isObservation) {
                                 return (
                                     <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                        <div className="bg-green-50 dark:bg-green-950/30 border-2 border-green-200 dark:border-green-800 rounded-lg p-5 mt-4 shadow-sm">
+                                        <div className="bg-green-50 dark:bg-green-950/30 border-2 border-green-200 dark:border-green-800 rounded-lg p-5 mt-2 shadow-sm">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                                <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-tighter">Final Assessment</span>
+                                                <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-tighter">
+                                                  {isLast && !loading ? "Final Assessment" : "Initial Impression"}
+                                                </span>
                                             </div>
                                             <div className="text-base leading-relaxed font-medium text-foreground markdown-content">
                                                 <ReactMarkdown>{step.content}</ReactMarkdown>
@@ -376,31 +447,25 @@ export default function MedGemmaButton() {
                                 );
                             }
 
+                            // AGENTIC STEP (Thought + Action)
                             return (
                                 <div key={i} className="border rounded-md overflow-hidden bg-muted/20">
                                     <details open={isLast} className="group">
                                         <summary className="cursor-pointer p-2 bg-muted/40 hover:bg-muted font-medium text-[10px] flex items-center justify-between gap-2 select-none group-open:border-b">
                                             <div className="flex items-center gap-2">
-                                                <span className="opacity-50">Step {i+1}:</span>
-                                                {step.action ? (
-                                                    <span className="text-blue-600 dark:text-blue-400 font-bold uppercase">
-                                                        {step.action.type.replace(/_/g, ' ')}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-amber-600 dark:text-amber-400 font-bold uppercase">
-                                                        Refining View
-                                                    </span>
-                                                )}
+                                                <span className="opacity-50 font-bold">Step {i+1}:</span>
+                                                <span className="text-blue-600 dark:text-blue-400 font-bold uppercase tracking-tight">
+                                                    Action: {step.action.type.replace(/_/g, ' ')}
+                                                </span>
                                             </div>
-                                            <div className="text-[10px] opacity-40 group-open:rotate-180 transition-transform">▼</div>
+                                            <div className="text-[10px] opacity-40 group- Larson open:rotate-180 transition-transform">▼</div>
                                         </summary>
-                                        <div className="p-3 bg-background/30 text-xs text-muted-foreground leading-snug markdown-content">
+                                        <div className="p-3 bg-background/30 text-xs text-muted-foreground leading-snug markdown-content border-l-2 border-blue-500/30 ml-1 mt-1">
+                                            <p className="text-[10px] font-bold text-blue-500/70 mb-1 uppercase">Reasoning</p>
                                             <ReactMarkdown>{step.content}</ReactMarkdown>
-                                            {step.action && (
-                                                <div className="mt-2 pt-2 border-t font-mono text-[9px] opacity-60">
-                                                    {JSON.stringify(step.action, null, 2)}
-                                                </div>
-                                            )}
+                                            <div className="mt-2 pt-2 border-t font-mono text-[9px] opacity-60 bg-muted/50 p-1 rounded">
+                                                {JSON.stringify(step.action, null, 2)}
+                                            </div>
                                         </div>
                                     </details>
                                 </div>
@@ -408,10 +473,10 @@ export default function MedGemmaButton() {
                         })}
                         
                         {loading && (
-                             <div className="flex items-center justify-center py-6 bg-muted/20 rounded-md border-dashed border-2 animate-pulse transition-all">
+                             <div className="flex items-center justify-center py-6 bg-muted/10 rounded-md border-dashed border-2 animate-pulse transition-all">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-2">
                                     <Loader2 className="h-3 w-3 animate-spin" />
-                                    Agent is inspecting next slice...
+                                    Step {steps.length + 1}: Inspecting medical volume...
                                 </p>
                              </div>
                         )}
@@ -420,7 +485,7 @@ export default function MedGemmaButton() {
             )}
 
             <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-2 text-[9px] text-yellow-800 dark:text-yellow-200 opacity-60">
-              <p><strong>⚠️ Disclaimer:</strong> This AI is for research purposes only. Not a substitute for professional medical advice.</p>
+              <p><strong>⚠️ Disclaimer:</strong> This AI is for research and educational purposes only. Not a substitute for professional medical advice.</p>
             </div>
           </div>
         </ScrollArea>

@@ -768,6 +768,15 @@ export function dataReducer(data, action) {
                 }
             };
             break;
+        case 'update_viewport_ci': {
+            const { viewport_idx, ci } = action.payload;
+            const newVd = [...data.vd];
+            if (newVd[viewport_idx]) {
+                newVd[viewport_idx] = { ...newVd[viewport_idx], ci: ci };
+            }
+            new_data = { ...data, vd: newVd };
+            break;
+        }
         default:
             throw Error('Unknown action: ' + action.type);
     }
