@@ -38,7 +38,7 @@ export default function MedGemmaButton() {
     { role: "assistant", content: "Hello! I'm MedGemma (27B). Ask me any medical questions." }
   ]);
   const [chatLoading, setChatLoading] = useState(false);
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
 
   // --- SEMANTIC NAVIGATION STATE ---
   const indexMapRef = useRef({
