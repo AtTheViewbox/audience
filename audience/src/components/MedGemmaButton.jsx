@@ -14,16 +14,23 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Loader2, Eye, Send, User, Bot } from 'lucide-react';
+import { Sparkles, Loader2, Eye, Send, User, Bot, Share, ArrowLeft } from 'lucide-react';
 import { DataContext, DataDispatchContext } from '../context/DataContext';
+import { UserContext, UserDispatchContext } from '../context/UserContext';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
+// Local constants for Sharing
+const Visibility = { PUBLIC: "PUBLIC" };
+const Mode = { TEAM: "TEAM" };
+
 export default function MedGemmaButton() {
+  const { userData, supabaseClient } = useContext(UserContext).data || {};
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
+  const [showPostSummaryOptions, setShowPostSummaryOptions] = useState(false);
 
   // Chat State
   const [chatInput, setChatInput] = useState("");
@@ -338,72 +345,83 @@ export default function MedGemmaButton() {
       // const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`; // Moved to component scope
 
 
-      // --- PHASE 1: PRE-CHECKS (Windowing - ONLY ON FIRST STEP) ---
-      let windowAnalysis = "Not checked (persisted)";
+      // --- PHASE 1: PRE-CHECKS ---
+      // Windowing moved to end of loop (Phase 4).
+      // BUT: We force a "Soft Tissue" reset at the start to ensure clean perception.
       if (iteration === 0) {
-        // Only check window on first step
-        const windowResp = await fetch(`${BASE_URL}/check-window`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: currentPrompt
-          })
-        });
-        if (!windowResp.ok) {
-          const errorText = await windowResp.text();
-          throw new Error(`Window API failed: ${windowResp.status} ${errorText}`);
-        }
-        const windowData = await windowResp.json();
-
-        if (windowData.action && windowData.action.type === 'set_window_level') {
-          await executeAction(windowData.action, viewport);
-
-          // Add windowing as a distinct step in the UI
-          const windowStep = {
-            content: windowData.thought || `Applying ${windowData.action.name} preset.`,
-            action: windowData.action,
-            timestamp: new Date().toISOString()
-          };
-          setSteps(prev => [...prev, { type: 'agent', ...windowStep }]);
-
-          windowAnalysis = `Applied ${windowData.action.name} (W: ${windowData.action.window}, L: ${windowData.action.level})`;
-        } else {
-          windowAnalysis = windowData.thought || "Default";
-        }
-      } else {
-        // Retrieve previous window analysis if available, or just skip
-        // For simplicity we just say it was done previously
-        windowAnalysis = "Previously checked";
+        // Soft Tissue Preset (HU)
+        // W: 400, L: 50
+        await executeAction({
+          type: 'set_window_level',
+          window: 400,
+          level: 50,
+          name: 'Soft Tissue (Reset)'
+        }, viewport);
       }
 
       // --- PHASE 2: PERCEPTION ---
       if (stopRef.current) return;
 
+      // Capture 5 slices context: current - 2 to current + 2
+      const currentIdx = viewport.getCurrentImageIdIndex();
+      const imageIds = viewport.getImageIds();
+      const total = imageIds.length;
+
+      const indices = [-2, -1, 0, 1, 2].map(d => currentIdx + d).filter(i => i >= 0 && i < total);
+      console.log(`[Perception] Capturing slices: [${indices.join(', ')}] around center ${currentIdx}`);
+
+      // Update UI to show we are looking at these slices
+      setSteps(prev => {
+        const last = prev[prev.length - 1];
+        // If the last step was an agent step, maybe append this info or just log it.
+        // Let's just log it for now to avoid cluttering the UI too much, unless the user wants it.
+        // But for debug, let's toast it or log it.
+        return prev;
+      });
+
+      // Capture detailed images
+      const imagesBase64 = [];
+      const originalIndex = currentIdx;
+
+      for (const idx of indices) {
+        viewport.setImageIdIndex(idx);
+        viewport.render();
+        await new Promise(r => setTimeout(r, 20)); // Small delay for render
+        const b64 = await getImageAsBase64(viewport);
+        if (b64) imagesBase64.push(b64);
+      }
+
+      // Restore original position
+      viewport.setImageIdIndex(originalIndex);
+      viewport.render();
+
+      if (imagesBase64.length === 0) throw new Error("Failed to capture slice images");
+
       const perceptionResp = await fetch(`${BASE_URL}/perception`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_base64: imageBase64,
+          images_base64: imagesBase64, // Send list
           text: currentPrompt,
         }),
       });
 
       // Read text first so you can debug non-JSON responses
-      const perceptionText = await perceptionResp.text();
+      const perceptionRawText = await perceptionResp.text();
 
       if (!perceptionResp.ok) {
         throw new Error(
-          `Perception API failed: ${perceptionResp.status} ${perceptionText.slice(0, 500)}`
+          `Perception API failed: ${perceptionResp.status} ${perceptionRawText.slice(0, 500)}`
         );
       }
 
       // Try parse JSON safely
       let perceptionData;
       try {
-        perceptionData = JSON.parse(perceptionText);
+        perceptionData = JSON.parse(perceptionRawText);
       } catch (e) {
         throw new Error(
-          `Perception returned non-JSON. First 500 chars:\n${perceptionText.slice(0, 500)}`
+          `Perception returned non-JSON. First 500 chars:\n${perceptionRawText.slice(0, 500)}`
         );
       }
 
@@ -439,7 +457,7 @@ export default function MedGemmaButton() {
       // ❌ Explicit failure from new contract
       else if (perceptionData && perceptionData.ok === false) {
         throw new Error(
-          `Perception returned ok=false. Raw:\n${(perceptionData.raw ?? perceptionText).slice(0, 800)}`
+          `Perception returned ok=false. Raw:\n${(perceptionData.raw ?? perceptionRawText).slice(0, 800)}`
         );
       }
 
@@ -579,7 +597,35 @@ export default function MedGemmaButton() {
         return;
       }
       // --- PHASE 4: FINAL PATIENT SUMMARY ---
-      setSteps(prev => [...prev, { type: 'info', content: 'Target reached. Generating patient-friendly summary...' }]);
+      setSteps(prev => [...prev, { type: 'info', content: 'Target reached. Optimizing contrast & generating summary...' }]);
+
+      // 1. OPTIMIZE WINDOW (One-shot at the end)
+      try {
+        const windowResp = await fetch(`${BASE_URL}/check-window`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: currentPrompt })
+        });
+
+        if (windowResp.ok) {
+          const windowData = await windowResp.json();
+          if (windowData.action && windowData.action.type === 'set_window_level') {
+            await executeAction(windowData.action, viewport);
+
+            setSteps(prev => [...prev, {
+              type: 'agent',
+              content: `**Contrast Optimized**: ${windowData.thought || windowData.action.name}`,
+              action: windowData.action,
+              timestamp: new Date().toISOString()
+            }]);
+
+            // Give time for render to settle before capturing for summary
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+      } catch (e) {
+        console.error("Window optimization failed (non-critical):", e);
+      }
 
       const summaryText = await generatePatientSummary();
 
@@ -591,6 +637,7 @@ export default function MedGemmaButton() {
         }]);
         setActiveTab("chat");
         toast.success("Analysis complete! Switched to Chat.");
+        setShowPostSummaryOptions(true);
       }
 
       setIsLooping(false);
@@ -630,6 +677,73 @@ export default function MedGemmaButton() {
 
     setLoading(false);
     setIsLooping(false);
+  };
+
+  const handleShareSession = async () => {
+    if (!userData || !supabaseClient) {
+      toast.error("You need to be logged in to share sessions.");
+      return;
+    }
+
+    try {
+      const queryParams = new URLSearchParams(window.location.search);
+
+      // Clean up old session first (matching ShareTab logic)
+      await supabaseClient.from("viewbox").delete().eq("user", userData.id);
+
+      // Create new session
+      const { data, error } = await supabaseClient
+        .from("viewbox")
+        .upsert([
+          {
+            user: userData.id,
+            url_params: queryParams.toString(),
+            visibility: Visibility.PUBLIC,
+            mode: Mode.TEAM,
+          },
+        ])
+        .select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const sessionId = data[0].session_id;
+        const newQueryParams = new URLSearchParams();
+        newQueryParams.set("s", sessionId);
+
+        const shareLink = `${window.location.origin}${window.location.pathname}?${newQueryParams.toString()}`;
+
+        // Try native share dialog first
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title: "Shared Medical Imaging Session",
+              text: "Review this case on ViewBox:",
+              url: shareLink
+            });
+            toast.success("Opened share dialog.");
+            setShowPostSummaryOptions(false);
+          } catch (shareErr) {
+            console.log("Share dialog closed or failed:", shareErr);
+            // If user cancelled, don't copy to clipboard automatically, just return
+            if (shareErr.name === 'AbortError') return;
+
+            // Fallback
+            await navigator.clipboard.writeText(shareLink);
+            toast.success("Link copied to clipboard (dialog failed).");
+            setShowPostSummaryOptions(false);
+          }
+        } else {
+          // Fallback for browsers without share API
+          await navigator.clipboard.writeText(shareLink);
+          toast.success("Shared session created! Link copied to clipboard.");
+          setShowPostSummaryOptions(false);
+        }
+      }
+    } catch (err) {
+      console.error("Share failed:", err);
+      toast.error("Failed to create shared session.");
+    }
   };
 
   const handleChatSubmit = async (e) => {
@@ -755,7 +869,7 @@ export default function MedGemmaButton() {
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[450px] h-[750px] max-h-[82vh] flex flex-col p-0 shadow-2xl rounded-xl border-border overflow-hidden bg-background"
+        className="flex flex-col p-0 overflow-hidden bg-background w-full h-[100dvh] fixed inset-0 z-50 border-none rounded-none sm:static sm:w-[450px] sm:h-[750px] sm:max-h-[82vh] sm:border sm:shadow-2xl sm:rounded-xl"
         align="end"
         sideOffset={8}
         onInteractOutside={(e) => e.preventDefault()}
@@ -844,7 +958,13 @@ export default function MedGemmaButton() {
                     <span className="text-[10px] uppercase font-bold text-muted-foreground">Analysing Finding</span>
                     <span className="text-xs font-semibold truncate" title={currentFinding}>{currentFinding}</span>
                   </div>
-                  <Button variant="destructive" size="sm" className="h-7 text-xs px-3 shadow-sm" onClick={handleStop}>Stop</Button>
+                  {isLooping ? (
+                    <Button variant="destructive" size="sm" className="h-7 text-xs px-3 shadow-sm" onClick={handleStop}>Stop</Button>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-7 text-xs px-3 shadow-sm" onClick={() => setPipelineMode('select')}>
+                      <ArrowLeft className="mr-1 h-3 w-3" /> Back
+                    </Button>
+                  )}
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="p-4 space-y-3 pb-8">
@@ -934,6 +1054,34 @@ export default function MedGemmaButton() {
                     </div>
                   </div>
                 ))}
+
+                {/* Post-Analysis Options */}
+                {showPostSummaryOptions && (
+                  <div className="mx-4 p-5 rounded-2xl bg-white border border-zinc-200 shadow-sm space-y-4">
+                    <p className="text-sm font-medium text-center text-zinc-600">
+                      How would you like to proceed?
+                    </p>
+
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+                        onClick={() => setShowPostSummaryOptions(false)}
+                      >
+                        Continue Chat
+                      </Button>
+
+                      <Button
+                        className="flex-1 bg-zinc-900 text-white hover:bg-zinc-800 font-medium"
+                        onClick={handleShareSession}
+                      >
+                        <Share className="w-4 h-4 mr-2" />
+                        Share with Provider
+                      </Button>
+                    </div>
+                  </div>)}
+
+
                 {chatLoading && (
                   <div className="flex gap-3">
                     <div className="h-8 w-8 rounded-full bg-green-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm"><Bot className="h-4 w-4" /></div>
