@@ -256,6 +256,7 @@ export default function MedGemmaButton() {
           });
         }
 
+        
         return true;
       } else if (action.type === 'scroll_to_slice') {
         const { index } = action;

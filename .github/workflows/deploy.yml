@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - staging
+      - medgemma
   workflow_dispatch:
 
 permissions:
@@ -33,6 +34,8 @@ jobs:
         run: |
           if [ "${{ github.ref }}" == "refs/heads/staging" ]; then
             export BUILD_ENV=staging
+          elif [ "${{ github.ref }}" == "refs/heads/medgemma" ]; then
+            export BUILD_ENV=medgemma
           fi
           npm run build
         working-directory: audience
@@ -41,6 +44,6 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: audience/dist
-          target-folder: ${{ github.ref == 'refs/heads/staging' && 'staging' || '.' }}
+          target-folder: ${{ github.ref == 'refs/heads/staging' && 'staging' || (github.ref == 'refs/heads/medgemma' && 'medgemma' || '.') }}
           clean: true
-          clean-exclude: ${{ github.ref == 'refs/heads/main' && 'staging' || '' }}
+          clean-exclude: ${{ github.ref == 'refs/heads/main' && 'staging medgemma' || '' }}

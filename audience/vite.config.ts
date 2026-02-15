@@ -5,7 +5,7 @@ import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
-  base: process.env.BUILD_ENV === 'staging' ? '/audience/staging/' : '/audience/',
+  base: process.env.BUILD_ENV === 'staging' ? '/audience/staging/' : (process.env.BUILD_ENV === 'medgemma' ? '/audience/medgemma/' : '/audience/'),
   plugins: [react(), wasm(), topLevelAwait()],
   envDir: '../',
   server: {
@@ -33,7 +33,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-       "@cornerstonejs/tools": "@cornerstonejs/tools/dist/umd/index.js"
+      "@cornerstonejs/tools": "@cornerstonejs/tools/dist/umd/index.js"
     },
   },
 })
