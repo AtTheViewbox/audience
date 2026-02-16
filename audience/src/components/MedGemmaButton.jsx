@@ -38,7 +38,8 @@ export default function MedGemmaButton() {
     { role: "assistant", content: "Hello! I'm MedGemma (27B). Ask me any medical questions." }
   ]);
   const [chatLoading, setChatLoading] = useState(false);
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
   // --- SEMANTIC NAVIGATION STATE ---
   const indexMapRef = useRef({
@@ -258,7 +259,9 @@ export default function MedGemmaButton() {
 
         
         return true;
-      } else if (action.type === 'scroll_to_slice') {
+      } 
+      
+      if (action.type === 'scroll_to_slice') {
         const { index } = action;
         if (index !== undefined) {
           const imageIds = viewport.getImageIds();
@@ -273,6 +276,175 @@ export default function MedGemmaButton() {
           return true;
         }
       }
+
+      if (action.type === 'segment_structure') {
+          const { structure } = action;
+          toast.info(`Segmenting ${structure} via Cloud...`);
+
+          // 1. Gather DICOM URLs
+          const imageIds = viewport.getImageIds();
+          const dicomUrls = imageIds.map(id => {
+              // Remove 'dicomweb:' prefix if present
+              return id.replace(/^dicomweb:/, '');
+          });
+
+          // 2. Call Backend with URLs
+          try {
+              const response = await fetch(`${BASE_URL}/segment_dicom`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                      dicom_urls: dicomUrls, 
+                      structure: structure 
+                  })
+              });
+
+              if (!response.ok) {
+                  throw new Error(`Segmentation failed: ${response.statusText}`);
+              }
+
+              const result = await response.json();
+
+              if (result.error) {
+                  toast.error(`Error: ${result.error}`);
+                  return false;
+              }
+
+              if (result.found) {
+                  const { mask_rle, shape, affine, centroid_voxel, window_level, window_thought } = result;
+                  
+                  console.log("Segmentation Result:", result);
+                  
+                  if (!shape || shape.length !== 3) {
+                      console.error("Invalid shape in result:", shape);
+                      toast.error("Received invalid segmentation data (shape missing).");
+                      return false;
+                  }
+
+                  // Apply Windowing
+                  if (window_level && window_level.window !== undefined) {
+                      const { window: ww, level: wl, name } = window_level;
+                      
+                      const imageId = viewport.getCurrentImageId();
+                      let slope = 1, intercept = 0;
+                      
+                      const image = cornerstone.cache.getImage(imageId);
+                      if (image) {
+                          slope = image.slope ?? (image.intercept?.slope ?? 1);
+                          intercept = image.intercept ?? (image.intercept?.intercept ?? 0);
+                      } else {
+                          const modalityLut = cornerstone.metaData.get('modalityLutModule', imageId) || {};
+                          slope = modalityLut.rescaleSlope ?? 1;
+                          intercept = modalityLut.rescaleIntercept ?? 0;
+                      }
+
+                      const wwSV = ww / slope;
+                      const wlSV = (wl - intercept) / slope;
+                      
+                      viewport.setProperties({
+                          voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwSV, wlSV)
+                      });
+                      viewport.render();
+                      
+                      // UI Feedback
+                      const winName = name || "AI Suggestion";
+                      const reasoningText = window_thought ? `\n\n> *${window_thought}*` : "";
+                      
+                      setSteps(prev => [...prev, {
+                          type: 'agent',
+                          content: `**Windowing Applied**: **${winName}** (W:${ww}/L:${wl}).${reasoningText}`,
+                          action: { type: 'set_window_level', window: ww, level: wl },
+                          timestamp: new Date().toISOString()
+                      }]);
+                  }
+
+                  // 3. Decode RLE to Uint8Array
+                  const size = shape[0] * shape[1] * shape[2];
+                  // Use Int16Array or Uint8Array. Labelmaps in CS3D usually Uint8/Uint16?
+                  // Scalar data for labelmaps. Uint8 is fine for few segments.
+                  const maskData = new Uint8Array(size);
+                  
+                  // RLE: [start, length, ...] flat index
+                  for (let i = 0; i < mask_rle.length; i += 2) {
+                      const start = mask_rle[i];
+                      const len = mask_rle[i+1];
+                      // .fill(value, start, end)
+                      maskData.fill(1, start, start + len);
+                  }
+
+                  // 4. Create Cornerstone3D Volume
+                  const segmentationId = `seg-${structure}-${Date.now()}`;
+                  
+                  // Decompose Affine
+                  const col0 = [affine[0][0], affine[1][0], affine[2][0]];
+                  const col1 = [affine[0][1], affine[1][1], affine[2][1]];
+                  const col2 = [affine[0][2], affine[1][2], affine[2][2]];
+                  
+                  const norm = (v) => Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
+                  const spacX = norm(col0);
+                  const spacY = norm(col1);
+                  const spacZ = norm(col2);
+
+                  const origin = [affine[0][3], affine[1][3], affine[2][3]];
+                  
+                  // Direction (Row-major or Col-major?)
+                  // CS3D/VTK uses a 3x3 direction matrix. flattened.
+                  // It expects Normalized columns.
+                  const direction = [
+                      col0[0]/spacX, col0[1]/spacX, col0[2]/spacX,
+                      col1[0]/spacY, col1[1]/spacY, col1[2]/spacY,
+                      col2[0]/spacZ, col2[1]/spacZ, col2[2]/spacZ
+                  ];
+
+                  // Create Local Volume
+                  await cornerstone.volumeLoader.createLocalVolume(segmentationId, {
+                      dimensions: shape, // [x, y, z]
+                      spacing: [spacX, spacY, spacZ],
+                      origin,
+                      direction,
+                      scalarData: maskData
+                  });
+
+                  // 5. Add Segmentation to State
+                  await cornerstoneTools.segmentation.addSegmentations([
+                      {
+                          segmentationId,
+                          representation: {
+                              type: cornerstoneTools.Enums.SegmentationRepresentations.Labelmap,
+                              data: { volumeId: segmentationId }
+                          }
+                      }
+                  ]);
+
+                  // 6. Add Representation to Viewport
+                  // This links the segmentation volume to the viewport
+                  await cornerstoneTools.segmentation.addSegmentationRepresentations(viewport.id, [
+                      {
+                          segmentationId,
+                          type: cornerstoneTools.Enums.SegmentationRepresentations.Labelmap
+                      }
+                  ]);
+
+                  // 7. Navigate to Centroid
+                  const targetSliceIndex = Math.round(centroid_voxel[2]);
+                  const safeIndex = Math.max(0, Math.min(targetSliceIndex, imageIds.length - 1));
+                  viewport.setImageIdIndex(safeIndex);
+                  viewport.render();
+                  
+                  toast.success(`Segmented ${structure}!`);
+                  return true;
+              } else {
+                   toast.warning(result.message || "Structure not found.");
+                   return false;
+              }
+
+          } catch (e) {
+              console.error("Segmentation error:", e);
+              toast.error("Segmentation request failed.");
+              return false;
+          }
+      }
+
     } catch (error) {
       console.error("Failed to execute action:", error);
     }
@@ -387,9 +559,12 @@ export default function MedGemmaButton() {
       for (const idx of indices) {
         viewport.setImageIdIndex(idx);
         viewport.render();
-        await new Promise(r => setTimeout(r, 20)); // Small delay for render
+        await new Promise(r => setTimeout(r, 100)); // Increased delay for render safety
         const b64 = await getImageAsBase64(viewport);
-        if (b64) imagesBase64.push(b64);
+        if (b64) {
+          console.log(`[Capture] Slice ${idx} captured. Length: ${b64.length}`);
+          imagesBase64.push(b64);
+        }
       }
 
       // Restore original position
@@ -653,7 +828,6 @@ export default function MedGemmaButton() {
   };
 
   const handleStart = async (overridePrompt) => {
-    // If input is empty, maybe use previous prompt? But for now require input.
     const effectivePrompt = (typeof overridePrompt === 'string' ? overridePrompt : chatInput);
 
     if (!effectivePrompt?.trim()) {
@@ -665,16 +839,54 @@ export default function MedGemmaButton() {
     setLoading(true);
     setResponse(null);
     setSteps([]);
-    setIsLooping(true);
-
-    // Add User Message for context is done in Chat, but for Pipeline we might not want to add it immediately?
-    // Actually, distinct separation: Pipeline runs separately.
-    // But we want to preserve context.
-
-    // NOTE: We don't add to generic 'messages' yet. We wait for completion.
+    //setIsLooping(true); // Disable agent loop indicator
 
     stopRef.current = false;
-    await runAgentLoop(currentPrompt);
+    
+    // --- STEP 0: Check for Structure/Pathology Mapping ---
+    // Decoupled logic: First check if this is a direct structure segmentation request
+    try {
+        if (!renderingEngine) throw new Error('No image loaded');
+        const viewport = renderingEngine.getViewport('0-vp');
+        if (!viewport) throw new Error('Viewport not found');
+
+        toast.info("Analyzing request...");
+        
+        const identifyResp = await fetch(`${BASE_URL}/identify_structure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: currentPrompt })
+        });
+        
+        if (identifyResp.ok) {
+            const data = await identifyResp.json();
+            if (data.structure) {
+                // Direct segmentation path
+                setSteps(prev => [...prev, { 
+                    type: 'agent', 
+                    content: `**Interpretation**: Request "${currentPrompt}" maps to structure **${data.structure}**.\n\n${data.thought || ''}`,
+                    action: { type: 'segment_structure', structure: data.structure },
+                    timestamp: new Date().toISOString()
+                }]);
+                
+                const exec = await executeAction({ type: 'segment_structure', structure: data.structure }, viewport);
+                if (exec) {
+                     setLoading(false);
+                     setIsLooping(false);
+                     toast.success("Structure found and segmented.");
+                     return; 
+                }
+            } else {
+                toast.warning("Could not identify a valid anatomical structure from your prompt.");
+            }
+        }
+    } catch (e) {
+        console.warn("Identification check failed:", e);
+        toast.error("Failed to connect to backend.");
+    }
+    
+    // REMOVED Agent Loop Call per user request
+    // await runAgentLoop(currentPrompt);
 
     setLoading(false);
     setIsLooping(false);
