@@ -279,7 +279,12 @@ export default function MedGemmaButton() {
 
       if (action.type === 'segment_structure') {
           const { structure } = action;
-          toast.info(`Segmenting ${structure} via Cloud...`);
+          
+          setSteps(prev => [...prev, {
+              type: 'agent',
+              content: `**Inspecting**: Analyzing **${structure}** (Segmentation & Windowing)...`,
+              timestamp: new Date().toISOString()
+          }]);
 
           // 1. Gather DICOM URLs
           const imageIds = viewport.getImageIds();
@@ -381,29 +386,43 @@ export default function MedGemmaButton() {
                   const col2 = [affine[0][2], affine[1][2], affine[2][2]];
                   
                   const norm = (v) => Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
-                  const spacX = norm(col0);
-                  const spacY = norm(col1);
-                  const spacZ = norm(col2);
+                  const spacX = norm(col0) || 1.0;
+                  const spacY = norm(col1) || 1.0;
+                  const spacZ = norm(col2) || 1.0;
 
                   const origin = [affine[0][3], affine[1][3], affine[2][3]];
                   
                   // Direction (Row-major or Col-major?)
-                  // CS3D/VTK uses a 3x3 direction matrix. flattened.
-                  // It expects Normalized columns.
+                  // CS3D/VTK uses a 3x3 direction matrix flattened.
                   const direction = [
                       col0[0]/spacX, col0[1]/spacX, col0[2]/spacX,
                       col1[0]/spacY, col1[1]/spacY, col1[2]/spacY,
                       col2[0]/spacZ, col2[1]/spacZ, col2[2]/spacZ
-                  ];
+                  ].map(v => isNaN(v) ? 0 : v);
 
-                  // Create Local Volume
-                  await cornerstone.volumeLoader.createLocalVolume(segmentationId, {
-                      dimensions: shape, // [x, y, z]
+                  // Get FrameOfReferenceUID from viewport to ensure compatibility
+                  const imageIds = viewport.getImageIds();
+                  const firstImageId = imageIds[0];
+                  // Try to get standard metadata
+                  let frameOfReferenceUID = 'default-for';
+                  try {
+                       const module = cornerstone.metaData.get('imagePlaneModule', firstImageId);
+                       if (module && module.frameOfReferenceUID) {
+                           frameOfReferenceUID = module.frameOfReferenceUID;
+                       }
+                  } catch (e) { console.warn("Could not get FOR:", e); }
+
+                  const volOptions = {
+                      metadata: { FrameOfReferenceUID: frameOfReferenceUID },
+                      dimensions: [shape[0], shape[1], shape[2]],
                       spacing: [spacX, spacY, spacZ],
-                      origin,
-                      direction,
+                      origin: [origin[0], origin[1], origin[2]],
+                      direction: direction,
                       scalarData: maskData
-                  });
+                  };
+                  console.log("createLocalVolume options:", volOptions);
+
+                  await cornerstone.volumeLoader.createLocalVolume(segmentationId, volOptions);
 
                   // 5. Add Segmentation to State
                   await cornerstoneTools.segmentation.addSegmentations([
