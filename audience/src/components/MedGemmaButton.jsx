@@ -1,28 +1,35 @@
 import { useState, useContext, useRef, useEffect } from 'react';
 import { UserContext } from '../context/UserContext';
-import { Sparkles, X } from 'lucide-react';
+import { DataContext, DataDispatchContext } from '../context/DataContext';
+import { Sparkles, X, Eye, EyeOff } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { setMaskOverlayVisible } from '../lib/medgemma-utils';
 
-import MedGemmaImpression from './MedGemmaImpression';
-import MedGemmaChat from './MedGemmaChat';
+import AgentChat from './AgentChat';
 
 const R = 12; // margin from edges
 
 export default function MedGemmaButton() {
   const { userData, supabaseClient } = useContext(UserContext).data || {};
+  const { data } = useContext(DataContext);
+  const { dispatch } = useContext(DataDispatchContext);
+  const { renderingEngine } = data;
+
   const [contentVisible, setContentVisible] = useState(false);
   const [phase, setPhase] = useState('button'); // 'button' | 'open'
   const cardRef = useRef(null);
   const measuredBtn = useRef({ w: 148, h: 40 }); // fallback dims
 
-  const [activeTab, setActiveTab] = useState('pipeline');
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hello! I'm MedGemma (27B). Ask me any medical questions." },
+    { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Constrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" },
   ]);
 
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
-  const handleAddToChat = (content) =>
-    setMessages((prev) => [...prev, { role: 'assistant', content }]);
+  // Mask toggle state — shown only when a mask exists
+  const [hasMask, setHasMask] = useState(false);
+  const [maskVisible, setMaskVisibleState] = useState(true);
+
+  // const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
   // Measure button size before first interaction
   useEffect(() => {
@@ -42,7 +49,6 @@ export default function MedGemmaButton() {
     if (!card) return;
 
     setPhase('open');
-
     card.animate(
       [
         { width: `${bw}px`, height: `${bh}px`, borderRadius: '10px' },
@@ -56,10 +62,7 @@ export default function MedGemmaButton() {
     const { w: bw, h: bh } = measuredBtn.current;
     const card = cardRef.current;
     if (!card) return;
-
     setContentVisible(false);
-
-    // small delay so content fade-out starts before shrink
     setTimeout(() => {
       card.animate(
         [
@@ -71,17 +74,25 @@ export default function MedGemmaButton() {
     }, 80);
   };
 
+  const handleToggleMask = () => {
+    const viewport = renderingEngine?.getViewport('0-vp');
+    if (!viewport) return;
+    const next = !maskVisible;
+    setMaskVisibleState(next);
+    setMaskOverlayVisible(viewport, next, 'medgemma-overlay');
+    viewport.element?.__rleRenderOnce?.();
+  };
+
   const card = {
     background: '#020617', // slate-950
     border: '1px solid #1e293b', // slate-800
   };
 
-  // Always the same single element — no swap, no flicker
   const portal = createPortal(
     <div
       ref={cardRef}
       onClick={phase === 'button' ? handleOpen : undefined}
-      className="fixed z-50 flex flex-col overflow-hidden shadow-2xl select-none"
+      className="fixed z-50 flex flex-col overflow-hidden shadow-2xl select-text"
       style={{
         top: R,
         right: R,
@@ -92,7 +103,7 @@ export default function MedGemmaButton() {
         ...card,
       }}
     >
-      {/* ── Header row — always visible, always same height as original button ── */}
+      {/* ── Header ── */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-4 bg-slate-900/40"
         style={{ height: measuredBtn.current.h, minHeight: measuredBtn.current.h }}
@@ -103,20 +114,34 @@ export default function MedGemmaButton() {
             MedGemma AI
           </span>
         </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); handleClose(); }}
-          className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
-          style={{
-            opacity: contentVisible ? 1 : 0,
-            transition: 'opacity 0.15s ease',
-            pointerEvents: contentVisible ? 'auto' : 'none',
-          }}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+
+        <div className="flex items-center gap-1" style={{ opacity: contentVisible ? 1 : 0, transition: 'opacity 0.15s ease', pointerEvents: contentVisible ? 'auto' : 'none' }}>
+          {/* Mask toggle — only shown when a mask exists */}
+          {hasMask && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleToggleMask(); }}
+              title={maskVisible ? 'Hide mask overlay' : 'Show mask overlay'}
+              className={`flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-semibold transition-colors border ${maskVisible
+                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                }`}
+            >
+              {maskVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              <span>Mask</span>
+            </button>
+          )}
+
+          {/* Close */}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleClose(); }}
+            className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* ── Body — fades in/out, never affects layout ── */}
+      {/* ── Body ── */}
       <div
         className="flex-1 flex flex-col overflow-hidden"
         style={{
@@ -125,53 +150,19 @@ export default function MedGemmaButton() {
           pointerEvents: contentVisible ? 'auto' : 'none',
         }}
       >
-        {/* Tab bar */}
-        <div
-          className="px-2 bg-slate-950"
-          style={{
-            borderTop: '1px solid #1e293b',
-            borderBottom: '1px solid #1e293b',
+        <AgentChat
+          messages={messages}
+          setMessages={setMessages}
+          BASE_URL={BASE_URL}
+          renderingEngine={renderingEngine}
+          userData={userData}
+          supabaseClient={supabaseClient}
+          dispatch={dispatch}
+          onMaskReady={(has) => {
+            setHasMask(has);
+            if (has) setMaskVisibleState(true);
           }}
-        >
-          <div className="flex h-10 gap-6 px-2">
-            {['pipeline', 'chat'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="text-[11px] uppercase tracking-wider font-bold py-2 transition-colors relative"
-                style={{
-                  color: activeTab === tab ? '#60a5fa' : '#64748b',
-                }}
-              >
-                {tab === 'pipeline' ? 'Assistant' : 'Chat'}
-                {activeTab === tab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'pipeline' && (
-            <MedGemmaImpression
-              BASE_URL={BASE_URL}
-              onAddToChat={handleAddToChat}
-              onSwitchToChat={() => setActiveTab('chat')}
-              onClose={handleClose}
-            />
-          )}
-          {activeTab === 'chat' && (
-            <MedGemmaChat
-              messages={messages}
-              setMessages={setMessages}
-              BASE_URL={BASE_URL}
-              userData={userData}
-              supabaseClient={supabaseClient}
-            />
-          )}
-        </div>
+        />
       </div>
     </div>,
     document.body

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import {
@@ -42,7 +43,7 @@ const Mode = {
 function ShareTab() {
   const { dispatch } = useContext(DataDispatchContext);
   const { userDispatch } = useContext(UserDispatchContext);
-  const { userData,supabaseClient} = useContext(UserContext).data;
+  const { userData, supabaseClient } = useContext(UserContext).data;
 
   const [visibility, setVisibility] = useState(Visibility.PUBLIC);
   const [qrCodeValue, setQRCodeValue] = useState("");
@@ -116,6 +117,10 @@ function ShareTab() {
   }
 
   async function transferSharedSession() {
+    if (!userData || userData.is_anonymous) {
+      toast.error('Please sign in to create a shared session.');
+      return;
+    }
     try {
       console.log(queryParams.toString());
       const { data, update_error } = await supabaseClient
@@ -151,6 +156,10 @@ function ShareTab() {
   }
 
   async function generateSharedSession() {
+    if (!userData || userData.is_anonymous) {
+      toast.error('Please sign in to create a shared session.');
+      return;
+    }
     try {
       const { _, delete_error } = await supabaseClient
         .from("viewbox")
@@ -179,15 +188,9 @@ function ShareTab() {
       });
       const newQueryParams = new URLSearchParams();
       newQueryParams.set("s", data[0].session_id);
-      queryParams.set("s", data[0].session_id);
-      setShareLink(
-        `${window.location.origin + window.location.pathname
-        }?${newQueryParams.toString()}`
-      );
-      setQRCodeValue(
-        `${window.location.origin + window.location.pathname
-        }?${newQueryParams.toString()}`
-      );
+      const shareLink = `${window.location.origin + window.location.pathname}?${newQueryParams.toString()}`;
+      setShareLink(shareLink);
+      setQRCodeValue(shareLink);
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
     } catch (error) {
       console.log(error.code);
@@ -369,6 +372,20 @@ function ShareTab() {
   }
 
 
+
+  // Anonymous users cannot create sessions
+  if (!userData || userData.is_anonymous) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign in to share</CardTitle>
+          <CardDescription>
+            You need a verified account to create a shared session. Please sign in and try again.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   switch (shareSessionState) {
     case ShareSessionState.EXISTING_SAME_SESSION:

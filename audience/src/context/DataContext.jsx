@@ -236,18 +236,20 @@ export const DataProvider = ({ children }) => {
                 }
             }
 
-            //if there is a session for the current image, join that session
-            var { data, errorCurrentSession } = await cl
-                .from("viewbox")
-                .select("user, url_params, session_id,mode")
-                .eq("user", userData.id);
-            if (errorCurrentSession) throw errorCurrentSession;
+            // Only look for existing sessions for real (non-anonymous) logged-in users
+            // Anonymous users cannot create sessions, so this query would never return results
+            if (!userData.is_anonymous) {
+                var { data, errorCurrentSession } = await cl
+                    .from("viewbox")
+                    .select("user, url_params, session_id,mode")
+                    .eq("user", userData.id);
+                if (errorCurrentSession) throw errorCurrentSession;
 
-
-            if (data?.length != 0 && data[0].url_params == queryParams.toString()) {
-                initialData.s = data[0].session_id
-                initialData.sessionMeta.mode = data[0].mode
-                initialData.sessionMeta.owner = data[0].user
+                if (data?.length != 0 && data[0].url_params == queryParams.toString()) {
+                    initialData.s = data[0].session_id
+                    initialData.sessionMeta.mode = data[0].mode
+                    initialData.sessionMeta.owner = data[0].user
+                }
             }
         }
 
