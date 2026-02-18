@@ -182,6 +182,7 @@ export default function Viewport(props) {
       defaultOptions: {},
     };
 
+
     rendering_engine.enableElement(viewportInput);
     dispatch({ type: 'viewport_ready', payload: { viewportId: viewport_idx } });
 
@@ -239,19 +240,7 @@ export default function Viewport(props) {
         if (queueRef.current) {
           queueRef.current.updateFocus(realIndex);
         }
-        
-        // Sync to Context (Debounced)
-        if (ciDebounceRef.current) clearTimeout(ciDebounceRef.current);
-        ciDebounceRef.current = setTimeout(() => {
-             const getNumber = (str) => {
-                const match = str.match(/(\d+)(?!.*\d)/); 
-                return match ? parseInt(match[0], 10) : null;
-             };
-             const ci = getNumber(imageId);
-             if (ci !== null) {
-                  dispatch({ type: 'update_viewport_ci', payload: { viewport_idx: viewport_idx, ci } });
-             }
-        }, 500);
+
 
         // Window/level settings are preserved across images
         // Only set during initial load (lines 219-222), not on every scroll
@@ -312,9 +301,9 @@ export default function Viewport(props) {
   // Effect: Sync state changes if needed (e.g. metadata updates)
   useEffect(() => {
     if (rendering_engine && viewportReady && viewport_data) {
-       // We no longer need to update the stack manually when images load
-       // because we use a dense stack from the start. 
-       // This allows the AI and user to scroll to any index instantly.
+      // We no longer need to update the stack manually when images load
+      // because we use a dense stack from the start. 
+      // This allows the AI and user to scroll to any index instantly.
     }
   }, [viewportReady, rendering_engine]);
 
@@ -329,12 +318,12 @@ export default function Viewport(props) {
       const currentTime = new Date().getTime();
       const tapInterval = currentTime - lastTapTimeRef.current;
       const isMultiTouch = event.type === 'touchstart' && event.touches.length > 1;
-      
+
       if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0 && !isMultiTouch && sharingUser === userData?.id) {
         // Double-tap detected - toggle between pointer and scroll
         const newTool = toolSelected === 'pointer' ? 'scroll' : 'pointer';
         dispatch({ type: 'select_tool', payload: newTool });
-        
+
         // Show toast notification for tool changes
         // Use fixed ID to prevent duplicates from multiple viewports
         if (currentTime - lastToastTime > 500) {
@@ -373,49 +362,69 @@ export default function Viewport(props) {
 
   // Ref to track previous data to prevent unnecessary reloads
   const prevDataRef = useRef(null);
-  const ciDebounceRef = useRef(null);
 
   useEffect(() => {
     let cleanup;
     // Only load if data exists
     if (viewport_data) {
-      
       const prev = prevDataRef.current;
-      const isStackSame = prev && prev.s === viewport_data.s;
+      // Compare stack by first URL string (not reference) — reducer spreads create new array refs
+      const prevFirstUrl = prev?.s?.[0];
+      const newFirstUrl = viewport_data?.s?.[0];
+      const isStackSame = prev && prevFirstUrl === newFirstUrl;
       const isWindowSame = prev && prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
       const isCiChanged = prev && prev.ci !== viewport_data.ci;
 
       // Guard: If nothing relevant changed, do nothing
       if (prev && isStackSame && isWindowSame && !isCiChanged && viewportReady) {
-          prevDataRef.current = viewport_data;
-          return;
+        prevDataRef.current = viewport_data;
+        return;
       }
 
-      // Smart Update: If only CI changed and stack is same, just scroll
-      if (isStackSame && isWindowSame && isCiChanged && viewportReady) {
-          const viewportId = `${viewport_idx}-vp`;
-          const viewport = rendering_engine.getViewport(viewportId);
-          if (viewport) {
-             const targetNumber = parseInt(viewport_data.ci, 10);
-             if (!isNaN(targetNumber)) {
-                 const getNumber = (str) => {
-                    const match = str.match(/(\d+)(?!.*\d)/); 
-                    return match ? parseInt(match[0], 10) : null;
-                 };
-                 const foundIndex = viewport_data.s.findIndex(url => getNumber(url) === targetNumber);
-                 if (foundIndex !== -1) {
-                     // Just scroll
-                     viewport.setImageIdIndex(foundIndex);
-                     viewport.render();
-                 }
-             }
+      // Smart Update: If stack is same, apply slice and/or windowing changes without a full reload
+      if (isStackSame && viewportReady) {
+        const viewportId = `${viewport_idx}-vp`;
+        const viewport = rendering_engine.getViewport(viewportId);
+
+        if (viewport) {
+          // 1. Handle Windowing Changes
+          if (!isWindowSame) {
+            const { ww, wc } = viewport_data;
+            viewport.setProperties({
+              voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
+              isComputedVOI: false,
+            });
           }
-          prevDataRef.current = viewport_data;
-          return;
+
+          // 2. Handle Slice (CI) Changes
+          if (isCiChanged) {
+            const targetNumber = parseInt(viewport_data.ci, 10);
+            if (!isNaN(targetNumber)) {
+              const getNumber = (str) => {
+                const match = str.match(/(\d+)(?!.*\d)/);
+                return match ? parseInt(match[0], 10) : null;
+              };
+              const foundIndex = viewport_data.s.findIndex(url => getNumber(url) === targetNumber);
+              const currentIndex = viewport.getCurrentImageIdIndex();
+
+              if (foundIndex !== -1 && foundIndex !== currentIndex) {
+                viewport.setImageIdIndex(foundIndex);
+              }
+            }
+          }
+
+          // 3. Final render if anything changed
+          if (!isWindowSame || isCiChanged) {
+            viewport.render();
+          }
+        }
+
+        prevDataRef.current = viewport_data;
+        return;
       }
-      
+
       // Full Reload
-      setViewportReady(false); 
+      setViewportReady(false);
       loadImagesAndDisplay().then(c => cleanup = c);
       prevDataRef.current = viewport_data;
     }

@@ -185,7 +185,8 @@ export const DataProvider = ({ children }) => {
                 StackScrollTool,
                 StackScrollMouseWheelTool,
                 ZoomTool,
-                ProbeTool
+                ProbeTool,
+
             } = cornerstoneTools;
 
             cornerstoneTools.addTool(PanTool);
@@ -194,6 +195,7 @@ export const DataProvider = ({ children }) => {
             cornerstoneTools.addTool(StackScrollMouseWheelTool);
             cornerstoneTools.addTool(ZoomTool);
             cornerstoneTools.addTool(ProbeTool);
+
 
             const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
 
@@ -291,17 +293,17 @@ export const DataProvider = ({ children }) => {
                         console.log('Updating session owner to:', userData.id);
                         console.log('shareController exists:', !!data.shareController);
                         dispatch({ type: 'update_session_owner', payload: userData.id });
-                        
+
                         // If Supabase not set up yet, set it up now
                         if (!data.shareController) {
                             console.log('Setting up Supabase after login');
-                            dispatch({ 
-                                type: 'connect_to_sharing_session', 
-                                payload: { 
-                                    sessionId: data.sessionId, 
-                                    mode: data.sessionMeta?.mode, 
-                                    owner: userData.id 
-                                } 
+                            dispatch({
+                                type: 'connect_to_sharing_session',
+                                payload: {
+                                    sessionId: data.sessionId,
+                                    mode: data.sessionMeta?.mode,
+                                    owner: userData.id
+                                }
                             });
                         }
                     }
@@ -768,15 +770,6 @@ export function dataReducer(data, action) {
                 }
             };
             break;
-        case 'update_viewport_ci': {
-            const { viewport_idx, ci } = action.payload;
-            const newVd = [...data.vd];
-            if (newVd[viewport_idx]) {
-                newVd[viewport_idx] = { ...newVd[viewport_idx], ci: ci };
-            }
-            new_data = { ...data, vd: newVd };
-            break;
-        }
         default:
             throw Error('Unknown action: ' + action.type);
     }

@@ -1,1353 +1,181 @@
-import { useState, useContext, useRef } from 'react';
-import * as cornerstone from '@cornerstonejs/core';
-import * as cornerstoneTools from '@cornerstonejs/tools';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Sparkles, Loader2, Eye, Send, User, Bot, Share, ArrowLeft } from 'lucide-react';
-import { DataContext, DataDispatchContext } from '../context/DataContext';
-import { UserContext, UserDispatchContext } from '../context/UserContext';
-import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
+import { useState, useContext, useRef, useEffect } from 'react';
+import { UserContext } from '../context/UserContext';
+import { Sparkles, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
-// Local constants for Sharing
-const Visibility = { PUBLIC: "PUBLIC" };
-const Mode = { TEAM: "TEAM" };
+import MedGemmaImpression from './MedGemmaImpression';
+import MedGemmaChat from './MedGemmaChat';
+
+const R = 12; // margin from edges
 
 export default function MedGemmaButton() {
   const { userData, supabaseClient } = useContext(UserContext).data || {};
-  const [open, setOpen] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState(null);
-  const [showPostSummaryOptions, setShowPostSummaryOptions] = useState(false);
+  const [contentVisible, setContentVisible] = useState(false);
+  const [phase, setPhase] = useState('button'); // 'button' | 'open'
+  const cardRef = useRef(null);
+  const measuredBtn = useRef({ w: 148, h: 40 }); // fallback dims
 
-  // Chat State
-  const [chatInput, setChatInput] = useState("");
+  const [activeTab, setActiveTab] = useState('pipeline');
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello! I'm MedGemma (27B). Ask me any medical questions." }
+    { role: 'assistant', content: "Hello! I'm MedGemma (27B). Ask me any medical questions." },
   ]);
-  const [chatLoading, setChatLoading] = useState(false);
-  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
-  // --- SEMANTIC NAVIGATION STATE ---
-  const indexMapRef = useRef({
-    cranialDeltaSign: null, // -1 or +1 once learned
-  });
-
-  const regionRank = (region) => {
-    const order = ["Brain", "Neck", "Chest", "Upper Abdomen", "Mid Abdomen", "Pelvis", "Lower Extremity"];
-    const i = order.indexOf(region);
-    return i === -1 ? null : i;
-  };
-
-  const learnCranialSign = (prevRegion, nextRegion, stepDelta) => {
-    const a = regionRank(prevRegion);
-    const b = regionRank(nextRegion);
-    if (a == null || b == null) return;
-
-    // moving cranial means rank should DECREASE (e.g., Mid Abdomen -> Chest)
-    const movedCranial = b < a;
-    const sign = Math.sign(stepDelta);
-
-    if (movedCranial && sign !== 0) {
-      indexMapRef.current.cranialDeltaSign = sign; // "this sign moves cranial"
-      console.log(`LEARNED CRANIAL SIGN: ${sign} (moved ${prevRegion} -> ${nextRegion})`);
-    }
-  };
-
-  const { renderingEngine } = useContext(DataContext).data;
-  const { dispatch } = useContext(DataDispatchContext);
-
-  // Convert canvas to base64 image
-  const getImageAsBase64 = async (viewport) => {
-    try {
-      const canvas = viewport.getCanvas();
-      if (!canvas) {
-        throw new Error('No canvas found');
-      }
-
-      // Convert canvas to blob then to base64
-      return new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error('Failed to create blob from canvas'));
-            return;
-          }
-
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            // Extract base64 data (remove data:image/png;base64, prefix)
-            const base64 = reader.result.split(',')[1];
-            console.log(`Captured Image: ${canvas.width}x${canvas.height}, Base64 Length: ${base64.length}`);
-            resolve(base64);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        }, 'image/png');
-      });
-    } catch (error) {
-      console.error('Error converting image:', error);
-      throw error;
-    }
-  };
-
-  // --- UI STATE ---
-  const [activeTab, setActiveTab] = useState("pipeline"); // 'pipeline' | 'chat'
-  const [pipelineMode, setPipelineMode] = useState("input"); // 'input' | 'select' | 'run'
-  const [findings, setFindings] = useState([]);
-  const [reportInput, setReportInput] = useState("");
-  const [currentFinding, setCurrentFinding] = useState("");
-
-  // --- AGENT STATE ---
-  const [steps, setSteps] = useState([]); // [{ type: 'thought'|'action', content: string }]
-  const [isLooping, setIsLooping] = useState(false);
-  const stopRef = useRef(false);
-
-  // --- PARSING LOGIC ---
-  const parseFindings = (text) => {
-    if (!text) return [];
-    // Split by newlines, bullets, or numbers
-    const lines = text.split(/\r?\n/);
-    const extracted = lines
-      .map(line => line.trim())
-      .filter(line => {
-        // Simple heuristic: Line starts with -, *, or digit+dot, or is just a non-empty line
-        // We want to filter out empty lines or very short meaningless lines
-        return line.length > 5;
-      })
-      .map(line => {
-        // Remove leading bullets/numbers for cleaner display
-        return line.replace(/^[\-\*•\d\.]+\s*/, '');
-      });
-    return extracted;
-  };
-
-  const handleParse = () => {
-    const extracted = parseFindings(reportInput);
-    if (extracted.length === 0) {
-      toast.error("No findings could be parsed. Please try pasting a list.");
-      return;
-    }
-    setFindings(extracted);
-    setPipelineMode("select");
-  };
-
-  const handleSelectFinding = (finding) => {
-    setCurrentFinding(finding);
-    setPipelineMode("run");
-    handleStart(finding);
-  };
-
-  const handleStop = () => {
-    stopRef.current = true;
-    setIsLooping(false);
-    setSteps(prev => [...prev, { type: 'error', content: 'Stopped by user.' }]);
-  };
-
-  const MAX_STEPS = 10;
-
-  // Execute agentic action returned by backend
-  const executeAction = async (action, viewport) => {
-    if (!action || !viewport) return false;
-
-    console.log("Executing agent action:", action);
-
-    try {
-      if (action.type === 'set_window_level') {
-        let { window: wwHU, level: wcHU } = action;
-
-        // Get metadata for inverse conversion
-        const imageId = viewport.getCurrentImageId();
-        let slope = 1;
-        let intercept = 0;
-
-        // Try to get from cached image object first (most reliable)
-        const image = cornerstone.cache.getImage(imageId);
-        if (image) {
-          slope = image.slope !== undefined ? image.slope : (image.intercept?.slope ?? 1);
-          intercept = image.intercept !== undefined ? image.intercept : (image.intercept?.intercept ?? 0);
-        } else {
-          // Fallback to metadata provider
-          const modalityLut = cornerstone.metaData.get('modalityLutModule', imageId) || {};
-          slope = modalityLut.rescaleSlope ?? 1;
-          intercept = modalityLut.rescaleIntercept ?? 0;
-        }
-
-        // Convert Hounsfield Units from AI back to Stored Values for the viewer
-        // SV = (HU - intercept) / slope
-        // For width, only slope applies
-        const wwSV = wwHU / slope;
-        const wcSV = (wcHU - intercept) / slope;
-
-        viewport.setProperties({
-          voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwSV, wcSV)
-        });
-        viewport.render();
-
-        return true;
-      }
-
-      if (action.type === 'scroll_delta' || action.type === "scroll_cranial" || action.type === "scroll_caudal") {
-        let step = 0;
-
-        if (action.type === 'scroll_delta') {
-          step = parseInt(action.step, 10);
-        } else {
-          // SEMANTIC ACTION
-          const rawStep = Number(action.step ?? 10);
-          if (!Number.isFinite(rawStep) || rawStep <= 0) return false;
-
-          // If we haven't learned mapping yet, probe with -1 first (standard DICOM) and learn from region change next step.
-          const cranialSign = indexMapRef.current.cranialDeltaSign ?? -1;
-
-          step = action.type === "scroll_cranial"
-            ? cranialSign * rawStep
-            : -cranialSign * rawStep;
-        }
-
-        if (isNaN(step) || step === 0) return false;
-
-        const currentIndex = viewport.getCurrentImageIdIndex();
-        const imageIds = viewport.getImageIds();
-        const newIndex = currentIndex + step;
-        const safeIndex = Math.max(0, Math.min(newIndex, imageIds.length - 1));
-
-        if (currentIndex === safeIndex) {
-          const atStart = currentIndex === 0;
-          const atEnd = currentIndex === imageIds.length - 1;
-
-          return {
-            ok: false,
-            reason: "hit_boundary",
-            current: currentIndex,
-            total: imageIds.length,
-            step,
-            atStart,
-            atEnd,
-          };
-        }
-
-        viewport.setImageIdIndex(safeIndex);
-        viewport.render();
-
-        // Sync context to prevent reset on re-render
-        const targetImageId = imageIds[safeIndex];
-        const getInstanceNumber = (str) => {
-          const match = str.match(/(\d+)(?!.*\d)/);
-          return match ? parseInt(match[0], 10) : null;
-        };
-        const ci = getInstanceNumber(targetImageId);
-
-        if (ci !== null) {
-          dispatch({
-            type: 'update_viewport_ci',
-            payload: { viewport_idx: 0, ci }
-          });
-        }
-
-        
-        return true;
-      } 
-      
-      if (action.type === 'scroll_to_slice') {
-        const { index } = action;
-        if (index !== undefined) {
-          const imageIds = viewport.getImageIds();
-          const safeIndex = Math.max(0, Math.min(index, imageIds.length - 1));
-
-          if (viewport.getCurrentImageIdIndex() === safeIndex) {
-            return false;
-          }
-
-          viewport.setImageIdIndex(safeIndex);
-          viewport.render();
-          return true;
-        }
-      }
-
-      if (action.type === 'segment_structure') {
-          const { structure } = action;
-          
-          setSteps(prev => [...prev, {
-              type: 'agent',
-              content: `**Inspecting**: Analyzing **${structure}** (Segmentation & Windowing)...`,
-              timestamp: new Date().toISOString()
-          }]);
-
-          // 1. Gather DICOM URLs
-          const imageIds = viewport.getImageIds();
-          const dicomUrls = imageIds.map(id => {
-              // Remove 'dicomweb:' prefix if present
-              return id.replace(/^dicomweb:/, '');
-          });
-
-          // 2. Call Backend with URLs
-          try {
-              const response = await fetch(`${BASE_URL}/segment_dicom`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                      dicom_urls: dicomUrls, 
-                      structure: structure 
-                  })
-              });
-
-              if (!response.ok) {
-                  throw new Error(`Segmentation failed: ${response.statusText}`);
-              }
-
-              const result = await response.json();
-
-              if (result.error) {
-                  toast.error(`Error: ${result.error}`);
-                  return false;
-              }
-
-              if (result.found) {
-                  const { mask_rle, shape, affine, centroid_voxel, window_level, window_thought } = result;
-                  
-                  console.log("Segmentation Result:", result);
-                  
-                  if (!shape || shape.length !== 3) {
-                      console.error("Invalid shape in result:", shape);
-                      toast.error("Received invalid segmentation data (shape missing).");
-                      return false;
-                  }
-
-                  // Apply Windowing
-                  if (window_level && window_level.window !== undefined) {
-                      const { window: ww, level: wl, name } = window_level;
-                      
-                      const imageId = viewport.getCurrentImageId();
-                      let slope = 1, intercept = 0;
-                      
-                      const image = cornerstone.cache.getImage(imageId);
-                      if (image) {
-                          slope = image.slope ?? (image.intercept?.slope ?? 1);
-                          intercept = image.intercept ?? (image.intercept?.intercept ?? 0);
-                      } else {
-                          const modalityLut = cornerstone.metaData.get('modalityLutModule', imageId) || {};
-                          slope = modalityLut.rescaleSlope ?? 1;
-                          intercept = modalityLut.rescaleIntercept ?? 0;
-                      }
-
-                      const wwSV = ww / slope;
-                      const wlSV = (wl - intercept) / slope;
-                      
-                      viewport.setProperties({
-                          voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwSV, wlSV)
-                      });
-                      viewport.render();
-                      
-                      // UI Feedback
-                      const winName = name || "AI Suggestion";
-                      const reasoningText = window_thought ? `\n\n> *${window_thought}*` : "";
-                      
-                      setSteps(prev => [...prev, {
-                          type: 'agent',
-                          content: `**Windowing Applied**: **${winName}** (W:${ww}/L:${wl}).${reasoningText}`,
-                          action: { type: 'set_window_level', window: ww, level: wl },
-                          timestamp: new Date().toISOString()
-                      }]);
-                  }
-
-                  // 3. Decode RLE to Uint8Array
-                  const size = shape[0] * shape[1] * shape[2];
-                  // Use Int16Array or Uint8Array. Labelmaps in CS3D usually Uint8/Uint16?
-                  // Scalar data for labelmaps. Uint8 is fine for few segments.
-                  const maskData = new Uint8Array(size);
-                  
-                  // RLE: [start, length, ...] flat index
-                  for (let i = 0; i < mask_rle.length; i += 2) {
-                      const start = mask_rle[i];
-                      const len = mask_rle[i+1];
-                      // .fill(value, start, end)
-                      maskData.fill(1, start, start + len);
-                  }
-
-                  // 4. Create Cornerstone3D Volume
-                  const segmentationId = `seg-${structure}-${Date.now()}`;
-                  
-                  // Decompose Affine
-                  const col0 = [affine[0][0], affine[1][0], affine[2][0]];
-                  const col1 = [affine[0][1], affine[1][1], affine[2][1]];
-                  const col2 = [affine[0][2], affine[1][2], affine[2][2]];
-                  
-                  const norm = (v) => Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
-                  const spacX = norm(col0) || 1.0;
-                  const spacY = norm(col1) || 1.0;
-                  const spacZ = norm(col2) || 1.0;
-
-                  const origin = [affine[0][3], affine[1][3], affine[2][3]];
-                  
-                  // Direction (Row-major or Col-major?)
-                  // CS3D/VTK uses a 3x3 direction matrix flattened.
-                  const direction = [
-                      col0[0]/spacX, col0[1]/spacX, col0[2]/spacX,
-                      col1[0]/spacY, col1[1]/spacY, col1[2]/spacY,
-                      col2[0]/spacZ, col2[1]/spacZ, col2[2]/spacZ
-                  ].map(v => isNaN(v) ? 0 : v);
-
-                  // Get FrameOfReferenceUID from viewport to ensure compatibility
-                  const imageIds = viewport.getImageIds();
-                  const firstImageId = imageIds[0];
-                  // Try to get standard metadata
-                  let frameOfReferenceUID = 'default-for';
-                  try {
-                       const module = cornerstone.metaData.get('imagePlaneModule', firstImageId);
-                       if (module && module.frameOfReferenceUID) {
-                           frameOfReferenceUID = module.frameOfReferenceUID;
-                       }
-                  } catch (e) { console.warn("Could not get FOR:", e); }
-
-                  const volOptions = {
-                      metadata: { FrameOfReferenceUID: frameOfReferenceUID },
-                      dimensions: [shape[0], shape[1], shape[2]],
-                      spacing: [spacX, spacY, spacZ],
-                      origin: [origin[0], origin[1], origin[2]],
-                      direction: direction,
-                      scalarData: maskData
-                  };
-                  console.log("createLocalVolume options:", volOptions);
-
-                  await cornerstone.volumeLoader.createLocalVolume(segmentationId, volOptions);
-
-                  // 5. Add Segmentation to State
-                  await cornerstoneTools.segmentation.addSegmentations([
-                      {
-                          segmentationId,
-                          representation: {
-                              type: cornerstoneTools.Enums.SegmentationRepresentations.Labelmap,
-                              data: { volumeId: segmentationId }
-                          }
-                      }
-                  ]);
-
-                  // 6. Add Representation to Viewport
-                  // This links the segmentation volume to the viewport
-                  await cornerstoneTools.segmentation.addSegmentationRepresentations(viewport.id, [
-                      {
-                          segmentationId,
-                          type: cornerstoneTools.Enums.SegmentationRepresentations.Labelmap
-                      }
-                  ]);
-
-                  // 7. Navigate to Centroid
-                  const targetSliceIndex = Math.round(centroid_voxel[2]);
-                  const safeIndex = Math.max(0, Math.min(targetSliceIndex, imageIds.length - 1));
-                  viewport.setImageIdIndex(safeIndex);
-                  viewport.render();
-                  
-                  toast.success(`Segmented ${structure}!`);
-                  return true;
-              } else {
-                   toast.warning(result.message || "Structure not found.");
-                   return false;
-              }
-
-          } catch (e) {
-              console.error("Segmentation error:", e);
-              toast.error("Segmentation request failed.");
-              return false;
-          }
-      }
-
-    } catch (error) {
-      console.error("Failed to execute action:", error);
-    }
-    console.warn("executeAction returning false (fallthrough)");
-    return false;
-  };
-
-  const runAgentLoop = async (currentPrompt, iteration = 0, currentSteps = []) => {
-    if (stopRef.current) return;
-
-    if (iteration >= MAX_STEPS) {
-      setSteps(prev => [...prev, { type: 'info', content: 'Max reasoning steps reached. Stopping.' }]);
-      stopRef.current = true;
-      setIsLooping(false);
-      return;
-    }
-
-    try {
-      if (!renderingEngine) throw new Error('No image loaded');
-      const viewport = renderingEngine.getViewport('0-vp');
-      if (!viewport) throw new Error('Viewport not found');
-
-      // Add a small delay to ensure any previous rendering/state changes are settled
-      await new Promise(r => setTimeout(r, 100));
-
-      if (stopRef.current) return;
-
-      // 1. Capture State & Image
-      const imageBase64 = await getImageAsBase64(viewport);
-      // ... (currentState capture logic unchanged) ...
-
-      let currentState = null;
-      try {
-        const props = viewport.getProperties();
-        const voiRange = props.voiRange;
-        let windowWidth = 0, windowCenter = 0;
-
-        if (voiRange) {
-          const wl = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
-          windowWidth = wl.windowWidth;
-          windowCenter = wl.windowCenter;
-        }
-
-        const currentSlice = viewport.getCurrentImageIdIndex();
-        const imageIds = viewport.getImageIds();
-
-        // Get metadata for conversion (slope/intercept)
-        const imageId = viewport.getCurrentImageId();
-        let slope = 1, intercept = 0;
-        const image = cornerstone.cache.getImage(imageId);
-        if (image) {
-          slope = image.slope ?? (image.intercept?.slope ?? 1);
-          intercept = image.intercept ?? (image.intercept?.intercept ?? 0);
-        }
-
-        const windowWidthHU = windowWidth * slope;
-        const windowCenterHU = windowCenter * slope + intercept;
-
-        // CRITICAL: Total slices now comes from imageIds.length which is dense!
-        currentState = {
-          window_width: windowWidthHU,
-          window_center: windowCenterHU,
-          current_slice: currentSlice,
-          total_slices: imageIds.length
-        };
-      } catch (e) {
-        console.warn("State capture failed:", e);
-      }
-
-      // 2. Call Backend (New V10 Chained Endpoints)
-      // const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`; // Moved to component scope
-
-
-      // --- PHASE 1: PRE-CHECKS ---
-      // Windowing moved to end of loop (Phase 4).
-      // BUT: We force a "Soft Tissue" reset at the start to ensure clean perception.
-      if (iteration === 0) {
-        // Soft Tissue Preset (HU)
-        // W: 400, L: 50
-        await executeAction({
-          type: 'set_window_level',
-          window: 400,
-          level: 50,
-          name: 'Soft Tissue (Reset)'
-        }, viewport);
-      }
-
-      // --- PHASE 2: PERCEPTION ---
-      if (stopRef.current) return;
-
-      // Capture 5 slices context: current - 2 to current + 2
-      const currentIdx = viewport.getCurrentImageIdIndex();
-      const imageIds = viewport.getImageIds();
-      const total = imageIds.length;
-
-      const indices = [-2, -1, 0, 1, 2].map(d => currentIdx + d).filter(i => i >= 0 && i < total);
-      console.log(`[Perception] Capturing slices: [${indices.join(', ')}] around center ${currentIdx}`);
-
-      // Update UI to show we are looking at these slices
-      setSteps(prev => {
-        const last = prev[prev.length - 1];
-        // If the last step was an agent step, maybe append this info or just log it.
-        // Let's just log it for now to avoid cluttering the UI too much, unless the user wants it.
-        // But for debug, let's toast it or log it.
-        return prev;
-      });
-
-      // Capture detailed images
-      const imagesBase64 = [];
-      const originalIndex = currentIdx;
-
-      for (const idx of indices) {
-        viewport.setImageIdIndex(idx);
-        viewport.render();
-        await new Promise(r => setTimeout(r, 100)); // Increased delay for render safety
-        const b64 = await getImageAsBase64(viewport);
-        if (b64) {
-          console.log(`[Capture] Slice ${idx} captured. Length: ${b64.length}`);
-          imagesBase64.push(b64);
-        }
-      }
-
-      // Restore original position
-      viewport.setImageIdIndex(originalIndex);
-      viewport.render();
-
-      if (imagesBase64.length === 0) throw new Error("Failed to capture slice images");
-
-      const perceptionResp = await fetch(`${BASE_URL}/perception`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          images_base64: imagesBase64, // Send list
-          text: currentPrompt,
-        }),
-      });
-
-      // Read text first so you can debug non-JSON responses
-      const perceptionRawText = await perceptionResp.text();
-
-      if (!perceptionResp.ok) {
-        throw new Error(
-          `Perception API failed: ${perceptionResp.status} ${perceptionRawText.slice(0, 500)}`
-        );
-      }
-
-      // Try parse JSON safely
-      let perceptionData;
-      try {
-        perceptionData = JSON.parse(perceptionRawText);
-      } catch (e) {
-        throw new Error(
-          `Perception returned non-JSON. First 500 chars:\n${perceptionRawText.slice(0, 500)}`
-        );
-      }
-
-      /**
-       * Supports BOTH backend contracts:
-       * NEW: { ok: true, perception: {...} } OR { ok:false, raw:"..." }
-       * OLD: { perception_output: "....json string...." } OR { perception_output: {...} }
-       */
-      let parsedPerception = null;
-
-      // ✅ New contract
-      if (perceptionData && perceptionData.ok === true && perceptionData.perception) {
-        parsedPerception = perceptionData.perception;
-      }
-
-      // ✅ Old contract
-      else if (perceptionData && perceptionData.perception_output != null) {
-        const po = perceptionData.perception_output;
-
-        if (typeof po === "object") {
-          parsedPerception = po;
-        } else if (typeof po === "string") {
-          // Extract JSON block if model wrapped it
-          const m = po.match(/\{[\s\S]*\}/);
-          if (m) {
-            try {
-              parsedPerception = JSON.parse(m[0]);
-            } catch { }
-          }
-        }
-      }
-
-      // ❌ Explicit failure from new contract
-      else if (perceptionData && perceptionData.ok === false) {
-        throw new Error(
-          `Perception returned ok=false. Raw:\n${(perceptionData.raw ?? perceptionRawText).slice(0, 800)}`
-        );
-      }
-
-      // ❌ Unknown shape
-      if (!parsedPerception || typeof parsedPerception !== "object") {
-        throw new Error(
-          `Perception returned unexpected shape:\n${JSON.stringify(perceptionData, null, 2).slice(0, 800)}`
-        );
-      }
-
-      // Send OBJECT directly into /reasoning
-      const perceptionForReasoning = parsedPerception;
-
-      // Pretty markdown for UI
-      const perceptionForUI = `
-**Plane**: ${parsedPerception.plane ?? "?"}
-**Region**: ${parsedPerception.region_guess ?? "?"}
-**Structures**: ${Array.isArray(parsedPerception.visible_structures)
-          ? parsedPerception.visible_structures.join(", ")
-          : (parsedPerception.visible_structures ?? "None")
-        }
-**Target Visible**: ${parsedPerception.target_visible ? "YES" : "NO"}
-**Findings**: ${parsedPerception.explanation ?? "None"}
-**Confidence**: ${typeof parsedPerception.confidence === "number"
-          ? parsedPerception.confidence.toFixed(2)
-          : "?"
-        }
-`.trim();
-
-      // --- PHASE 3: REASONING ---
-      if (stopRef.current) return;
-      // setSteps(prev => [...prev, { type: 'info', content: 'Deciding Next Move...' }]); // REMOVED per user request
-
-      const last = currentSteps.length ? currentSteps[currentSteps.length - 1] : null;
-
-      const reasoningResp = await fetch(`${BASE_URL}/reasoning`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          perception_output: perceptionForReasoning,
-          text: currentPrompt,
-          current_state: currentState,
-          previous_action: last?.action ?? null,
-          previous_thought: null, // Don't send full thought text (token heavy)
-          previous_exec: last?.exec ?? null,
-          previous_region: last?.region ?? null // Helpful for backend context
-        })
-      });
-
-      if (!reasoningResp.ok) {
-        const errorText = await reasoningResp.text();
-        throw new Error(`Reasoning API failed: ${reasoningResp.status} ${errorText}`);
-      }
-      const result = await reasoningResp.json();
-
-
-      // Construct combined thought for display
-      // Only include window analysis if it was fresh
-      let combinedThought = "";
-      combinedThought = `**Visual Findings**: ${perceptionForUI}\n\n**Reasoning**: ${result.thought}`;
-
-      const newStep = {
-        content: combinedThought,
-        action: result.action,
-        timestamp: new Date().toISOString()
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  const handleAddToChat = (content) =>
+    setMessages((prev) => [...prev, { role: 'assistant', content }]);
+
+  // Measure button size before first interaction
+  useEffect(() => {
+    if (cardRef.current) {
+      measuredBtn.current = {
+        w: cardRef.current.offsetWidth,
+        h: cardRef.current.offsetHeight,
       };
-
-      setSteps(prev => [...prev, { type: 'agent', ...newStep }]);
-      let execReason = null;
-      // Execute Action
-      if (result.action) {
-        console.log("Calling executeAction with:", result.action);
-        const exec = await executeAction(result.action, viewport);
-        console.log("executeAction returned:", exec);
-
-        let execReason = null;
-        if (exec === true) execReason = "ok";
-        else if (exec?.reason) execReason = exec.reason; // hit_boundary
-        else execReason = "failed";
-
-        const stepWithExec = { ...newStep, exec };
-
-        if (exec === true) {
-          // --- LEARN DIRECTION ---
-          const lastStep = currentSteps.length > 0 ? currentSteps[currentSteps.length - 1] : null;
-
-          const prevRegion = lastStep?.region;
-          const currentRegion = parsedPerception?.region_guess;
-
-          if (prevRegion && currentRegion && prevRegion !== currentRegion && result.action?.step) {
-            // Only learn if the action was a scroll
-            const stepDelta = result.action.type === 'scroll_delta'
-              ? result.action.step
-              : (result.action.type === 'scroll_cranial' || result.action.type === 'scroll_caudal'
-                ? (indexMapRef.current.cranialDeltaSign ?? -1) * (result.action.type === 'scroll_cranial' ? 1 : -1) * (result.action.step ?? 10)
-                : 0);
-
-            learnCranialSign(prevRegion, currentRegion, stepDelta);
-          }
-
-          await new Promise(r => setTimeout(r, 500));
-          // Pass current region for next iteration learning
-          const stepWithRegion = { ...stepWithExec, region: parsedPerception?.region_guess };
-          return runAgentLoop(currentPrompt, iteration + 1, [...currentSteps, stepWithRegion]);
-        }
-
-        if (exec && exec.reason === "hit_boundary") {
-          // AUTO-REVERSE ONE STEP to escape boundary (LLM stacks are often reversed)
-          const reverseStep = exec.step ? -Math.sign(exec.step) * Math.min(3, Math.abs(exec.step)) : -3;
-
-          const reverseAction = { type: "scroll_delta", step: reverseStep };
-          const reverseExec = await executeAction(reverseAction, viewport);
-
-          const boundaryStep = {
-            ...stepWithExec,
-            content:
-              combinedThought +
-              `\n\n**Note**: Hit boundary (atStart=${exec.atStart}, atEnd=${exec.atEnd}, step=${exec.step}). Auto-reversing with step=${reverseStep}.`,
-            execReason: "hit_boundary",
-            exec,
-          };
-
-          // If reverse worked, continue loop from the new slice
-          if (reverseExec === true) {
-            await new Promise(r => setTimeout(r, 300));
-            return runAgentLoop(currentPrompt, iteration + 1, [...currentSteps, boundaryStep]);
-          }
-
-          // If reverse didn't work either, stop and show a useful error
-          setSteps(prev => [...prev, { type: "error", content: "Stuck at both boundaries or viewport not moving." }]);
-          setIsLooping(false);
-          return;
-        }
-
-
-        setIsLooping(false);
-        return;
-      }
-      // --- PHASE 4: FINAL PATIENT SUMMARY ---
-      setSteps(prev => [...prev, { type: 'info', content: 'Target reached. Optimizing contrast & generating summary...' }]);
-
-      // 1. OPTIMIZE WINDOW (One-shot at the end)
-      try {
-        const windowResp = await fetch(`${BASE_URL}/check-window`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: currentPrompt })
-        });
-
-        if (windowResp.ok) {
-          const windowData = await windowResp.json();
-          if (windowData.action && windowData.action.type === 'set_window_level') {
-            await executeAction(windowData.action, viewport);
-
-            setSteps(prev => [...prev, {
-              type: 'agent',
-              content: `**Contrast Optimized**: ${windowData.thought || windowData.action.name}`,
-              action: windowData.action,
-              timestamp: new Date().toISOString()
-            }]);
-
-            // Give time for render to settle before capturing for summary
-            await new Promise(r => setTimeout(r, 500));
-          }
-        }
-      } catch (e) {
-        console.error("Window optimization failed (non-critical):", e);
-      }
-
-      const summaryText = await generatePatientSummary();
-
-      if (summaryText) {
-        // Auto-switch to chat
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: `**Analysis Complete** for "${currentPrompt}":\n\n${summaryText}`
-        }]);
-        setActiveTab("chat");
-        toast.success("Analysis complete! Switched to Chat.");
-        setShowPostSummaryOptions(true);
-      }
-
-      setIsLooping(false);
-      return;
-
-    } catch (error) {
-      console.error("Agent Loop Error:", error);
-      setSteps(prev => [...prev, { type: 'error', content: `Error: ${error.message}` }]);
-      setIsLooping(false); // Use setIsLooping
-      toast.error(`Agent error: ${error.message}`);
     }
+  }, []);
+
+  const handleOpen = () => {
+    const { w: bw, h: bh } = measuredBtn.current;
+    const pw = Math.min(440, window.innerWidth - R * 2);
+    const ph = window.innerHeight - R * 2;
+    const card = cardRef.current;
+    if (!card) return;
+
+    setPhase('open');
+
+    card.animate(
+      [
+        { width: `${bw}px`, height: `${bh}px`, borderRadius: '10px' },
+        { width: `${pw}px`, height: `${ph}px`, borderRadius: '16px' },
+      ],
+      { duration: 380, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+    ).finished.then(() => setContentVisible(true));
   };
 
-  const handleStart = async (overridePrompt) => {
-    const effectivePrompt = (typeof overridePrompt === 'string' ? overridePrompt : chatInput);
+  const handleClose = () => {
+    const { w: bw, h: bh } = measuredBtn.current;
+    const card = cardRef.current;
+    if (!card) return;
 
-    if (!effectivePrompt?.trim()) {
-      toast.error('Please enter a question or prompt for analysis');
-      return;
-    }
+    setContentVisible(false);
 
-    const currentPrompt = effectivePrompt;
-    setLoading(true);
-    setResponse(null);
-    setSteps([]);
-    //setIsLooping(true); // Disable agent loop indicator
-
-    stopRef.current = false;
-    
-    // --- STEP 0: Check for Structure/Pathology Mapping ---
-    // Decoupled logic: First check if this is a direct structure segmentation request
-    try {
-        if (!renderingEngine) throw new Error('No image loaded');
-        const viewport = renderingEngine.getViewport('0-vp');
-        if (!viewport) throw new Error('Viewport not found');
-
-        toast.info("Analyzing request...");
-        
-        const identifyResp = await fetch(`${BASE_URL}/identify_structure`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: currentPrompt })
-        });
-        
-        if (identifyResp.ok) {
-            const data = await identifyResp.json();
-            if (data.structure) {
-                // Direct segmentation path
-                setSteps(prev => [...prev, { 
-                    type: 'agent', 
-                    content: `**Interpretation**: Request "${currentPrompt}" maps to structure **${data.structure}**.\n\n${data.thought || ''}`,
-                    action: { type: 'segment_structure', structure: data.structure },
-                    timestamp: new Date().toISOString()
-                }]);
-                
-                const exec = await executeAction({ type: 'segment_structure', structure: data.structure }, viewport);
-                if (exec) {
-                     setLoading(false);
-                     setIsLooping(false);
-                     toast.success("Structure found and segmented.");
-                     return; 
-                }
-            } else {
-                toast.warning("Could not identify a valid anatomical structure from your prompt.");
-            }
-        }
-    } catch (e) {
-        console.warn("Identification check failed:", e);
-        toast.error("Failed to connect to backend.");
-    }
-    
-    // REMOVED Agent Loop Call per user request
-    // await runAgentLoop(currentPrompt);
-
-    setLoading(false);
-    setIsLooping(false);
+    // small delay so content fade-out starts before shrink
+    setTimeout(() => {
+      card.animate(
+        [
+          { width: `${card.offsetWidth}px`, height: `${card.offsetHeight}px`, borderRadius: '16px' },
+          { width: `${bw}px`, height: `${bh}px`, borderRadius: '10px' },
+        ],
+        { duration: 320, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+      ).finished.then(() => setPhase('button'));
+    }, 80);
   };
 
-  const handleShareSession = async () => {
-    if (!userData || !supabaseClient) {
-      toast.error("You need to be logged in to share sessions.");
-      return;
-    }
-
-    try {
-      const queryParams = new URLSearchParams(window.location.search);
-
-      // Clean up old session first (matching ShareTab logic)
-      await supabaseClient.from("viewbox").delete().eq("user", userData.id);
-
-      // Create new session
-      const { data, error } = await supabaseClient
-        .from("viewbox")
-        .upsert([
-          {
-            user: userData.id,
-            url_params: queryParams.toString(),
-            visibility: Visibility.PUBLIC,
-            mode: Mode.TEAM,
-          },
-        ])
-        .select();
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const sessionId = data[0].session_id;
-        const newQueryParams = new URLSearchParams();
-        newQueryParams.set("s", sessionId);
-
-        const shareLink = `${window.location.origin}${window.location.pathname}?${newQueryParams.toString()}`;
-
-        // Try native share dialog first
-        if (navigator.share) {
-          try {
-            await navigator.share({
-              title: "Shared Medical Imaging Session",
-              text: "Review this case on ViewBox:",
-              url: shareLink
-            });
-            toast.success("Opened share dialog.");
-            setShowPostSummaryOptions(false);
-          } catch (shareErr) {
-            console.log("Share dialog closed or failed:", shareErr);
-            // If user cancelled, don't copy to clipboard automatically, just return
-            if (shareErr.name === 'AbortError') return;
-
-            // Fallback
-            await navigator.clipboard.writeText(shareLink);
-            toast.success("Link copied to clipboard (dialog failed).");
-            setShowPostSummaryOptions(false);
-          }
-        } else {
-          // Fallback for browsers without share API
-          await navigator.clipboard.writeText(shareLink);
-          toast.success("Shared session created! Link copied to clipboard.");
-          setShowPostSummaryOptions(false);
-        }
-      }
-    } catch (err) {
-      console.error("Share failed:", err);
-      toast.error("Failed to create shared session.");
-    }
+  const card = {
+    background: '#020617', // slate-950
+    border: '1px solid #1e293b', // slate-800
   };
 
-  const handleChatSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (!chatInput.trim() || chatLoading) return;
-
-    const userMsg = { role: "user", content: chatInput };
-    // Optimistic update
-    const newHistory = [...messages, userMsg];
-    setMessages(newHistory);
-    setChatInput("");
-    setChatLoading(true);
-
-    try {
-      const response = await fetch(`${BASE_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Send history but exclude the "agent logs" if we had them? 
-        // For now just send standard messages. The backend might get confused if we send complex objects.
-        // We need to filter simple messages only.
-        body: JSON.stringify({
-          messages: newHistory.filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-        })
-      });
-
-      if (!response.ok) throw new Error("Chat failed");
-
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to send message");
-      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error." }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const clearChat = () => {
-    setMessages([{ role: "assistant", content: "Hello! I'm MedGemma (27B). Ask me any medical questions." }]);
-    setSteps([]);
-    setIsLooping(false);
-  };
-
-  const handleClear = () => {
-    setPrompt('');
-    setResponse(null);
-    setSteps([]);
-  };
-
-  const generatePatientSummary = async () => {
-    if (!renderingEngine) return null;
-    const viewport = renderingEngine.getViewport('0-vp');
-
-    // Capture 5 slices: current - 2 to current + 2
-    const currentIdx = viewport.getCurrentImageIdIndex();
-    const imageIds = viewport.getImageIds();
-    const total = imageIds.length;
-
-    const indices = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map(d => currentIdx + d).filter(i => i >= 0 && i < total);
-
-    setSteps(prev => [...prev, {
-      type: 'info',
-      content: `Generating multi-slice analysis for slices: ${indices.join(', ')}...`
-    }]);
-
-    try {
-      // Capture detailed images
-      const imagesBase64 = [];
-      const originalIndex = currentIdx;
-
-      for (const idx of indices) {
-        viewport.setImageIdIndex(idx);
-        viewport.render();
-        await new Promise(r => setTimeout(r, 50)); // Allow render
-        const b64 = await getImageAsBase64(viewport);
-        if (b64) imagesBase64.push(b64);
-      }
-
-      // Restore original position
-      viewport.setImageIdIndex(originalIndex);
-      viewport.render();
-
-      if (imagesBase64.length === 0) throw new Error("Failed to capture slice images");
-
-      // Call new endpoint
-      // Call new endpoint for Patient Summary
-      const response = await fetch(`${BASE_URL}/summary-multi`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          images_base64: imagesBase64,
-          text: prompt // context (using global prompt state or chatInput? Accessing closure)
-          // We need the current prompt. State 'prompt' might be stale if we use 'chatInput'. 
-          // Ideally we pass it in. For now, rely on chatInput as it's set in handleSelectFinding.
-        })
-      });
-
-      const data = await response.json();
-      // data is { summary: "..." }
-
-      const summary = data.summary || "No summary generated.";
-
-      setSteps(prev => [...prev, {
-        type: 'summary',
-        content: summary
-      }]);
-
-      return summary;
-
-    } catch (e) {
-      console.error(e);
-      setSteps(prev => [...prev, { type: 'error', content: `Summary failed: ${e.message}` }]);
-      return null;
-    }
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button className="fixed top-20 right-6 z-50 h-10 gap-2 shadow-2xl border border-white/10 transition-all hover:scale-105" variant="default">
-          <Sparkles className="h-4 w-4" />
-          MedGemma AI
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="flex flex-col p-0 overflow-hidden bg-background w-full h-[100dvh] fixed inset-0 z-50 border-none rounded-none sm:static sm:w-[450px] sm:h-[750px] sm:max-h-[82vh] sm:border sm:shadow-2xl sm:rounded-xl"
-        align="end"
-        sideOffset={8}
-        onInteractOutside={(e) => e.preventDefault()}
+  // Always the same single element — no swap, no flicker
+  const portal = createPortal(
+    <div
+      ref={cardRef}
+      onClick={phase === 'button' ? handleOpen : undefined}
+      className="fixed z-50 flex flex-col overflow-hidden shadow-2xl select-none"
+      style={{
+        top: R,
+        right: R,
+        width: measuredBtn.current.w,
+        height: measuredBtn.current.h,
+        borderRadius: 10,
+        cursor: phase === 'button' ? 'pointer' : 'default',
+        ...card,
+      }}
+    >
+      {/* ── Header row — always visible, always same height as original button ── */}
+      <div
+        className="flex items-center justify-between flex-shrink-0 px-4 bg-slate-900/40"
+        style={{ height: measuredBtn.current.h, minHeight: measuredBtn.current.h }}
       >
-        <div className="p-3 border-b flex justify-between items-center flex-shrink-0 bg-muted/20">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 p-1.5 rounded-md text-primary">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <h4 className="font-semibold text-sm tracking-tight text-foreground">MedGemma Agent</h4>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-400 flex-shrink-0" />
+          <span className="font-semibold text-sm tracking-tight text-slate-100 whitespace-nowrap">
+            MedGemma AI
+          </span>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleClose(); }}
+          className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
+          style={{
+            opacity: contentVisible ? 1 : 0,
+            transition: 'opacity 0.15s ease',
+            pointerEvents: contentVisible ? 'auto' : 'none',
+          }}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* ── Body — fades in/out, never affects layout ── */}
+      <div
+        className="flex-1 flex flex-col overflow-hidden"
+        style={{
+          opacity: contentVisible ? 1 : 0,
+          transition: 'opacity 0.16s ease',
+          pointerEvents: contentVisible ? 'auto' : 'none',
+        }}
+      >
+        {/* Tab bar */}
+        <div
+          className="px-2 bg-slate-950"
+          style={{
+            borderTop: '1px solid #1e293b',
+            borderBottom: '1px solid #1e293b',
+          }}
+        >
+          <div className="flex h-10 gap-6 px-2">
+            {['pipeline', 'chat'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="text-[11px] uppercase tracking-wider font-bold py-2 transition-colors relative"
+                style={{
+                  color: activeTab === tab ? '#60a5fa' : '#64748b',
+                }}
+              >
+                {tab === 'pipeline' ? 'Assistant' : 'Chat'}
+                {activeTab === tab && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                )}
+              </button>
+            ))}
           </div>
-          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-muted/50" onClick={() => setOpen(false)}>
-            <span className="sr-only">Close</span>
-            ✕
-          </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b px-2 bg-muted/20">
-            <TabsList className="w-full justify-start h-10 bg-transparent p-0 gap-6">
-              <TabsTrigger
-                value="pipeline"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-2 py-2 text-xs font-medium relative transition-all"
-              >
-                Impressions Assistant
-              </TabsTrigger>
-              <TabsTrigger
-                value="chat"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-2 py-2 text-xs font-medium transition-all"
-              >
-                Chat (27B)
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="pipeline" className="flex-1 flex-col overflow-hidden data-[state=active]:flex mt-0">
-            {pipelineMode === 'input' && (
-              <div className="flex-1 flex flex-col p-4 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">Radiology Report / Impressions</Label>
-                  <p className="text-[11px] text-muted-foreground">Paste findings below. MedGemma will parse them for individual analysis.</p>
-                </div>
-                <Textarea
-                  value={reportInput}
-                  onChange={(e) => setReportInput(e.target.value)}
-                  placeholder="1. 5mm nodule in RUL&#10;2. Trace pleural effusion..."
-                  className="flex-1 resize-none font-mono text-xs leading-relaxed p-3 focus-visible:ring-1"
-                />
-                <Button onClick={handleParse} disabled={!reportInput.trim()} className="w-full">
-                  <Sparkles className="mr-2 h-4 w-4" /> Identify Findings
-                </Button>
-              </div>
-            )}
-
-            {pipelineMode === 'select' && (
-              <div className="flex-1 flex flex-col overflow-hidden bg-muted/5">
-                <div className="flex items-center justify-between px-4 py-3 border-b bg-background">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Select Finding</span>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setPipelineMode('input')}>Back</Button>
-                </div>
-                <ScrollArea className="flex-1 px-4 py-2">
-                  <div className="space-y-2 py-2">
-                    {findings.map((f, i) => (
-                      <div
-                        key={i}
-                        onClick={() => handleSelectFinding(f)}
-                        className="group p-3 bg-card border shadow-sm rounded-lg hover:border-primary/50 hover:shadow-md cursor-pointer transition-all"
-                      >
-                        <div className="flex gap-3 items-start">
-                          <div className="mt-0.5 h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                            {i + 1}
-                          </div>
-                          <span className="text-sm leading-snug group-hover:text-primary transition-colors">{f}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-
-            {pipelineMode === 'run' && (
-              <div className="flex-1 flex flex-col overflow-hidden bg-background">
-                <div className="px-4 py-3 border-b flex justify-between items-center shadow-sm bg-muted/10">
-                  <div className="flex flex-col overflow-hidden mr-3">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Analysing Finding</span>
-                    <span className="text-xs font-semibold truncate" title={currentFinding}>{currentFinding}</span>
-                  </div>
-                  {isLooping ? (
-                    <Button variant="destructive" size="sm" className="h-7 text-xs px-3 shadow-sm" onClick={handleStop}>Stop</Button>
-                  ) : (
-                    <Button variant="outline" size="sm" className="h-7 text-xs px-3 shadow-sm" onClick={() => setPipelineMode('select')}>
-                      <ArrowLeft className="mr-1 h-3 w-3" /> Back
-                    </Button>
-                  )}
-                </div>
-                <ScrollArea className="flex-1">
-                  <div className="p-4 space-y-3 pb-8">
-                    {steps.map((step, i) => {
-                      const isLast = i === steps.length - 1;
-                      let label = "Observation";
-                      let colorClass = "text-blue-600 dark:text-blue-400";
-                      let bgClass = "bg-blue-50 dark:bg-blue-950/20";
-                      let borderClass = "border-blue-200 dark:border-blue-800";
-
-                      if (step.type === 'summary') {
-                        label = "Patient Summary";
-                        colorClass = "text-green-600 dark:text-green-400";
-                        bgClass = "bg-green-50 dark:bg-green-950/20";
-                        borderClass = "border-green-200 dark:border-green-800";
-                      } else if (step.type === 'info') {
-                        label = "System";
-                        colorClass = "text-muted-foreground";
-                        bgClass = "bg-muted/30";
-                        borderClass = "border-border";
-                      } else if (step.type === 'error') {
-                        label = "Error";
-                        colorClass = "text-red-600 dark:text-red-400";
-                        bgClass = "bg-red-50 dark:bg-red-950/20";
-                        borderClass = "border-red-200 dark:border-red-800";
-                      } else if (step.action) {
-                        label = `Action: ${step.action.type.replace(/_/g, ' ')}`;
-                        colorClass = "text-indigo-600 dark:text-indigo-400";
-                        bgClass = "bg-indigo-50 dark:bg-indigo-950/20";
-                        borderClass = "border-indigo-200 dark:border-indigo-800";
-                      } else {
-                        label = "Reasoning";
-                        colorClass = "text-purple-600 dark:text-purple-400";
-                        bgClass = "bg-purple-50 dark:bg-purple-950/20";
-                        borderClass = "border-purple-200 dark:border-purple-800";
-                      }
-
-                      return (
-                        <div key={i} className={`border rounded-lg overflow-hidden ${isLast ? 'shadow-md ring-1 ring-primary/10' : 'opacity-80'}`}>
-                          <details open={isLast || step.type === 'summary'} className="group">
-                            <summary className={`cursor-pointer px-3 py-2 ${bgClass} font-medium text-[10px] flex items-center justify-between gap-2 select-none group-open:border-b border-inherit`}>
-                              <div className="flex items-center gap-2">
-                                <span className="opacity-40 font-mono text-[9px]">#{i + 1}</span>
-                                <span className={`font-bold uppercase tracking-tight ${colorClass}`}>{label}</span>
-                              </div>
-                              <div className="text-[10px] opacity-40 group-open:rotate-180 transition-transform">▼</div>
-                            </summary>
-                            <div className="p-3 text-xs leading-relaxed bg-card">
-                              <div className="markdown-content text-foreground/90"><ReactMarkdown>{step.content}</ReactMarkdown></div>
-                              {step.action && (
-                                <div className="mt-2 pt-2 border-t font-mono text-[9px] text-muted-foreground bg-muted/20 p-2 rounded-md">
-                                  {JSON.stringify(step.action, null, 2)}
-                                </div>
-                              )}
-                            </div>
-                          </details>
-                        </div>
-                      );
-                    })}
-                    {loading && (
-                      <div className="flex items-center justify-center py-6 bg-muted/5 rounded-xl border-2 border-dashed border-primary/20 animate-pulse transition-all mt-2">
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                          <span className="text-[10px] font-bold text-primary/60 uppercase tracking-widest">Inspecting...</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="chat" className="flex-1 flex-col overflow-hidden data-[state=active]:flex mt-0">
-            <ScrollArea className="flex-1 bg-muted/5">
-              <div className="p-4 space-y-4 pb-4">
-                {messages.map((msg, i) => (
-                  <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm border ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
-                      {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                    </div>
-                    <div className={`p-3 rounded-2xl text-sm max-w-[85%] shadow-sm ${msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                      : 'bg-card border rounded-tl-sm'
-                      }`}>
-                      {msg.role === 'assistant' ? <div className="markdown-content"><ReactMarkdown>{msg.content}</ReactMarkdown></div> : msg.content}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Post-Analysis Options */}
-                {showPostSummaryOptions && (
-                  <div className="mx-4 p-5 rounded-2xl bg-white border border-zinc-200 shadow-sm space-y-4">
-                    <p className="text-sm font-medium text-center text-zinc-600">
-                      How would you like to proceed?
-                    </p>
-
-                    <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        className="flex-1 border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
-                        onClick={() => setShowPostSummaryOptions(false)}
-                      >
-                        Continue Chat
-                      </Button>
-
-                      <Button
-                        className="flex-1 bg-zinc-900 text-white hover:bg-zinc-800 font-medium"
-                        onClick={handleShareSession}
-                      >
-                        <Share className="w-4 h-4 mr-2" />
-                        Share with Provider
-                      </Button>
-                    </div>
-                  </div>)}
-
-
-                {chatLoading && (
-                  <div className="flex gap-3">
-                    <div className="h-8 w-8 rounded-full bg-green-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm"><Bot className="h-4 w-4" /></div>
-                    <div className="bg-card border shadow-sm p-3 rounded-2xl rounded-tl-sm text-sm text-muted-foreground animate-pulse flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Thinking...
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="p-3 bg-background border-t">
-              <form onSubmit={handleChatSubmit} className="flex gap-2 relative">
-                <Input
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Ask MedGemma..."
-                  className="flex-1 pr-10 shadow-sm"
-                  disabled={loading || chatLoading}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="absolute right-1 top-1 h-8 w-8"
-                  variant="ghost"
-                  disabled={loading || chatLoading || !chatInput.trim()}
-                >
-                  {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 text-primary" />}
-                </Button>
-              </form>
-            </div>
-          </TabsContent>
-
-        </Tabs>
-      </PopoverContent>
-    </Popover >
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === 'pipeline' && (
+            <MedGemmaImpression
+              BASE_URL={BASE_URL}
+              onAddToChat={handleAddToChat}
+              onSwitchToChat={() => setActiveTab('chat')}
+              onClose={handleClose}
+            />
+          )}
+          {activeTab === 'chat' && (
+            <MedGemmaChat
+              messages={messages}
+              setMessages={setMessages}
+              BASE_URL={BASE_URL}
+              userData={userData}
+              supabaseClient={supabaseClient}
+            />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
+
+  return portal;
 }

@@ -4,7 +4,7 @@
  */
 
 // Cloudflare Worker proxy URL (update after deployment)
-const WORKER_PROXY_URL = import.meta.env.VITE_SAM3_WORKER_URL || 'http://localhost:8787';
+const WORKER_PROXY_URL = import.meta.env.VITE_HF_WORKER_URL || 'http://localhost:8787';
 
 // Rate limiting: Track last request time per model
 const lastRequestTimes = new Map();
