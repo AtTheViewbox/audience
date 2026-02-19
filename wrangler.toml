@@ -1,7 +1,0 @@
-# Cloudflare Worker Configuration
-name = "sam3-proxy"
-main = "workers/sam3-proxy.js"
-compatibility_date = "2024-01-01"
-
-# Environment variables (set via Cloudflare dashboard or wrangler)
-# HUGGINGFACE_API_TOKEN = "your-token-here"
