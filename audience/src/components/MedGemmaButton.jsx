@@ -28,8 +28,8 @@ export default function MedGemmaButton() {
   const [hasMask, setHasMask] = useState(false);
   const [maskVisible, setMaskVisibleState] = useState(true);
 
-  // const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
   // Measure button size before first interaction
   useEffect(() => {
