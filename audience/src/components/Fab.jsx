@@ -15,15 +15,15 @@ import {
 
 function Fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  const { sharingUser,sharingPending } = useContext(DataContext).data;
-  const  {userData}= useContext(UserContext).data;
+  const { sharingUser, sharingPending } = useContext(DataContext).data;
+  const { userData } = useContext(UserContext).data;
   const { dispatch } = useContext(DataDispatchContext);
 
   let { longPressProps } = useLongPress({
     accessibilityDescription: "Long press to toggle sharing interactions",
     onLongPress: (e) => {
       //switch long and short press
-      dispatch({ type: "toggle_sharing",payload:{userData:userData} });
+      dispatch({ type: "toggle_sharing", payload: { userData: userData } });
     },
   });
 
@@ -37,8 +37,8 @@ function Fab() {
   return !userData ? null : (
     <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
       <Button
-      disabled={sharingPending}
-        size={"icon"}
+        disabled={sharingPending}
+        size="icon"
         {...mergeProps(pressProps, longPressProps)}
         style={{
           backgroundColor: sharingUser == userData.id ? "red" : "white",
@@ -46,7 +46,7 @@ function Fab() {
           left: "10px",
           bottom: "10px",
         }}
-        
+
       >
         {sharingUser == userData.id ? (
           <LocateFixed strokeWidth={1.5} color="#000000" />
@@ -56,7 +56,7 @@ function Fab() {
       </Button>
 
 
-      <DialogContent>
+      <DialogContent >
         <DialogPage />
       </DialogContent>
     </Dialog>

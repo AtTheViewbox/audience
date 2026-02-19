@@ -31,18 +31,18 @@ function DialogPage() {
       <DialogHeader>
         <DialogTitle>{isAnonymous ? "Login" : "Share"}</DialogTitle>
         <DialogDescription>
-          {isAnonymous 
-            ? "Log in to access sharing and advanced features." 
+          {isAnonymous
+            ? "Log in to access sharing and advanced features."
             : "Manage your sharing settings and application preferences."}
         </DialogDescription>
       </DialogHeader>
-      
+
       <Tabs defaultValue={isAnonymous ? "login" : "sharing"}>
         <TabsList className="grid w-full grid-cols-2">
           {isAnonymous ? (
-             <TabsTrigger value="login">Login</TabsTrigger>
+            <TabsTrigger value="login">Login</TabsTrigger>
           ) : (
-             <TabsTrigger value="sharing">Share</TabsTrigger>
+            <TabsTrigger value="sharing">Share</TabsTrigger>
           )}
           <TabsTrigger value="setting">Setting</TabsTrigger>
         </TabsList>

@@ -104,7 +104,7 @@ export default function HomePage() {
   };
   const getIframeURL = (url_params, preview = false) => {
     const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
-    
+
     // Handle both full URLs and search params strings
     let searchString = '';
     try {
@@ -120,7 +120,7 @@ export default function HomePage() {
       // If parsing fails, assume it's search params
       searchString = url_params;
     }
-    
+
     let params = new URLSearchParams(searchString);
     const initialData = unflatten(Object.fromEntries(params));
 
@@ -164,13 +164,13 @@ export default function HomePage() {
       }
       else if (filter === Filter.MYSTUDIES) {
         if (userData) {
-            ({ data, error } = await supabaseClient
+          ({ data, error } = await supabaseClient
             .from("studies")
             .select("*")
             .eq("owner", userData.id));
         } else {
-             // Should not happen if filtered efficiently, but safe fallback
-             data = [];
+          // Should not happen if filtered efficiently, but safe fallback
+          data = [];
         }
       } else if (filter === Filter.BUILDER) {
         ({ data, error } = await supabaseClient
@@ -208,10 +208,10 @@ export default function HomePage() {
 
   useEffect(() => {
     const results = seriesList.filter(item =>
-        Object.values(item).some(value =>
-          value.toString().toLowerCase().includes(search.toLowerCase())
-        )
-      );
+      Object.values(item).some(value =>
+        value.toString().toLowerCase().includes(search.toLowerCase())
+      )
+    );
     setdisplaySeriesList(results);
 
   }, [search, seriesList]);
@@ -224,230 +224,236 @@ export default function HomePage() {
   }, [filter]);
 
   return (
-    <div className="flex h-screen bg-background relative">
+    <div className="flex h-screen bg-background relative text-foreground">
       <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
-      
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden w-full">
         <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
 
         <div className="flex-1 flex overflow-hidden relative">
           {filter === Filter.BUILDER ? (
-              <BuilderPage 
-                  allSeries={seriesList} 
-                  filteredSeries={displaySeriesList}
-                  uploadedUrl={uploadedUrl}
-                  onClearUpload={() => setUploadedUrl("")}
-                  onStudySaved={getSeries}
-              />
+            <BuilderPage
+              allSeries={seriesList}
+              filteredSeries={displaySeriesList}
+              uploadedUrl={uploadedUrl}
+              onClearUpload={() => setUploadedUrl("")}
+              onStudySaved={getSeries}
+            />
           ) : (
             <>
-              <div className="flex-1 overflow-auto p-6 w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold ">Studies</h2>
-              <div className="flex items-center gap-4">
-                {!userData?.is_anonymous ? (
-                  <AddCaseDialog onStudyAdded={getSeries} />
-                ) : null}
-              </div>
-            </div>
-
-            {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
-              <div
-                key={study.id}
-                className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
-              >
-                <div className="flex items-center gap-3">
-                  <div>
-                    <p className="font-medium">{study.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Created by: {study.userID}
-                    </p>
+              <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
+                  <div className="flex items-center gap-4">
+                    {!userData?.is_anonymous ? (
+                      <AddCaseDialog onStudyAdded={getSeries} />
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => window.open(study.metadata[0].url)}
+
+                {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
+                  <div
+                    key={study.id}
+                    className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
                   >
-                    <ExternalLink className="size-4 text-muted-foreground" />
-                    <span className="sr-only">Open in new tab</span>
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="size-8">
-                        <MoreHorizontal className="size-4" />
-                        <span className="sr-only">More options</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => deleteStudy(study.id)}
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {displaySeriesList.map((series) => (
-                <Card
-                  key={series.id}
-                  className={`relative group cursor-pointer hover:bg-muted/20 transition-colors ${selectedSeries?.id === series.id ? "border-primary" : ""
-                    }`}
-                  onClick={() => setSelectedSeries(series)}
-                >
-                  {filter === Filter.MYSTUDIES ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                      onClick={(e) => {
-                         e.stopPropagation();
-                         handleDelete(series.id);
-                      }}
-                      aria-label="Delete series"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  ) : null}
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-3">
                       <div>
-                        <CardTitle className="text-base">
-                          {series.name}
-                        </CardTitle>
-                        <CardDescription className="text-xs line-clamp-2">
-                          {series.description && series.description.length > 100
-                            ? series.description.slice(0, 100) + "..."
-                            : series.description || "No description"}
-                        </CardDescription>
+                        <p className="font-medium">{study.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Created by: {study.userID}
+                        </p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardFooter className="pt-2 text-xs text-muted-foreground">
-                    Created on{" "}
-                    {
-                      series.last_accessed ? new Date(series.last_accessed)
-                        .toISOString()
-                        .split("T")[0] : series.created_at ? new Date(series.created_at)
-                        .toISOString()
-                        .split("T")[0] : "Unknown date"
-                    }
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>}
-          </div>
+                    <div className="flex items-center gap-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => window.open(study.metadata[0].url)}
+                      >
+                        <ExternalLink className="size-4 text-muted-foreground" />
+                        <span className="sr-only">Open in new tab</span>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-8">
+                            <MoreHorizontal className="size-4" />
+                            <span className="sr-only">More options</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => deleteStudy(study.id)}
+                          >
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {displaySeriesList.map((series) => (
+                    <Card
+                      key={series.id}
+                      className={`relative group cursor-pointer bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
+                        }`}
+                      onClick={() => setSelectedSeries(series)}
+                    >
+                      {filter === Filter.MYSTUDIES ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(series.id);
+                          }}
+                          aria-label="Delete series"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      ) : null}
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start gap-3">
+                          <div>
+                            <CardTitle className="text-base text-slate-100 font-semibold mb-1">
+                              {series.name}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                              {series.description && series.description.length > 100
+                                ? series.description.slice(0, 100) + "..."
+                                : series.description || "No description"}
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardFooter className="pt-2 text-xs text-muted-foreground">
+                        Created on{" "}
+                        {
+                          series.last_accessed ? new Date(series.last_accessed)
+                            .toISOString()
+                            .split("T")[0] : series.created_at ? new Date(series.created_at)
+                              .toISOString()
+                              .split("T")[0] : "Unknown date"
+                        }
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>}
+              </div>
 
-          {/* Desktop Resize Handle */}
-          <div
-            className="w-1 cursor-col-resize bg-transparent hover:bg-border transition-colors hidden md:block"
-            onMouseDown={() => setIsResizingRight(true)}
-          />
+              {/* Desktop Resize Handle */}
+              <div
+                className="w-px cursor-col-resize bg-slate-800 hover:bg-blue-500/40 transition-colors hidden md:block"
+                onMouseDown={() => setIsResizingRight(true)}
+              />
 
-          {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
-          <div
-            className={`bg-background border-l border-border overflow-hidden flex flex-col 
+              {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
+              <div
+                className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
                 ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 md:static md:z-auto' : 'hidden md:flex'}
             `}
-            style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
-          >
-              {/* Mobile Back Button */}
-            <div className="md:hidden p-4 border-b flex items-center">
-                 <Button variant="ghost" onClick={() => {
-                     setSelectedSeries(null);
-                     setUploadedUrl("");
-                 }}>
+                style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
+              >
+                {/* Mobile Back Button */}
+                <div className="md:hidden p-4 border-b flex items-center">
+                  <Button variant="ghost" onClick={() => {
+                    setSelectedSeries(null);
+                    setUploadedUrl("");
+                  }}>
                     <ChevronRight className="h-4 w-4 rotate-180 mr-2" />
                     Back to List
-                 </Button>
-            </div>
-
-            {selectedSeries && (
-              <>
-                <div className="p-6 border-b">
-                  <div className="flex flex-col items-center text-center mb-4">
-                    <iframe
-                      src={
-                        selectedSeries?.url_params
-                          ? getIframeURL(selectedSeries?.url_params, true)
-                          : ""
-                      }
-                      title={`${selectedSeries.name}`}
-                      className="w-full h-[300px] border-0"
-                      allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    ></iframe>
-
-                    <h3 className="text-xl font-bold">
-                      {selectedSeries.name}
-                    </h3>
-
-                    <div className="text-xs text-muted-foreground mt-2">
-                      Created by {selectedSeries.owner}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Button
-                        className="flex-1"
-                        onClick={() => {
-                          window.open(
-                            selectedSeries?.url_params
-                              ? getIframeURL(selectedSeries?.url_params)
-                              : "",
-                            "_blank"
-                          );
-                        }}
-                      >
-                        Launch to New Tab
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={
-                          selectedSeries?.url_params
-                            ? getIframeURL(selectedSeries?.url_params)
-                            : "" ?? ""
-                        }
-                        readOnly
-                      />
-                      <Button
-                        size="icon"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            selectedSeries?.url_params
-                              ? getIframeURL(selectedSeries?.url_params)
-                              : ""
-                          );
-                          setCopyClicked(true);
-                        }}
-                      >
-                        {copyClicked ? (
-                          <Check className="h-4" />
-                        ) : (
-                          <Copy className="h-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  </Button>
                 </div>
-                <ScrollArea className="flex-1">
-                  <div className="p-4">
-                    <h4 className="font-medium mb-2">Description</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedSeries.description}
-                    </p>
-                  </div>
-                </ScrollArea>
-              </>
-            )}
-          </div>
-      </>
+
+                {selectedSeries && (
+                  <>
+                    <div className="border-b bg-muted/20">
+                      <div className="flex flex-col items-center text-center">
+                        <div className="w-full aspect-square bg-black overflow-hidden border-b transition-colors">
+                          <iframe
+                            src={
+                              selectedSeries?.url_params
+                                ? getIframeURL(selectedSeries?.url_params, true)
+                                : ""
+                            }
+                            title={`${selectedSeries.name}`}
+                            className="w-full h-full border-0"
+                            allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          ></iframe>
+                        </div>
+
+                        <div className="p-4 w-full text-left">
+                          <h3 className="text-lg font-bold tracking-tight">
+                            {selectedSeries.name}
+                          </h3>
+                          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-1">
+                            Created by {selectedSeries.owner}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-4 p-4">
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1"
+                            onClick={() => {
+                              window.open(
+                                selectedSeries?.url_params
+                                  ? getIframeURL(selectedSeries?.url_params)
+                                  : "",
+                                "_blank"
+                              );
+                            }}
+                          >
+                            Launch to New Tab
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={
+                              selectedSeries?.url_params
+                                ? getIframeURL(selectedSeries?.url_params)
+                                : "" ?? ""
+                            }
+                            readOnly
+                            className="bg-slate-900/50 border-slate-800 text-slate-300 text-xs h-9"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9 text-slate-400 hover:text-slate-100 border border-slate-800 hover:bg-slate-900"
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                selectedSeries?.url_params
+                                  ? getIframeURL(selectedSeries?.url_params)
+                                  : ""
+                              );
+                              setCopyClicked(true);
+                            }}
+                          >
+                            {copyClicked ? (
+                              <Check className="h-4" />
+                            ) : (
+                              <Copy className="h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    <ScrollArea className="flex-1 bg-slate-950/20">
+                      <div className="p-6">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Description</h4>
+                        <p className="text-sm text-slate-300 leading-relaxed italic">
+                          {selectedSeries.description}
+                        </p>
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>

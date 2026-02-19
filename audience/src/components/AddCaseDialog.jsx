@@ -36,11 +36,11 @@ export default function AddCaseDialog({ onStudyAdded }) {
     }
 
     async function addCase() {
-        try { 
+        try {
             // Extract only the search params from the link URL
             const linkValue = document.getElementById("link").value;
             let searchParams = '';
-            
+
             try {
                 // If it's a full URL, extract the search params
                 if (linkValue.startsWith('http')) {
@@ -54,7 +54,7 @@ export default function AddCaseDialog({ onStudyAdded }) {
                 // If URL parsing fails, use the value as is
                 searchParams = linkValue;
             }
-            
+
             // Create new case object
             const caseItem = {
                 owner: userData.id,
@@ -79,54 +79,57 @@ export default function AddCaseDialog({ onStudyAdded }) {
 
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
+                <Button variant="outline" className="gap-2">
+                    <Plus className="h-4 w-4" />
                     Add Case
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] bg-slate-950 border-slate-800 text-slate-100">
 
                 <DialogHeader>
-                    <DialogTitle>Add New Case</DialogTitle>
-                    <DialogDescription>Fill in the details to create a new case.</DialogDescription>
+                    <DialogTitle className="text-slate-100">Add New Case</DialogTitle>
+                    <DialogDescription className="text-slate-400">Fill in the details to create a new case.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name" className="text-slate-300">Name</Label>
                         <Input
                             id="name"
                             name="name"
                             placeholder="Case name"
                             required
+                            className="bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-700/30"
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="description">Description</Label>
+                        <Label htmlFor="description" className="text-slate-300">Description</Label>
                         <Textarea
                             id="description"
                             name="description"
                             placeholder="Describe the case"
+                            className="bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-700/30"
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="link">Link</Label>
+                        <Label htmlFor="link" className="text-slate-300">Link</Label>
                         <Input
                             id="link"
                             name="link"
                             placeholder="https://example.com"
                             type="url"
                             required
+                            className="bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-700/30"
                         />
                     </div>
                     <div className="grid gap-2">
                         <div className="flex items-center justify-between">
-                            <Label htmlFor="public-switch">Visibility</Label>
+                            <Label htmlFor="public-switch" className="text-slate-300">Visibility</Label>
                             <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">{visibility == "PUBLIC" ? "Public" : "Private"}</span>
-                                <Switch id="public-switch" checked={visibility == "PUBLIC"} onCheckedChange={changeVisibility} />
+                                <span className="text-xs text-slate-500">{visibility == "PUBLIC" ? "Public" : "Private"}</span>
+                                <Switch id="public-switch" checked={visibility == "PUBLIC"} onCheckedChange={changeVisibility} className="data-[state=checked]:bg-slate-700" />
                             </div>
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-[10px] text-slate-500 italic">
                             {visibility == "PUBLIC"
                                 ? "Public cases are visible to everyone."
                                 : "Private cases are only visible to you."}
@@ -134,7 +137,7 @@ export default function AddCaseDialog({ onStudyAdded }) {
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button type="submit" onClick={addCase}>Add Case</Button>
+                    <Button type="submit" onClick={addCase} className="bg-slate-100 hover:bg-slate-200 text-slate-950 border-0">Add Case</Button>
                 </DialogFooter>
 
             </DialogContent>

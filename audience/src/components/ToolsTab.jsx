@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
-import {ZoomIn, Contrast, Move, ArrowDownUp, Bolt,Crosshair } from "lucide-react";
-import { useEffect, useContext,useState } from "react";
-import { DataDispatchContext,DataContext } from '../context/DataContext.jsx';
+import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair } from "lucide-react";
+import { useEffect, useContext, useState } from "react";
+import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -38,18 +38,18 @@ function ToolsTab() {
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     return (
-       
-        <DropdownMenu modal={false} open={mobile? modelDropdown : true} onOpenChange={() => {setModelDropdown(!modelDropdown)}}>
-            <DropdownMenuTrigger asChild style={mobile?{}:{display: "none"}} >
+
+        <DropdownMenu modal={false} open={mobile ? modelDropdown : true} onOpenChange={() => { setModelDropdown(!modelDropdown) }}>
+            <DropdownMenuTrigger asChild style={mobile ? {} : { display: "none" }} >
                 <Button
                     size={"icon"}
                     //variant="ghost"
                     style={{
-                        backgroundColor:  'transparent',
+                        backgroundColor: 'transparent',
                         position: 'fixed', left: '10px', top: '10px',
                     }}
                 >
-                    <Bolt strokeWidth={0.75}/>
+                    <Bolt strokeWidth={0.75} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
@@ -60,19 +60,19 @@ function ToolsTab() {
                     </DropdownMenuRadioItem>
                     <DropdownMenuRadioItem value="zoom">
                         <ZoomIn strokeWidth={0.75} className="mr-2 h-4 w-4" />
-                        <span>&nbsp;{mobile?"Zoom & Pan" :"Zoom"}</span>
+                        <span>&nbsp;{mobile ? "Zoom & Pan" : "Zoom"}</span>
                     </DropdownMenuRadioItem>
 
-                    {mobile?null:<DropdownMenuRadioItem value="pan">
+                    {mobile ? null : <DropdownMenuRadioItem value="pan">
                         <Move strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Pan</span>
                     </DropdownMenuRadioItem>}
-                    
+
                     <DropdownMenuRadioItem value="scroll">
                         <ArrowDownUp strokeWidth={0.75} className="mr-2 h-4 w-4" />
                         <span>&nbsp;Scroll</span>
                     </DropdownMenuRadioItem>
-                    
+
                     {sharingUser && (
                         <DropdownMenuRadioItem value="pointer">
                             <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
@@ -82,7 +82,7 @@ function ToolsTab() {
                 </DropdownMenuRadioGroup>
             </DropdownMenuContent>
         </DropdownMenu>
-                 
+
     );
 }
 

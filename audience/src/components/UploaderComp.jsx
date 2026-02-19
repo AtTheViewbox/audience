@@ -213,9 +213,9 @@ export function UploaderComp({ onUploadComplete }) {
 
       // Generate viewer URL with row=1, col=1
       const viewerURL = metadata ? generateGridURL([metadata], 1, 1) : null;
-      
+
       if (onUploadComplete && viewerURL) {
-          onUploadComplete(viewerURL);
+        onUploadComplete(viewerURL);
       }
 
       // Store the viewer URL in state
@@ -460,40 +460,41 @@ export function UploaderComp({ onUploadComplete }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <UploadCloudIcon className="h-5 w-5" />
-          Upload DICOM Files
+        <Button variant="ghost" className="gap-2 text-slate-400 hover:text-slate-100 hover:bg-slate-900/50 border border-slate-800">
+          <UploadCloudIcon className="h-4 w-4" />
+          Upload DICOM
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md md:max-w-lg">
+      <DialogContent className="sm:max-w-md md:max-w-lg bg-slate-950 border-slate-800 text-slate-100">
         <DialogHeader>
-          <DialogTitle>Upload DICOM Files</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-slate-100">Upload DICOM Files</DialogTitle>
+          <DialogDescription className="text-slate-400">
             Select a folder containing DICOM (.dcm) files to upload. All files will be automatically anonymized to remove patient information.
           </DialogDescription>
         </DialogHeader>
 
-        <Card className="border-dashed border-2">
+        <Card className="bg-slate-900/50 border-dashed border-2 border-slate-800">
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="series-name">Series Name (Optional)</Label>
+              <Label htmlFor="series-name" className="text-slate-300">Series Name (Optional)</Label>
               <Input
                 id="series-name"
                 placeholder="Enter a name for this series..."
                 value={seriesName}
                 onChange={(e) => setSeriesName(e.target.value)}
+                className="bg-slate-950/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-700/30"
               />
             </div>
 
             {/* Upload Box - Only show when no files selected */}
             {files.length === 0 && !uploading && !uploadComplete && (
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className="p-4 rounded-full bg-blue-50">
-                  <FolderIcon className="h-8 w-8 text-blue-500" />
+              <div className="flex flex-col items-center justify-center space-y-6 py-8">
+                <div className="p-5 rounded-full bg-slate-800 border border-slate-700">
+                  <FolderIcon className="h-8 w-8 text-slate-400" />
                 </div>
                 <div className="text-center space-y-2">
-                  <p className="text-sm text-gray-500">Drag and drop a folder or click to browse</p>
-                  <p className="text-xs text-gray-400">Supports folders containing DICOM (.dcm) files</p>
+                  <p className="text-sm text-slate-200">Drag and drop a folder or click to browse</p>
+                  <p className="text-xs text-slate-500 italic">Supports folders containing DICOM (.dcm) files</p>
                 </div>
                 <input
                   type="file"
@@ -505,7 +506,7 @@ export function UploaderComp({ onUploadComplete }) {
                   onChange={handleFileChange}
                 />
                 <label htmlFor="file-upload">
-                  <Button variant="outline" size="sm" className="cursor-pointer" asChild>
+                  <Button variant="ghost" size="sm" className="cursor-pointer text-slate-300 hover:text-slate-100 hover:bg-slate-800 border border-slate-800" asChild>
                     <span>Select Folder</span>
                   </Button>
                 </label>
@@ -516,29 +517,29 @@ export function UploaderComp({ onUploadComplete }) {
             {files.length > 0 && !uploading && !uploadComplete && (
               <div className="space-y-4">
                 {/* Header with file count and clear button */}
-                <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <div className="flex items-center gap-2">
-                    <FileIcon className="h-5 w-5 text-blue-500" />
-                    <p className="text-sm font-semibold">{files.length} file(s) selected</p>
+                    <FileIcon className="h-4 w-4 text-slate-400" />
+                    <p className="text-sm font-semibold text-slate-100">{files.length} file(s) selected</p>
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={resetUpload}
-                    className="gap-2"
+                    className="h-7 gap-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                   >
-                    <XIcon className="h-4 w-4" />
-                    Clear All
+                    <XIcon className="h-3.5 w-3.5" />
+                    Clear
                   </Button>
                 </div>
 
                 {/* File list */}
-                <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-2 no-scrollbar">
                   {files.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
-                      <FileIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                      <span className="truncate flex-1">{file.name}</span>
-                      <span className="text-gray-400 text-xs flex-shrink-0">
+                    <div key={index} className="flex items-center gap-2 text-xs p-2 bg-slate-950/50 border border-slate-800/50 rounded hover:bg-slate-900 transition-colors">
+                      <FileIcon className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
+                      <span className="truncate flex-1 text-slate-300">{file.name}</span>
+                      <span className="text-slate-600 font-mono flex-shrink-0">
                         {(file.size / 1024).toFixed(0)} KB
                       </span>
                     </div>
@@ -546,29 +547,29 @@ export function UploaderComp({ onUploadComplete }) {
                 </div>
 
                 {/* PHI Verification Checkbox */}
-                <div className="p-3 bg-blue-50 border-2 border-blue-300 rounded-lg space-y-3">
+                <div className="p-3 bg-muted/30 border rounded-lg space-y-3">
                   <div className="flex items-start gap-2">
-                    <ShieldCheck className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div className="space-y-2 flex-1">
-                      <p className="text-sm font-semibold text-blue-900">Privacy & Anonymization</p>
-                      <p className="text-xs text-blue-800">
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-foreground">Privacy & Anonymization</p>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
                         All DICOM files will be automatically anonymized before upload. Patient names, IDs, dates, and other identifying information will be removed.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 pt-3 border-t border-blue-200">
+                  <div className="flex items-start gap-3 pt-3 border-t border-slate-800">
                     <Checkbox
                       id="phi-verification"
                       checked={phiVerified}
                       onCheckedChange={setPhiVerified}
-                      className="mt-1 h-5 w-5 border-2 border-blue-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      className="mt-0.5 h-4 w-4 border-slate-700 data-[state=checked]:bg-slate-100 data-[state=checked]:border-slate-100 data-[state=checked]:text-slate-900"
                     />
                     <Label
                       htmlFor="phi-verification"
-                      className="text-sm font-medium text-blue-900 cursor-pointer leading-tight flex-1"
+                      className="text-xs font-medium text-slate-300 cursor-pointer leading-tight flex-1"
                     >
-                      I have reviewed these files and confirm they do not contain any additional Protected Health Information (PHI) beyond what will be automatically removed
+                      I have reviewed these files and confirm they do not contain any additional Protected Health Information (PHI)
                     </Label>
                   </div>
                 </div>
@@ -578,16 +579,16 @@ export function UploaderComp({ onUploadComplete }) {
             {(uploading || uploadComplete) && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-[10px] uppercase font-bold tracking-wider text-slate-500">
                     <span>Upload Progress</span>
-                    <span>{progress}%</span>
+                    <span className="text-slate-300">{progress}%</span>
                   </div>
-                  <Progress value={progress} className="h-2" />
+                  <Progress value={progress} className="h-1.5 bg-slate-800" indicatorClassName="bg-slate-100" />
                 </div>
 
-                <div className="flex items-center gap-2 text-sm">
-                  <FileIcon className="h-4 w-4 text-blue-500" />
-                  <span className="text-gray-600">
+                <div className="flex items-center gap-2 text-xs">
+                  <FileIcon className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-slate-400">
                     {uploadComplete
                       ? `Successfully uploaded ${files.length} files`
                       : `Uploading ${files.length} files...`}
@@ -600,10 +601,12 @@ export function UploaderComp({ onUploadComplete }) {
                     <Input
                       value={viewerUrl}
                       readOnly
-                      className="text-xs font-mono"
+                      className="text-[10px] font-mono bg-slate-950 border-slate-800 text-slate-400 h-8"
                     />
                     <Button
                       size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-slate-400 hover:text-slate-100 border border-slate-800 hover:bg-slate-900"
                       onClick={() => {
                         navigator.clipboard.writeText(viewerUrl);
                         setCopyClicked(true);
@@ -611,9 +614,9 @@ export function UploaderComp({ onUploadComplete }) {
                       }}
                     >
                       {copyClicked ? (
-                        <Check className="h-4" />
+                        <Check className="h-3.5 w-3.5" />
                       ) : (
-                        <Copy className="h-4" />
+                        <Copy className="h-3.5 w-3.5" />
                       )}
                     </Button>
                   </div>
@@ -623,22 +626,21 @@ export function UploaderComp({ onUploadComplete }) {
           </CardContent>
         </Card>
 
-        <CardFooter className="flex justify-end gap-2">
-          <Button variant="outline" onClick={closeDialog}>
-            {uploadComplete ? "Close" : "Cancel"}
-          </Button>
-          {!uploading && !uploadComplete && files.length > 0 && (
-            <Button
-              onClick={handleUpload}
-              disabled={!phiVerified}
-              className="gap-2"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Upload Files
-            </Button>
-          )}
-          {uploadComplete && <Button onClick={resetUpload}>Upload More</Button>}
-        </CardFooter>
+        {((!uploading && !uploadComplete && files.length > 0) || uploadComplete) && (
+          <CardFooter className="flex justify-end gap-2 p-4 bg-slate-950/50 border-t border-slate-800">
+            {!uploading && !uploadComplete && files.length > 0 && (
+              <Button
+                onClick={handleUpload}
+                disabled={!phiVerified}
+                className="gap-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-950"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Upload Files
+              </Button>
+            )}
+            {uploadComplete && <Button onClick={resetUpload} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-950">Upload More</Button>}
+          </CardFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

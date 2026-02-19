@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Search, Library, User, Settings, Globe, Moon,Monitor, FileStack, X, Hammer } from "lucide-react"
+import { Home, Search, Library, User, Settings, Globe, Monitor, FileStack, X, Hammer } from "lucide-react"
 import { Filter, Visibility } from "../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -32,13 +32,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
         }
     }, [])
 
-    const ToggleDarkMode = () => {
-        if (document.documentElement.classList.contains("dark")) {
-            document.documentElement.classList.remove("dark")
-        } else {
-            document.documentElement.classList.add("dark")
-        }
-    }
+
 
     // Handle mouse events for resizing
     useEffect(() => {
@@ -68,114 +62,124 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
     return (
         <>
             {/* Mobile Overlay */}
-             {mobileMenuOpen && (
-                <div 
+            {mobileMenuOpen && (
+                <div
                     className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden"
                     onClick={() => setMobileMenuOpen(false)}
                 />
             )}
 
             {/* Left Sidebar */}
-            <div 
+            <div
                 className={cn(
-                    "bg-background border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0",
+                    "bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0",
                     // Mobile: Fixed, Full Height, Slide in
                     "fixed inset-y-0 left-0 z-50 w-64 md:static md:z-auto",
-                     mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                    mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                 )}
-                style={{ width: (window.innerWidth >= 768) ? `${leftPanelWidth}px` : undefined }} 
+                style={{ width: (window.innerWidth >= 768) ? `${leftPanelWidth}px` : undefined }}
             >
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-6">
-                        <h1 className="text-xl font-semibold">AtTheViewBox</h1>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="md:hidden"
+                        <h1 className="text-xl font-bold text-slate-100 tracking-tight">AtTheViewBox</h1>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="md:hidden text-slate-400 hover:text-slate-100"
                             onClick={() => setMobileMenuOpen(false)}
                         >
-                            <X className="h-4 w-4"/>
+                            <X className="h-4 w-4" />
                         </Button>
                     </div>
 
-                    <nav className="space-y-1">
+                    <nav className="space-y-1.5">
                         {!userData || userData.is_anonymous ? null :
-                            <Button variant="ghost" onClick={() => setFilter(Filter.ALL)} className={cn("w-full justify-start",
-                                filter === Filter.ALL
-                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
-                                    : "",
-                            )}>
-                                <Home className="mr-2 h-4 w-4" />
+                            <Button
+                                variant="ghost"
+                                onClick={() => setFilter(Filter.ALL)}
+                                className={cn("w-full justify-start text-xs font-medium transition-all",
+                                    filter === Filter.ALL
+                                        ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                        : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                                )}>
+                                <Home className="mr-2.5 h-4 w-4" />
                                 Home
                             </Button>}
 
-                        <Button onClick={() => setFilter(Filter.PUBLIC)} variant="ghost" className={cn("w-full justify-start",
-                            filter === Filter.PUBLIC
-                                ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
-                                : "",
-                        )}>
-                            <Globe className="mr-2 h-4 w-4" />
+                        <Button
+                            onClick={() => setFilter(Filter.PUBLIC)}
+                            variant="ghost"
+                            className={cn("w-full justify-start text-xs font-medium transition-all",
+                                filter === Filter.PUBLIC
+                                    ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                    : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                            )}>
+                            <Globe className="mr-2.5 h-4 w-4" />
                             Everyone's Viewbox
                         </Button>
                         {!userData || userData.is_anonymous ? null :
-                        <div>
-                            <Button onClick={() => setFilter(Filter.MYSTUDIES)} variant="ghost" className={cn("w-full justify-start",
-                                filter === Filter.MYSTUDIES
-                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
-                                    : "",
-                            )}>
-                                <Monitor className="mr-2 h-4 w-4" />
-                                Your Viewbox
-                            </Button>
+                            <div className="space-y-1.5">
+                                <Button
+                                    onClick={() => setFilter(Filter.MYSTUDIES)}
+                                    variant="ghost"
+                                    className={cn("w-full justify-start text-xs font-medium transition-all",
+                                        filter === Filter.MYSTUDIES
+                                            ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                            : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                                    )}>
+                                    <Monitor className="mr-2.5 h-4 w-4" />
+                                    Your Viewbox
+                                </Button>
 
-                            <Button onClick={() => setFilter(Filter.PACSBIN)} variant="ghost" className={cn("w-full justify-start",
+                                {/** 
+                                <Button
+                                    onClick={() => setFilter(Filter.PACSBIN)}
+                                    variant="ghost"
+                                    className={cn("w-full justify-start text-xs font-medium transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                                        filter === Filter.PACSBIN ? "bg-blue-600/10 text-blue-400 border border-blue-500/20" : ""
+                                    )}>
+                                    <FileStack className="mr-2.5 h-4 w-4" />
+                                    Pacsbin Studies
+                                </Button>
+                                */}
 
-                            )}>
-                                <FileStack className="mr-2 h-4 w-4" />
-                                Pacsbin Studies
-                            </Button>
-                            <Button onClick={() => setFilter(Filter.BUILDER)} variant="ghost" className={cn("w-full justify-start",
-                                filter === Filter.BUILDER
-                                    ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
-                                    : "",
-                            )}>
-                                <Hammer className="mr-2 h-4 w-4" />
-                                Builder
-                            </Button>
-                            
+                                <Button
+                                    onClick={() => setFilter(Filter.BUILDER)}
+                                    variant="ghost"
+                                    className={cn("w-full justify-start text-xs font-medium transition-all",
+                                        filter === Filter.BUILDER
+                                            ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                            : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                                    )}>
+                                    <Hammer className="mr-2.5 h-4 w-4" />
+                                    Builder
+                                </Button>
+
                             </div>
                         }
                     </nav>
                 </div>
 
-                <div className="mt-auto p-4 border-t">
+                <div className="mt-auto p-4 border-t border-slate-800 space-y-1">
                     {!userData || userData.is_anonymous ? null :
                         <Dialog open={open} onOpenChange={setOpen} >
 
-                            <Button onClick={() => setOpen(true)} variant="ghost" className="w-full justify-start">
-                                <Settings className="mr-2 h-4 w-4" />
+                            <Button onClick={() => setOpen(true)} variant="ghost" className="w-full justify-start text-xs font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/50">
+                                <Settings className="mr-2.5 h-4 w-4" />
                                 Settings
                             </Button>
                             <DialogTitle className="hidden">Settings</DialogTitle>
-                            <DialogContent className="sm:max-w-md p-0 rounded-2xl shadow-xl overflow-hidden border-0">
+                            <DialogContent className="sm:max-w-md p-0 rounded-2xl shadow-xl overflow-hidden border-0 bg-slate-950">
                                 <SettingTab />
                             </DialogContent>
                         </Dialog>}
 
-
-                    <Button onClick={ToggleDarkMode} variant="ghost" className="w-full justify-start">
-                        <Moon className="mr-2 h-4 w-4" />
-                        Toggle Dark Mode
-                    </Button>
                 </div>
-
-
-
             </div>
 
             {/* Resize handle for left panel - Desktop Only */}
             <div
-                className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors hidden md:block"
+                className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden md:block"
                 onMouseDown={() => setIsResizingLeft(true)}
             />
         </>
