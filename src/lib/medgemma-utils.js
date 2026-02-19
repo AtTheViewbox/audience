@@ -31,12 +31,10 @@ export function ensureOverlayState(viewport, overlayClass = 'medgemma-overlay') 
     const element = viewport?.element;
     if (!element) return null;
 
-    // anchor
     if (getComputedStyle(element).position === 'static') {
         element.style.position = 'relative';
     }
 
-    // container
     let container = element.querySelector(`.${overlayClass}`);
     if (!container) {
         container = document.createElement('div');
@@ -46,11 +44,11 @@ export function ensureOverlayState(viewport, overlayClass = 'medgemma-overlay') 
             inset: '0',
             pointerEvents: 'none',
             zIndex: '10',
+            display: 'block',
         });
         element.appendChild(container);
     }
 
-    // single canvas
     let canvas = container.querySelector('canvas');
     if (!canvas) {
         canvas = document.createElement('canvas');
@@ -63,19 +61,12 @@ export function ensureOverlayState(viewport, overlayClass = 'medgemma-overlay') 
         container.appendChild(canvas);
     }
 
-    // default visibility flag stored on element (persists)
-    if (typeof element.__maskVisible !== 'boolean') element.__maskVisible = true;
-
-    // apply current visibility
-    container.style.display = element.__maskVisible ? 'block' : 'none';
-
     return { element, container, canvas };
 }
 
 export function setMaskOverlayVisible(viewport, visible, overlayClass = 'medgemma-overlay') {
     const element = viewport?.element;
     if (!element) return;
-    element.__maskVisible = !!visible;
     const container = element.querySelector(`.${overlayClass}`);
     if (container) container.style.display = visible ? 'block' : 'none';
 }
@@ -84,20 +75,28 @@ export function clearMaskOverlay(viewport, overlayClass = 'medgemma-overlay') {
     const element = viewport?.element;
     if (!element) return;
 
-    // remove render listeners
-    if (element.__rleRenderHandler) {
-        element.removeEventListener('cornerstoneimagerendered', element.__rleRenderHandler);
-        element.removeEventListener('CORNERSTONE_IMAGE_RENDERED', element.__rleRenderHandler);
-        delete element.__rleRenderHandler;
+    // Unregister this overlay's render function from the master dispatcher
+    if (element.__rleHandlers) {
+        delete element.__rleHandlers[overlayClass];
+
+        // If no overlays remain, tear down the master event listener
+        if (Object.keys(element.__rleHandlers).length === 0) {
+            if (element.__rleMasterDispatch) {
+                element.removeEventListener('cornerstoneimagerendered', element.__rleMasterDispatch);
+                element.removeEventListener('CORNERSTONE_IMAGE_RENDERED', element.__rleMasterDispatch);
+                delete element.__rleMasterDispatch;
+            }
+            delete element.__rleHandlers;
+        }
     }
 
-    // remove DOM
-    element.querySelectorAll(`.${overlayClass}`).forEach(el => el.remove());
+    // Remove per-overlay cached data
+    if (element.__rleOverlays) {
+        delete element.__rleOverlays[overlayClass];
+    }
 
-    // clear stored data
-    delete element.__rleSeriesData;
-    delete element.__maskVisible;
-    delete element.__rleRenderOnce;
+    // Remove DOM
+    element.querySelectorAll(`.${overlayClass}`).forEach(el => el.remove());
 }
 
 
@@ -190,7 +189,7 @@ export function extractInstanceNumber(str) {
 export function drawRleMaskOverlay({
     viewport,
     volumeMaskRle,          // full 3D RLE from backend
-    shape,                  // [W,H,D] or [H,W,D] — we’ll handle both if W/H match 512
+    shape,                  // [W,H,D]
     overlayClass = 'medgemma-overlay',
     colorHex = '#00ff00',
     alpha = 140,
@@ -217,7 +216,6 @@ export function drawRleMaskOverlay({
         return;
     }
 
-    // Ensure absolute overlay anchors correctly
     if (getComputedStyle(element).position === 'static') {
         element.style.position = 'relative';
     }
@@ -227,46 +225,39 @@ export function drawRleMaskOverlay({
         console.warn('[RLE overlay] viewport has no imageIds');
         return;
     }
-    // ensure overlay exists
+
     const state = ensureOverlayState(viewport, overlayClass);
     if (!state) return;
 
-    const { element: vpEl, canvas: overlayCanvas } = state;
+    const { element: vpEl, container, canvas: overlayCanvas } = state;
     const overlayCtx = overlayCanvas.getContext('2d');
 
-    // Persist series data ONCE per segmentation run.
-    // Only reset cache if the incoming volumeMaskRle changed.
-    vpEl.__rleSeriesData = vpEl.__rleSeriesData || {};
+    // ── Per-overlay data (keyed by overlayClass) ─────────────────────────────
+    vpEl.__rleOverlays = vpEl.__rleOverlays || {};
+    let ovData = vpEl.__rleOverlays[overlayClass];
 
-    const prevSig = vpEl.__rleSeriesData._sig;
-    const nextSig = `${shape?.join('x') || 'noShape'}_${volumeMaskRle.length}_${volumeMaskRle[0]}_${volumeMaskRle[1]}`;
-
-    if (prevSig !== nextSig) {
-        // new segmentation -> reset cache
-        vpEl.__rleSeriesData.cache2D = {};
-        vpEl.__rleSeriesData._sig = nextSig;
-    }
-
-    vpEl.__rleSeriesData.volumeMaskRle = volumeMaskRle;
-    vpEl.__rleSeriesData.shape = shape;
-    vpEl.__rleSeriesData.imageIds = imageIds;
-
-    // IMPORTANT: store latest opts (this is what your buttons update)
+    const nextSig = `${shape.join('x')}_${volumeMaskRle.length}_${volumeMaskRle[0]}_${volumeMaskRle[1]}`;
     const nextOpts = { xyOrder, flipX, flipY, flipZ, zOffset };
-    const prevOpts = vpEl.__rleSeriesData.opts;
 
-    // If options changed, clear cache
-    if (JSON.stringify(prevOpts) !== JSON.stringify(nextOpts)) {
-        vpEl.__rleSeriesData.cache2D = {};
+    if (!ovData || ovData._sig !== nextSig) {
+        ovData = { _sig: nextSig, cache2D: {}, opts: nextOpts };
+    } else if (JSON.stringify(ovData.opts) !== JSON.stringify(nextOpts)) {
+        ovData.cache2D = {};
+        ovData.opts = nextOpts;
+    } else {
+        ovData.opts = nextOpts;
     }
-    vpEl.__rleSeriesData.opts = nextOpts;
 
+    ovData.volumeMaskRle = volumeMaskRle;
+    ovData.shape = shape;
+    ovData.imageIds = imageIds;
+    vpEl.__rleOverlays[overlayClass] = ovData;
+
+    // ── Render function for THIS overlay ─────────────────────────────────────
     const renderOnce = () => {
-        // Use vpEl consistently
-        if (vpEl.__maskVisible === false) {
-            // hidden: still keep handler active but don’t draw
-            return;
-        }
+        // Per-overlay visibility: check if this container is hidden
+        if (container.style.display === 'none') return;
+
         const cw = vpEl.clientWidth;
         const ch = vpEl.clientHeight;
         if (!cw || !ch) return;
@@ -280,45 +271,29 @@ export function drawRleMaskOverlay({
         if (!imageData) return;
 
         const { direction, spacing, origin, dimensions } = imageData;
-
         const imgW = dimensions?.[0];
         const imgH = dimensions?.[1];
         if (!imgW || !imgH) return;
 
-        // D from backend shape
         const D = shape[2];
-
-        // current z from viewport index
         const z = viewport.getCurrentImageIdIndex();
-        if (z < 0 || z >= D) {
-            if (debug) console.warn('[RLE overlay] z out of range', { z, D });
-            return;
-        }
+        if (z < 0 || z >= D) return;
 
-        // Build cached mask ImageData for this z
-        let maskImgData = vpEl.__rleSeriesData.cache2D[z];
+        const myData = vpEl.__rleOverlays?.[overlayClass];
+        if (!myData) return;
+
+        let maskImgData = myData.cache2D[z];
         if (!maskImgData) {
-            const opts = vpEl.__rleSeriesData?.opts || { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: 1 };
-            const { xyOrder, flipX: fX, flipY: fY, flipZ: fZ, zOffset: zO } = opts;
-
+            const o = myData.opts || { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: 1 };
             const seen = sliceBinary_ZYX(volumeMaskRle, imgW, imgH, D, z, {
-                xyOrder,
-                flipX: fX,
-                flipY: fY,
-                flipZ: fZ,
-                zOffset: zO,
+                xyOrder: o.xyOrder, flipX: o.flipX, flipY: o.flipY, flipZ: o.flipZ, zOffset: o.zOffset,
             });
             const rle2D = binaryToRlePairs(seen);
             const { r, g, b } = hexToRgb(colorHex);
             maskImgData = rlePairsToImageData(rle2D, imgW, imgH, [r, g, b, alpha]);
-            vpEl.__rleSeriesData.cache2D[z] = maskImgData;
-
-            if (debug) {
-                console.log('[mask cache] slice', z, 'runs', rle2D.length / 2, 'sample', rle2D.slice(0, 10));
-            }
+            myData.cache2D[z] = maskImgData;
         }
 
-        // Map image pixels -> canvas rect using worldToCanvas
         const getCanvasCoord = (x, y) => {
             const world = [
                 origin[0] + x * spacing[0] * direction[0] + y * spacing[1] * direction[3],
@@ -346,7 +321,6 @@ export function drawRleMaskOverlay({
             overlayCtx.restore();
         }
 
-        // Draw mask
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = imgW;
         sliceCanvas.height = imgH;
@@ -356,30 +330,40 @@ export function drawRleMaskOverlay({
         overlayCtx.drawImage(sliceCanvas, 0, 0, imgW, imgH, canvasX, canvasY, canvasW, canvasH);
     };
 
-    // Allow external force-redraw without relying on cornerstone events
-    vpEl.__rleRenderOnce = renderOnce;
+    // ── Master event dispatcher (shared across all overlays) ─────────────────
+    // One event listener calls every registered overlay's render function.
+    element.__rleHandlers = element.__rleHandlers || {};
+    element.__rleHandlers[overlayClass] = renderOnce;
+
+    if (!element.__rleMasterDispatch) {
+        const dispatch = () => {
+            requestAnimationFrame(() => {
+                const handlers = element.__rleHandlers;
+                if (!handlers) return;
+                for (const key in handlers) {
+                    handlers[key]();
+                }
+            });
+        };
+        element.__rleMasterDispatch = dispatch;
+        element.addEventListener('cornerstoneimagerendered', dispatch);
+        element.addEventListener('CORNERSTONE_IMAGE_RENDERED', dispatch);
+    }
 
     // initial render
     renderOnce();
 
-    // re-render on cornerstone events
-    const handleRender = () => requestAnimationFrame(renderOnce);
-
-    if (element.__rleRenderHandler) {
-        element.removeEventListener('cornerstoneimagerendered', element.__rleRenderHandler);
-        element.removeEventListener('CORNERSTONE_IMAGE_RENDERED', element.__rleRenderHandler);
-    }
-
-    element.__rleRenderHandler = handleRender;
-    element.addEventListener('cornerstoneimagerendered', handleRender);
-    element.addEventListener('CORNERSTONE_IMAGE_RENDERED', handleRender);
-
     return () => {
-        element.removeEventListener('cornerstoneimagerendered', handleRender);
-        element.removeEventListener('CORNERSTONE_IMAGE_RENDERED', handleRender);
+        if (element.__rleHandlers) {
+            delete element.__rleHandlers[overlayClass];
+            if (Object.keys(element.__rleHandlers).length === 0 && element.__rleMasterDispatch) {
+                element.removeEventListener('cornerstoneimagerendered', element.__rleMasterDispatch);
+                element.removeEventListener('CORNERSTONE_IMAGE_RENDERED', element.__rleMasterDispatch);
+                delete element.__rleMasterDispatch;
+                delete element.__rleHandlers;
+            }
+        }
         element.querySelectorAll(`.${overlayClass}`).forEach(el => el.remove());
-        delete element.__rleRenderHandler;
-        delete vpEl.__rleRenderOnce;
-        delete element.__rleSeriesData;
+        if (vpEl.__rleOverlays) delete vpEl.__rleOverlays[overlayClass];
     };
 }

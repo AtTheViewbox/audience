@@ -13,7 +13,7 @@ import {
     drawRleMaskOverlay,
     setMaskOverlayVisible,
     clearMaskOverlay,
-} from '../lib/medgemma-utils';
+} from '../../lib/medgemma-utils';
 
 const Visibility = { PUBLIC: 'PUBLIC' };
 const Mode = { TEAM: 'TEAM' };
@@ -26,6 +26,41 @@ const DEFAULT_MASK_XFORM = {
     flipZ: true,
     zOffset: -1,
 };
+
+const MASK_COLORS = [
+    '#22c55e', '#f87171', '#38bdf8', '#fbbf24', '#a78bfa',
+    '#fb923c', '#2dd4bf', '#f472b6', '#818cf8', '#34d399',
+];
+
+function friendlyStructureLabel(structure) {
+    const map = {
+        lung_upper_lobe_right: 'R Upper Lobe', lung_middle_lobe_right: 'R Middle Lobe',
+        lung_lower_lobe_right: 'R Lower Lobe', lung_upper_lobe_left: 'L Upper Lobe',
+        lung_lower_lobe_left: 'L Lower Lobe', kidney_right: 'R Kidney',
+        kidney_left: 'L Kidney', kidney_cyst_right: 'R Kidney Cyst',
+        kidney_cyst_left: 'L Kidney Cyst', adrenal_gland_right: 'R Adrenal',
+        adrenal_gland_left: 'L Adrenal', hip_right: 'R Hip', hip_left: 'L Hip',
+        femur_right: 'R Femur', femur_left: 'L Femur',
+    };
+    if (map[structure]) return map[structure];
+    return structure
+        .replace(/_/g, ' ')
+        .replace(/\bright\b/gi, 'R')
+        .replace(/\bleft\b/gi, 'L')
+        .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function getMaskTransform(orientation) {
+    switch (orientation) {
+        case 'coronal':
+            return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: -1 };
+        case 'sagittal':
+            return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: -1 };
+        case 'axial':
+        default:
+            return { ...DEFAULT_MASK_XFORM };
+    }
+}
 
 // ── Tool step icons & labels ──────────────────────────────────────────────────
 const STEP_META = {
@@ -155,8 +190,10 @@ export default function AgentChat({
 }) {
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
+    const [activeMasks, setActiveMasks] = useState([]);
     const scrollRef = useRef(null);
     const textareaRef = useRef(null);
+    const studyCacheRef = useRef(null);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -199,6 +236,85 @@ export default function AgentChat({
         } catch (err) {
             console.error('Windowing failed:', err);
         }
+    };
+
+    const clearAllMasks = () => {
+        const vp = getViewport();
+        if (vp) {
+            clearMaskOverlay(vp, 'medgemma-overlay');
+            activeMasks.forEach(m => clearMaskOverlay(vp, m.overlayClass));
+        }
+        setActiveMasks([]);
+        onMaskReady?.(false);
+    };
+
+    const toggleMask = (index) => {
+        setActiveMasks(prev => {
+            const updated = [...prev];
+            const mask = updated[index];
+            const newVisible = !mask.visible;
+            setMaskOverlayVisible(getViewport(), newVisible, mask.overlayClass);
+            updated[index] = { ...mask, visible: newVisible };
+            return updated;
+        });
+    };
+
+    // Cached modality+orientation detection — only hits the backend once per study.
+    // Keyed on the first DICOM URL + count so it auto-invalidates when the study changes.
+    const detectStudyInfo = async (dicomUrls, { showStep = true } = {}) => {
+        const cacheKey = dicomUrls.length > 0
+            ? `${dicomUrls[0]}|${dicomUrls.length}`
+            : null;
+
+        if (cacheKey && studyCacheRef.current?.key === cacheKey) {
+            const cached = studyCacheRef.current;
+            if (showStep) {
+                addStep({
+                    type: 'modality',
+                    label: 'Detecting modality',
+                    status: 'done',
+                    result: `${cached.modality} — ${cached.orientation} (cached)`,
+                });
+            }
+            return cached;
+        }
+
+        if (showStep) {
+            addStep({ type: 'modality', label: 'Detecting modality', status: 'running', result: null });
+        }
+
+        let result = { modality: 'Unknown', orientation: 'axial', confidence: 0, reasoning: '' };
+        try {
+            const resp = await fetch(`${BASE_URL}/detect-modality`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dicom_urls: dicomUrls }),
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                result = {
+                    modality: data.modality || 'Unknown',
+                    orientation: data.orientation || 'axial',
+                    confidence: data.confidence || 0,
+                    reasoning: data.reasoning || '',
+                };
+            }
+        } catch (err) {
+            console.warn('Modality detection failed:', err);
+        }
+
+        if (cacheKey) {
+            studyCacheRef.current = { key: cacheKey, ...result };
+        }
+
+        if (showStep) {
+            updateLastStep({
+                status: 'done',
+                result: `${result.modality} (${(result.confidence * 100).toFixed(0)}% confidence), ${result.orientation}`,
+            });
+        }
+
+        return result;
     };
 
     // Adds a step to the last (in-progress) assistant message
@@ -338,21 +454,7 @@ export default function AgentChat({
 
         try {
             if (action === 'adjust_window') {
-                // Detect modality first — windowing only applies to CT
-                addStep({ type: 'modality', label: 'Detecting modality', status: 'running', result: null });
-                let winModality = 'Unknown';
-                try {
-                    const modResp = await fetch(`${BASE_URL}/detect-modality`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dicom_urls: dicomUrls })
-                    });
-                    if (modResp.ok) {
-                        const modData = await modResp.json();
-                        winModality = modData.modality || 'Unknown';
-                    }
-                } catch (_) { }
-                updateLastStep({ status: 'done', result: `Modality: ${winModality}` });
+                const { modality: winModality } = await detectStudyInfo(dicomUrls);
 
                 if (winModality !== 'CT') {
                     reply = `Window/level adjustment is only available for **CT scans**. The current study appears to be **${winModality}**, which doesn't use Hounsfield Unit windowing.`;
@@ -387,24 +489,7 @@ export default function AgentChat({
                     const imageIds = viewport.getImageIds();
 
                     // ── 1. Detect modality ────────────────────────────────────
-                    addStep({ type: 'modality', label: 'Detecting modality', status: 'running', result: null });
-                    let modality = 'Unknown';
-                    try {
-                        const modResp = await fetch(`${BASE_URL}/detect-modality`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ dicom_urls: dicomUrls })
-                        });
-                        if (modResp.ok) {
-                            const modData = await modResp.json();
-                            modality = modData.modality || 'Unknown';
-                            updateLastStep({ status: 'done', result: `${modality} (${((modData.confidence || 0) * 100).toFixed(0)}% confidence)` });
-                        } else {
-                            updateLastStep({ status: 'done', result: 'Modality unknown' });
-                        }
-                    } catch (err) {
-                        updateLastStep({ status: 'done', result: 'Modality detection failed, continuing...' });
-                    }
+                    const { modality, orientation } = await detectStudyInfo(dicomUrls);
 
                     // ── 2. Windowing (CT or X-Ray only) ──────────────────────
                     if (modality === 'CT') {
@@ -433,12 +518,11 @@ export default function AgentChat({
                     }
 
                     // ── 3. Segment (CT or MRI only) ───────────────────────────
-                    let summaryDicomUrls = null; // will be set from mask slices or fallback
+                    let summaryDicomUrls = null;
 
                     if (['CT', 'MRI', 'MR'].includes(modality)) {
-                        // Identify structure
-                        addStep({ type: 'segmentation', label: `Identifying structure in finding`, status: 'running', result: null });
-                        let structure = null;
+                        addStep({ type: 'segmentation', label: 'Identifying structures in finding', status: 'running', result: null });
+                        let structures = [];
                         try {
                             const identResp = await fetch(`${BASE_URL}/identify_structure`, {
                                 method: 'POST',
@@ -447,79 +531,105 @@ export default function AgentChat({
                             });
                             if (identResp.ok) {
                                 const identData = await identResp.json();
-                                structure = identData.structure || null;
+                                structures = identData.structures || (identData.structure ? [identData.structure] : []);
                             }
                         } catch (_) { }
 
-                        if (!structure) {
+                        if (!structures.length) {
                             updateLastStep({ status: 'done', result: 'No specific structure identified' });
                         } else {
-                            updateLastStep({ status: 'done', result: `Structure: ${structure}` });
-                            addStep({ type: 'segmentation', label: `Segmenting ${structure}`, status: 'running', result: null });
+                            updateLastStep({ status: 'done', result: `Structures: ${structures.map(friendlyStructureLabel).join(', ')}` });
+                            addStep({ type: 'segmentation', label: `Segmenting ${structures.length} structure(s)`, status: 'running', result: null });
 
                             try {
                                 const segResp = await fetch(`${BASE_URL}/segment_dicom`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ dicom_urls: dicomUrls, structure, modality })
+                                    body: JSON.stringify({ dicom_urls: dicomUrls, structures, modality, orientation })
                                 });
                                 if (!segResp.ok) throw new Error('Segmentation request failed');
                                 const segData = await segResp.json();
+                                const foundResults = (segData.results || []).filter(r => r.found);
 
-                                if (segData.found && !segData.error) {
-                                    const { mask_rle, shape, centroid_voxel } = segData;
+                                if (foundResults.length > 0) {
+                                    clearAllMasks();
+                                    const maskTransform = getMaskTransform(segData.orientation || orientation);
+                                    const newMasks = [];
 
-                                    // Draw overlay
-                                    drawRleMaskOverlay({
-                                        viewport,
-                                        volumeMaskRle: mask_rle,
-                                        shape,
-                                        overlayClass: 'medgemma-overlay',
-                                        ...DEFAULT_MASK_XFORM
+                                    foundResults.forEach((res, i) => {
+                                        const overlayClass = `medgemma-mask-${i}`;
+                                        const colorHex = MASK_COLORS[i % MASK_COLORS.length];
+                                        drawRleMaskOverlay({
+                                            viewport, volumeMaskRle: res.mask_rle, shape: res.shape,
+                                            overlayClass, colorHex, ...maskTransform,
+                                        });
+                                        setMaskOverlayVisible(viewport, true, overlayClass);
+                                        newMasks.push({
+                                            structure: res.structure, overlayClass, colorHex,
+                                            visible: true, label: friendlyStructureLabel(res.structure),
+                                        });
                                     });
-                                    setMaskOverlayVisible(viewport, true, 'medgemma-overlay');
+
+                                    setActiveMasks(newMasks);
                                     onMaskReady?.(true);
 
-                                    // Navigate to centroid
-                                    const D = shape[2];
-                                    const rawZ = DEFAULT_MASK_XFORM.flipZ
-                                        ? (D - 1 - Math.round(centroid_voxel[2]))
-                                        : Math.round(centroid_voxel[2]);
-                                    const sliceIdx = Math.max(0, Math.min(rawZ - (DEFAULT_MASK_XFORM.zOffset || 0), imageIds.length - 1));
+                                    // Navigate to first structure's centroid
+                                    const first = foundResults[0];
+                                    const D = first.shape[2];
+                                    const rawZ = maskTransform.flipZ
+                                        ? (D - 1 - Math.round(first.centroid_voxel[2]))
+                                        : Math.round(first.centroid_voxel[2]);
+                                    const sliceIdx = Math.max(0, Math.min(rawZ - (maskTransform.zOffset || 0), imageIds.length - 1));
                                     const cam = viewport.getCamera();
                                     viewport.setImageIdIndex(sliceIdx);
                                     viewport.setCamera(cam);
                                     viewport.render();
 
-                                    // Pick up to 15 evenly-spaced mask slices for summary
-                                    const getRelevantSlices = (rle, sh) => {
-                                        const [, , D] = sh;
-                                        const slices = new Set();
-                                        for (let i = 0; i < rle.length; i += 2) {
-                                            const start = rle[i], len = rle[i + 1];
-                                            for (let p = start; p < start + len; p++) {
-                                                const zVol = p % D;
-                                                const rawZ = DEFAULT_MASK_XFORM.flipZ ? (D - 1 - zVol) : zVol;
-                                                const idx = rawZ - (DEFAULT_MASK_XFORM.zOffset || 0);
-                                                if (idx >= 0) slices.add(idx);
+                                    // Collect which viewport slices contain mask data (all structures combined).
+                                    // Uses modular arithmetic per RLE run instead of iterating every voxel.
+                                    const allSlices = new Set();
+                                    foundResults.forEach(res => {
+                                        const D = res.shape[2];
+                                        for (let i = 0; i < res.mask_rle.length; i += 2) {
+                                            const start = res.mask_rle[i], len = res.mask_rle[i + 1];
+                                            if (len >= D) {
+                                                for (let z = 0; z < D; z++) {
+                                                    const rz = maskTransform.flipZ ? (D - 1 - z) : z;
+                                                    const idx = rz - (maskTransform.zOffset || 0);
+                                                    if (idx >= 0) allSlices.add(idx);
+                                                }
+                                            } else {
+                                                const zStart = start % D;
+                                                const zEnd = (start + len - 1) % D;
+                                                const addZ = (z) => {
+                                                    const rz = maskTransform.flipZ ? (D - 1 - z) : z;
+                                                    const idx = rz - (maskTransform.zOffset || 0);
+                                                    if (idx >= 0) allSlices.add(idx);
+                                                };
+                                                if (zStart <= zEnd) {
+                                                    for (let z = zStart; z <= zEnd; z++) addZ(z);
+                                                } else {
+                                                    for (let z = zStart; z < D; z++) addZ(z);
+                                                    for (let z = 0; z <= zEnd; z++) addZ(z);
+                                                }
                                             }
                                         }
-                                        return Array.from(slices).sort((a, b) => a - b);
-                                    };
-                                    const maskSlices = getRelevantSlices(mask_rle, shape);
+                                    });
+                                    const sorted = Array.from(allSlices).sort((a, b) => a - b);
                                     const pickSlices = (slices, n = 15) => {
                                         if (!slices.length) return [sliceIdx];
                                         if (slices.length <= n) return slices;
                                         const step = (slices.length - 1) / (n - 1);
                                         return Array.from({ length: n }, (_, i) => slices[Math.round(i * step)]);
                                     };
-                                    const picked = pickSlices(maskSlices);
+                                    const picked = pickSlices(sorted);
                                     summaryDicomUrls = picked.map(idx =>
                                         imageIds[Math.max(0, Math.min(idx, imageIds.length - 1))].replace(/^dicomweb:/, '')
                                     );
-                                    updateLastStep({ status: 'done', result: `${structure} segmented — ${picked.length} slices selected` });
+                                    const names = foundResults.map(r => friendlyStructureLabel(r.structure)).join(', ');
+                                    updateLastStep({ status: 'done', result: `${names} segmented — ${picked.length} slices selected` });
                                 } else {
-                                    updateLastStep({ status: 'done', result: `${structure} not found, using nearby slices` });
+                                    updateLastStep({ status: 'done', result: 'No structures found, using nearby slices' });
                                 }
                             } catch (segErr) {
                                 updateLastStep({ status: 'done', result: `Segmentation failed: ${segErr.message}` });
@@ -560,23 +670,13 @@ export default function AgentChat({
 
 
             } else if (action === 'detect_modality') {
-                addStep({ type: 'modality', label: 'Detecting modality', status: 'running', result: null });
-
                 if (!dicomUrls.length) {
-                    updateLastStep({ status: 'error', result: 'No DICOM loaded.' });
+                    addStep({ type: 'modality', label: 'Detecting modality', status: 'error', result: 'No DICOM loaded.' });
                     reply = 'No imaging study is currently loaded.';
                 } else {
-                    const modResp = await fetch(`${BASE_URL}/detect-modality`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dicom_urls: dicomUrls })
-                    });
-                    if (!modResp.ok) throw new Error('Modality detection failed');
-                    const modData = await modResp.json();
-                    const modality = modData.modality || 'Unknown';
-                    const confidence = ((modData.confidence || 0) * 100).toFixed(0);
-                    updateLastStep({ status: 'done', result: `${modality} (${confidence}% confidence)` });
-                    reply = `**Modality detected: ${modality}** (${confidence}% confidence)\n\n${modData.reasoning || ''}`;
+                    const info = await detectStudyInfo(dicomUrls);
+                    const confidence = (info.confidence * 100).toFixed(0);
+                    reply = `**Modality detected: ${info.modality}** (${confidence}% confidence)\n**Orientation: ${info.orientation}**\n\n${info.reasoning}`;
                 }
 
             } else if (action === 'show_organ') {
@@ -587,7 +687,9 @@ export default function AgentChat({
                     updateLastStep({ status: 'error', result: 'No DICOM loaded.' });
                     reply = 'No imaging study is currently loaded.';
                 } else {
-                    // Identify structure
+                    const { modality: detectedModality, orientation: detectedOrientation } = await detectStudyInfo(dicomUrls, { showStep: false });
+
+                    // Identify structure(s)
                     const identResp = await fetch(`${BASE_URL}/identify_structure`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -595,60 +697,68 @@ export default function AgentChat({
                     });
                     if (!identResp.ok) throw new Error('Structure identification failed');
                     const identData = await identResp.json();
-                    const structure = identData.structure;
+                    const structures = identData.structures || (identData.structure ? [identData.structure] : []);
 
-                    if (!structure) {
+                    if (!structures.length) {
                         updateLastStep({ status: 'done', result: 'No structure identified.' });
                         reply = `I couldn't identify a specific anatomical structure from "${structureHint}". Try being more specific (e.g., "show me the liver" or "highlight the left kidney").`;
                     } else {
-                        updateLastStep({ status: 'done', result: `Structure: ${structure}` });
-                        addStep({ type: 'segmentation', label: `Segmenting ${structure}…`, status: 'running', result: null });
+                        const labels = structures.map(friendlyStructureLabel).join(', ');
+                        updateLastStep({ status: 'done', result: `Structures: ${labels}` });
+                        addStep({ type: 'segmentation', label: `Segmenting ${structures.length > 1 ? `${structures.length} structures` : labels}…`, status: 'running', result: null });
 
                         const segResp = await fetch(`${BASE_URL}/segment_dicom`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ dicom_urls: dicomUrls, structure })
+                            body: JSON.stringify({ dicom_urls: dicomUrls, structures, modality: detectedModality, orientation: detectedOrientation })
                         });
                         if (!segResp.ok) throw new Error('Segmentation failed');
                         const segData = await segResp.json();
 
                         if (segData.error) throw new Error(segData.error);
 
-                        if (!segData.found) {
-                            updateLastStep({ status: 'done', result: `${structure} not found in this study.` });
-                            reply = `The **${structure}** could not be segmented in this study. It may not be visible in the current imaging plane.`;
+                        const foundResults = (segData.results || []).filter(r => r.found);
+
+                        if (!foundResults.length) {
+                            updateLastStep({ status: 'done', result: `No structures found in this study.` });
+                            reply = `The requested structure(s) could not be segmented in this study. They may not be visible in the current imaging plane.`;
                         } else {
-                            const { mask_rle, shape, centroid_voxel } = segData;
+                            clearAllMasks();
+                            const maskTransform = getMaskTransform(segData.orientation || detectedOrientation);
+                            const newMasks = [];
 
-                            // Draw overlay
-                            drawRleMaskOverlay({
-                                viewport,
-                                volumeMaskRle: mask_rle,
-                                shape,
-                                overlayClass: 'medgemma-overlay',
-                                ...DEFAULT_MASK_XFORM
+                            foundResults.forEach((res, i) => {
+                                const overlayClass = `medgemma-mask-${i}`;
+                                const colorHex = MASK_COLORS[i % MASK_COLORS.length];
+                                drawRleMaskOverlay({
+                                    viewport, volumeMaskRle: res.mask_rle, shape: res.shape,
+                                    overlayClass, colorHex, ...maskTransform,
+                                });
+                                setMaskOverlayVisible(viewport, true, overlayClass);
+                                newMasks.push({
+                                    structure: res.structure, overlayClass, colorHex,
+                                    visible: true, label: friendlyStructureLabel(res.structure),
+                                });
                             });
-                            setMaskOverlayVisible(viewport, true, 'medgemma-overlay');
 
-                            // Navigate to centroid
-                            const imageIds = viewport.getImageIds();
-                            const D = shape[2];
-                            const voxelZ = centroid_voxel[2];
-                            const rawZ = DEFAULT_MASK_XFORM.flipZ ? (D - 1 - Math.round(voxelZ)) : Math.round(voxelZ);
-                            const sliceIdx = Math.max(0, Math.min(rawZ - (DEFAULT_MASK_XFORM.zOffset || 0), imageIds.length - 1));
-                            const localIndex = imageIds.indexOf(imageIds[sliceIdx]);
-                            if (localIndex !== -1) {
-                                const cam = viewport.getCamera();
-                                viewport.setImageIdIndex(localIndex);
-                                viewport.setCamera(cam);
-                                viewport.render();
-                            }
-
-                            // Notify parent to show mask toggle
+                            setActiveMasks(newMasks);
                             onMaskReady?.(true);
 
-                            updateLastStep({ status: 'done', result: `${structure} segmented — mask drawn on viewport` });
-                            reply = `**${structure}** has been highlighted on the viewport. Use the **mask toggle** in the header to show/hide it.`;
+                            // Navigate to first structure's centroid
+                            const imageIds = viewport.getImageIds();
+                            const first = foundResults[0];
+                            const D = first.shape[2];
+                            const voxelZ = first.centroid_voxel[2];
+                            const rawZ = maskTransform.flipZ ? (D - 1 - Math.round(voxelZ)) : Math.round(voxelZ);
+                            const sliceIdx = Math.max(0, Math.min(rawZ - (maskTransform.zOffset || 0), imageIds.length - 1));
+                            const cam = viewport.getCamera();
+                            viewport.setImageIdIndex(sliceIdx);
+                            viewport.setCamera(cam);
+                            viewport.render();
+
+                            const names = foundResults.map(r => friendlyStructureLabel(r.structure)).join(', ');
+                            updateLastStep({ status: 'done', result: `${names} segmented` });
+                            reply = `**${names}** ${foundResults.length > 1 ? 'have' : 'has'} been highlighted on the viewport. Use the structure toggles to show/hide individual masks.`;
                         }
                     }
                 }
@@ -732,6 +842,30 @@ export default function AgentChat({
                 </div>
             </ScrollArea>
 
+            {/* Mask structure toggles */}
+            {activeMasks.length > 0 && (
+                <div className="px-2 py-1.5 bg-slate-950/80 border-t border-slate-800/50 flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[9px] text-slate-600 font-medium uppercase tracking-wider mr-0.5">Masks</span>
+                    {activeMasks.map((mask, i) => (
+                        <button
+                            key={mask.overlayClass}
+                            onClick={() => toggleMask(i)}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+                                mask.visible
+                                    ? 'bg-slate-800 border-slate-600 text-slate-200'
+                                    : 'bg-slate-900 border-slate-800 text-slate-500'
+                            }`}
+                        >
+                            <span
+                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: mask.visible ? mask.colorHex : '#475569' }}
+                            />
+                            {mask.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Input */}
             <div className="p-2 bg-slate-950 border-t border-slate-800">
                 <form onSubmit={handleSubmit} className="flex gap-2 items-end relative">
@@ -759,7 +893,6 @@ export default function AgentChat({
                 {/* Capability hints */}
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {[
-                        'Detect modality',
                         'Adjust window',
                         'Show an organ',
                         'Explain a finding',
