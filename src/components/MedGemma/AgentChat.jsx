@@ -840,7 +840,8 @@ export default function AgentChat({
                     const atlasResults = [];
                     const atlasPromises = foundResults.map(async (result) => {
                         try {
-                            const resp = await agentFetch(`${BASE_URL}/normal-atlas/${result.structure}`);
+                            const orientation = seg?.orientation || 'axial';
+                            const resp = await agentFetch(`${BASE_URL}/normal-atlas/${result.structure}?orientation=${orientation}`);
                             const atlasData = await resp.json();
                             if (!atlasData.error) {
                                 return { structure: result.structure, atlas: atlasData, patientResult: result };
@@ -1022,7 +1023,8 @@ export default function AgentChat({
 
             const atlasPromises = foundResults.map(async (result) => {
                 try {
-                    const resp = await fetch(`${BASE_URL}/normal-atlas/${result.structure}`, { signal: controller.signal });
+                    const orientation = seg?.orientation || 'axial';
+                    const resp = await fetch(`${BASE_URL}/normal-atlas/${result.structure}?orientation=${orientation}`, { signal: controller.signal });
                     const atlasData = await resp.json();
                     if (!atlasData.error) return { structure: result.structure, atlas: atlasData, patientResult: result };
                 } catch { /* skip */ }
@@ -1132,11 +1134,10 @@ export default function AgentChat({
                         <button
                             key={mask.overlayClass}
                             onClick={() => toggleMask(i)}
-                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${
-                                mask.visible
-                                    ? 'bg-slate-800 border-slate-600 text-slate-200'
-                                    : 'bg-slate-900 border-slate-800 text-slate-500'
-                            }`}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${mask.visible
+                                ? 'bg-slate-800 border-slate-600 text-slate-200'
+                                : 'bg-slate-900 border-slate-800 text-slate-500'
+                                }`}
                         >
                             <span
                                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"

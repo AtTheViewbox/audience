@@ -130,7 +130,7 @@ export default function MedGemmaButton() {
           supabaseClient={supabaseClient}
           dispatch={dispatch}
           dataDispatch={dispatch}
-          onMaskReady={() => {}}
+          onMaskReady={() => { }}
         />
       </div>
     </div>,

@@ -3,7 +3,7 @@ import Fab from './Fab'
 import Tools from './Tools'
 import SessionUsers from './SessionUsers'
 import MedGemmaButton from './MedGemma/MedGemmaButton'
-import CompareNormal from './CompareNormal'
+import CompareNormal from './MedGemma/CompareNormal'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
 

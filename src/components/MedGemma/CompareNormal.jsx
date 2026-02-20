@@ -1,11 +1,12 @@
 import { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import * as cornerstone from '@cornerstonejs/core';
-import { DataContext, DataDispatchContext } from '../context/DataContext';
+import { DataContext, DataDispatchContext } from '../../context/DataContext';
+import { Link, Unlink } from 'lucide-react';
 import {
     drawRleMaskOverlay,
     setMaskOverlayVisible,
     clearMaskOverlay,
-} from '../lib/medgemma-utils';
+} from '../../lib/medgemma-utils';
 
 const MASK_COLORS = [
     '#22c55e', '#f87171', '#38bdf8', '#fbbf24', '#a78bfa',
@@ -32,6 +33,7 @@ export default function CompareNormal() {
 
     const cleanupRef = useRef(null);
     const [maskToggles, setMaskToggles] = useState([]);
+    const [isSynced, setIsSynced] = useState(true);
     const isActive = !!compareNormal?.active;
 
     const getSliceSpacing = useCallback((vp) => {
@@ -45,7 +47,7 @@ export default function CompareNormal() {
                 const [x1, y1, z1] = m1.imagePositionPatient;
                 return Math.abs(Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2 + (z1 - z0) ** 2)) || null;
             }
-        } catch (_) {}
+        } catch (_) { }
         return null;
     }, []);
 
@@ -90,11 +92,30 @@ export default function CompareNormal() {
 
         const pushPatientVoi = (patientVp, refVp) => {
             try {
-                const { voiRange } = patientVp.getProperties();
-                if (voiRange) {
-                    refVp.setProperties({ voiRange, isComputedVOI: false });
+                // Ensure the exact desired ref volume slice is fully loaded in memory
+                const refImageId = refVp.getCurrentImageId();
+                if (!refImageId) return;
+
+                const refImg = cornerstone.cache.getImage(refImageId);
+                if (!refImg) {
+                    // It hasn't finished hitting the network/cache yet. 
+                    // Do not push VOI—cornerstone would incorrectly apply it to the fallback rendering state.
+                    return;
                 }
-            } catch (_) {}
+
+                // Push properties natively. Cornerstone 3D correctly processes Modality LUTs internally.
+                const props = patientVp.getProperties();
+                if (props && props.voiRange) {
+                    refVp.setProperties({
+                        voiRange: props.voiRange,
+                        invert: props.invert ?? false,
+                        isComputedVOI: false
+                    });
+                    refVp.render();
+                }
+            } catch (err) {
+                console.warn('Sync VOI failed:', err);
+            }
         };
 
         const setup = () => {
@@ -106,16 +127,7 @@ export default function CompareNormal() {
                 return;
             }
 
-            // ── 1. Lock reference viewport ───────────────────────────────────
-            refEl = refVp.element;
-            if (refEl) {
-                refEl.dataset.voiSynced = 'true';
-                refEl.addEventListener('wheel', blocker, { capture: true, passive: false });
-                refEl.addEventListener('mousedown', blocker, { capture: true });
-                refEl.addEventListener('touchstart', blocker, { capture: true });
-            }
-
-            // ── 2. Apply masks to reference ──────────────────────────────────
+            // ── 1. Apply masks to reference ──────────────────────────────────
             const maskDataList = compareNormal.normalMaskDataList || [];
             maskDataList.forEach((maskData, i) => {
                 const xform = getMaskTransform(maskData.orientation);
@@ -132,6 +144,25 @@ export default function CompareNormal() {
                 setMaskOverlayVisible(refVp, true, cls);
             });
 
+            if (!isSynced) {
+                cleanupRef.current = () => {
+                    if (voiInterval) clearInterval(voiInterval);
+                    maskDataList.forEach((_, i) => {
+                        clearMaskOverlay(refVp, `compare-normal-mask-${i}`);
+                    });
+                };
+                return;
+            }
+
+            // ── 2. Lock reference viewport ───────────────────────────────────
+            refEl = refVp.element;
+            if (refEl) {
+                refEl.dataset.voiSynced = 'true';
+                refEl.addEventListener('wheel', blocker, { capture: true, passive: false });
+                refEl.addEventListener('mousedown', blocker, { capture: true });
+                refEl.addEventListener('touchstart', blocker, { capture: true });
+            }
+
             // ── 3. Compute centroids + spacing for linear mapping ────────────
             const patCentroid = compareNormal.patientCentroidSlice ?? 0;
             const normCentroid = compareNormal.normalCentroidSlice ?? 0;
@@ -144,7 +175,9 @@ export default function CompareNormal() {
 
             // ── 4. Navigate reference to centroid + push patient VOI ─────────
             const refImages = refVp.getImageIds();
-            const clampedCentroid = Math.max(0, Math.min(normCentroid, refImages.length - 1));
+            const patIdx = patientVp.getCurrentImageIdIndex();
+            const syncNormalIdx = Math.round(normCentroid + (patIdx - patCentroid) * ratio);
+            const clampedCentroid = Math.max(0, Math.min(syncNormalIdx, refImages.length - 1));
             refVp.setImageIdIndex(clampedCentroid);
             pushPatientVoi(patientVp, refVp);
             refVp.render();
@@ -211,7 +244,7 @@ export default function CompareNormal() {
             if (voiInterval) clearInterval(voiInterval);
             cleanupRef.current?.();
         };
-    }, [isActive, renderingEngine, compareNormal, getSliceSpacing]);
+    }, [isActive, renderingEngine, compareNormal, getSliceSpacing, isSynced]);
 
     // ── Deactivate comparison ─────────────────────────────────────────────────
     const deactivateCompare = useCallback(() => {
@@ -263,20 +296,28 @@ export default function CompareNormal() {
 
     return (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs text-slate-200 font-medium">Normal</span>
-            </div>
+
+            <button
+                onClick={() => setIsSynced(!isSynced)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${isSynced
+                    ? 'bg-blue-600/20 border-blue-500/50 text-blue-400'
+                    : 'bg-slate-900 border-slate-800 text-slate-500'
+                    }`}
+                title="Toggle Sync"
+            >
+                {isSynced ? <Link className="h-3 w-3" /> : <Unlink className="h-3 w-3" />}
+                {isSynced ? 'Synced' : 'Independent'}
+            </button>
+
             <div className="w-px h-4 bg-slate-700" />
             {maskToggles.map((t, i) => (
                 <button
                     key={t.structure}
                     onClick={() => toggleStructureMask(i)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${
-                        t.visible
-                            ? 'bg-slate-800 border-slate-600 text-slate-200'
-                            : 'bg-slate-900 border-slate-800 text-slate-500'
-                    }`}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${t.visible
+                        ? 'bg-slate-800 border-slate-600 text-slate-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-500'
+                        }`}
                 >
                     <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -285,7 +326,7 @@ export default function CompareNormal() {
                     {t.label}
                 </button>
             ))}
-            <div className="w-px h-4 bg-slate-700" />
+
             <button
                 onClick={deactivateCompare}
                 className="text-[10px] text-slate-400 hover:text-red-400 transition-colors font-medium"
