@@ -23,6 +23,12 @@ export default function Viewport(props) {
   const [sortedLoadedIndices, setSortedLoadedIndices] = useState([0]);
   const queueRef = useRef(null);
   const lastTapTimeRef = useRef(0);
+  const voiRef = useRef(null);
+  const invertRef = useRef(false);
+  const voiCorrectionActiveRef = useRef(false);
+  const prevImageIndexRef = useRef(0);
+  const loadedSetRef = useRef(new Set());
+  const progressThrottleRef = useRef(null);
 
   const { dispatch } = useContext(DataDispatchContext);
 
@@ -130,7 +136,6 @@ export default function Viewport(props) {
       PanTool,
       WindowLevelTool,
       StackScrollTool,
-      StackScrollMouseWheelTool,
       ZoomTool,
       ProbeTool,
       ToolGroupManager,
@@ -158,11 +163,12 @@ export default function Viewport(props) {
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ numTouchPoints: 3 }], });
       } else {
-        toolGroup.addTool(StackScrollMouseWheelTool.toolName, { loop: false });
+        // StackScrollMouseWheelTool intentionally NOT added — we handle
+        // wheel events ourselves to gate scrolling to cached-only images
+        // and prevent Cornerstone's on-demand loader from triggering.
         toolGroup.setToolActive(WindowLevelTool.toolName);
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
-        toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
         toolGroup.setToolActive(StackScrollTool.toolName);
       }
     }
@@ -208,6 +214,8 @@ export default function Viewport(props) {
       }
     }
 
+    loadedSetRef.current = new Set([initialIndex]);
+    prevImageIndexRef.current = initialIndex;
     setLoadedImages(new Set([initialIndex]));
     setAllImagesLoaded(false);
 
@@ -219,10 +227,12 @@ export default function Viewport(props) {
       // Cornerstone handles lazy-loading pixels as needed.
       await viewport.setStack(s, initialIndex);
 
+      voiRef.current = cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
       viewport.setProperties({
-        voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
+        voiRange: voiRef.current,
         isComputedVOI: false,
       });
+      invertRef.current = viewport.getProperties().invert ?? false;
 
       addCornerstoneTools();
       setViewportReady(true);
@@ -231,26 +241,107 @@ export default function Viewport(props) {
       // Start the intelligent queue
       startQueue(s, viewportId, initialIndex);
 
+      // Intercept wheel events in the CAPTURE phase — this runs before
+      // Cornerstone's StackScrollMouseWheelTool (which listens in the
+      // bubble phase). We stop propagation so Cornerstone never sees
+      // the event, then navigate ourselves only to cached images.
+      const handleWheel = (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const delta = event.deltaY > 0 ? 1 : -1;
+        const currentId = viewport.getCurrentImageId();
+        const current = s.indexOf(currentId);
+
+        for (let i = current + delta; i >= 0 && i < s.length; i += delta) {
+          if (loadedSetRef.current.has(i)) {
+            viewport.setImageIdIndex(i);
+
+            // Force our VOI onto the new image — setImageIdIndex may
+            // auto-compute VOI from image metadata on first display.
+            // Both calls are synchronous, so the browser only paints
+            // the corrected frame.
+            if (voiRef.current) {
+              viewport.setProperties({
+                voiRange: voiRef.current,
+                invert: invertRef.current,
+                isComputedVOI: false,
+              });
+              viewport.render();
+            }
+
+            prevImageIndexRef.current = i;
+            setCurrentImageIndex(i);
+            if (queueRef.current) {
+              queueRef.current.updateFocus(i);
+            }
+            break;
+          }
+        }
+      };
+
+      // Fallback for non-wheel navigation (touch drag, programmatic).
+      // Still gates to loaded images, but the wheel handler above is
+      // the primary defense for desktop scrolling.
       const handleImageChange = (event) => {
-        // Find real index 
         const imageId = viewport.getCurrentImageId();
-        const realIndex = s.indexOf(imageId);
-        setCurrentImageIndex(realIndex);
+        const targetIndex = s.indexOf(imageId);
 
         if (queueRef.current) {
-          queueRef.current.updateFocus(realIndex);
+          queueRef.current.updateFocus(targetIndex);
         }
 
+        if (!loadedSetRef.current.has(targetIndex)) {
+          const prev = prevImageIndexRef.current;
+          const dir = targetIndex >= prev ? 1 : -1;
 
-        // Window/level settings are preserved across images
-        // Only set during initial load (lines 219-222), not on every scroll
+          let nearest = -1;
+          for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
+            if (loadedSetRef.current.has(i)) {
+              nearest = i;
+              break;
+            }
+          }
+
+          if (nearest === -1) nearest = prev;
+
+          if (nearest !== targetIndex) {
+            viewport.setImageIdIndex(nearest);
+            prevImageIndexRef.current = nearest;
+            setCurrentImageIndex(nearest);
+            return;
+          }
+        }
+
+        prevImageIndexRef.current = targetIndex;
+        setCurrentImageIndex(targetIndex);
       };
-      elementRef.current?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+
+      const captureUserVoi = () => {
+        const props = viewport.getProperties();
+        if (props.voiRange) {
+          voiRef.current = props.voiRange;
+          invertRef.current = props.invert ?? false;
+        }
+      };
+
+      const el = elementRef.current;
+      el?.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+      el?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+      el?.addEventListener('mouseup', captureUserVoi);
+      el?.addEventListener('touchend', captureUserVoi);
 
       return () => {
-        elementRef.current?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+        el?.removeEventListener('wheel', handleWheel, true);
+        el?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
+        el?.removeEventListener('mouseup', captureUserVoi);
+        el?.removeEventListener('touchend', captureUserVoi);
 
-        // Log performance metrics before destroying
+        if (progressThrottleRef.current) {
+          clearTimeout(progressThrottleRef.current);
+          progressThrottleRef.current = null;
+        }
+
         if (queueRef.current) {
           queueRef.current.destroy();
         }
@@ -271,21 +362,23 @@ export default function Viewport(props) {
       allImageIds,
       3,
       (loadedIndex) => {
-        // When image finishes loading
-        const imageId = allImageIds[loadedIndex];
+        loadedSetRef.current.add(loadedIndex);
 
-
-
-        setLoadedImages(prev => {
-          const newSet = new Set(prev);
-          newSet.add(loadedIndex);
-          if (newSet.size === allImageIds.length) {
-            setAllImagesLoaded(true);
+        if (loadedSetRef.current.size === allImageIds.length) {
+          setAllImagesLoaded(true);
+          setLoadedImages(new Set(loadedSetRef.current));
+          if (progressThrottleRef.current) {
+            clearTimeout(progressThrottleRef.current);
+            progressThrottleRef.current = null;
           }
-          return newSet;
-        });
+        } else if (!progressThrottleRef.current) {
+          progressThrottleRef.current = setTimeout(() => {
+            setLoadedImages(new Set(loadedSetRef.current));
+            progressThrottleRef.current = null;
+          }, 250);
+        }
       },
-      () => { }, // Empty callback for onImageLoadStart (not used)
+      () => { },
       isMobile
     );
 

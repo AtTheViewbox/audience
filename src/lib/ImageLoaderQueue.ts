@@ -21,7 +21,7 @@ export class ImageLoaderQueue {
     // Scroll throttling
     private throttleTimeout: NodeJS.Timeout | null = null;
     private pendingFocusIndex: number | null = null;
-    private readonly THROTTLE_MS = 200;
+    private readonly THROTTLE_MS = 100;
 
     // Idle detection
     private idleTimeout: NodeJS.Timeout | null = null;
@@ -82,13 +82,17 @@ export class ImageLoaderQueue {
     }
 
     public updateFocus(focusIndex: number) {
-        // Throttle scroll events
         this.pendingFocusIndex = focusIndex;
+        this.handleScrollActivity();
 
         if (this.throttleTimeout) {
-            // Already waiting, just update pending index
             return;
         }
+
+        // Leading edge: respond immediately to the first scroll event,
+        // then batch subsequent updates within the throttle window
+        this.applyFocusUpdate(focusIndex);
+        this.pendingFocusIndex = null;
 
         this.throttleTimeout = setTimeout(() => {
             if (this.pendingFocusIndex !== null) {
@@ -97,9 +101,6 @@ export class ImageLoaderQueue {
             }
             this.throttleTimeout = null;
         }, this.THROTTLE_MS);
-
-        // Mark as scrolling and reset idle timer
-        this.handleScrollActivity();
     }
 
     private handleScrollActivity() {
@@ -181,44 +182,35 @@ export class ImageLoaderQueue {
         }
     }
 
-    private async processNext() {
+    private processNext() {
         if (this.isDestroyed) return;
 
-        // While we have slots open and items in queue
         while (this.processing.size < this.concurrency && this.queue.length > 0) {
-            // Double check inside loop in case state changed async
             if (this.isDestroyed) return;
 
-            // OPTIMIZATION: Queue is already sorted by applyFocusUpdate, no need to sort again
-            // Just shift the highest priority item (at index 0)
             const item = this.queue.shift();
             if (!item) break;
 
             if (this.loaded.has(item.idx)) continue;
 
             this.processing.add(item.id);
-
-            // Notify that loading is starting
             this.onImageLoadStart(item.idx);
 
-            // Fetch
-            try {
-                await cornerstone.imageLoader.loadAndCacheImage(item.id, {
-                    priority: 10,
-                    requestType: 'prefetch'
-                });
-
+            const loadItem = item;
+            cornerstone.imageLoader.loadAndCacheImage(loadItem.id, {
+                priority: 10,
+                requestType: 'prefetch'
+            }).then(() => {
                 if (!this.isDestroyed) {
-                    this.loaded.add(item.idx);
-                    this.onImageLoaded(item.idx);
+                    this.loaded.add(loadItem.idx);
+                    this.onImageLoaded(loadItem.idx);
                 }
-            } catch (e) {
-                console.error(`Failed to load image ${item.idx}`, e);
-            } finally {
-                this.processing.delete(item.id);
-                // Trigger next
+            }).catch((e: unknown) => {
+                console.error(`Failed to load image ${loadItem.idx}`, e);
+            }).finally(() => {
+                this.processing.delete(loadItem.id);
                 this.processNext();
-            }
+            });
         }
     }
 }
