@@ -186,6 +186,91 @@ export function extractInstanceNumber(str) {
     return match ? parseInt(match[0], 10) : null;
 }
 
+/**
+ * Compute per-z-slice mask-voxel count from a 3D RLE mask.
+ * Returns a Float64Array of length D (shape[2]) in raw z-space
+ * (z = flatIndex % D). Efficiently handles large runs via modular arithmetic.
+ */
+export function computeSliceProfile(maskRle, shape) {
+    const D = shape[2];
+    const profile = new Float64Array(D);
+    for (let i = 0; i < maskRle.length; i += 2) {
+        const start = maskRle[i];
+        const len = maskRle[i + 1];
+        const fullWraps = Math.floor(len / D);
+        if (fullWraps > 0) {
+            for (let z = 0; z < D; z++) profile[z] += fullWraps;
+        }
+        const rem = len - fullWraps * D;
+        const z0 = start % D;
+        for (let j = 0; j < rem; j++) {
+            profile[(z0 + j) % D]++;
+        }
+    }
+    return profile;
+}
+
+/**
+ * 1D cross-correlation to find the shift k that maximises
+ * sum_z( a[z] * b[z + k] ).  O(lenA * lenB) but both are ≤ ~400 so it's instant.
+ *
+ * Returns { offset, score } where offset is the raw-z shift.
+ */
+export function crossCorrelateProfiles(a, b) {
+    const lenA = a.length;
+    const lenB = b.length;
+    let bestK = 0;
+    let bestScore = -1;
+    for (let k = -(lenB - 1); k < lenA; k++) {
+        let score = 0;
+        const zStart = Math.max(0, -k);
+        const zEnd = Math.min(lenA, lenB - k);
+        for (let z = zStart; z < zEnd; z++) {
+            score += a[z] * b[z + k];
+        }
+        if (score > bestScore) {
+            bestScore = score;
+            bestK = k;
+        }
+    }
+    return { offset: bestK, score: bestScore };
+}
+
+/**
+ * Compute the viewport scroll offset between a patient and normal scan
+ * using slice-profile cross-correlation.  Handles partially-clipped organs
+ * much better than single-centroid alignment.
+ *
+ * patMasks / normMasks: arrays of { mask_rle, shape }
+ * Both scans are assumed to share the same flipZ convention.
+ *
+ * Returns the scrollOffset for use in scroll sync:
+ *   normalViewportSlice = patientViewportSlice + scrollOffset
+ */
+export function computeProfileScrollOffset(patMasks, normMasks) {
+    // Sum profiles across all structures for a more distinctive signal
+    const patD = patMasks[0].shape[2];
+    const normD = normMasks[0].shape[2];
+    const patCombined = new Float64Array(patD);
+    const normCombined = new Float64Array(normD);
+
+    patMasks.forEach(({ mask_rle, shape }) => {
+        const p = computeSliceProfile(mask_rle, shape);
+        for (let i = 0; i < p.length; i++) patCombined[i] += p[i];
+    });
+    normMasks.forEach(({ mask_rle, shape }) => {
+        const p = computeSliceProfile(mask_rle, shape);
+        for (let i = 0; i < p.length; i++) normCombined[i] += p[i];
+    });
+
+    const { offset: rawK } = crossCorrelateProfiles(patCombined, normCombined);
+
+    // Convert raw-z offset → viewport offset.
+    // With flipZ=true (both axial CT): viewportIdx ∝ (D - rawZ), so
+    // scrollOffset = (normD - patD) - rawK
+    return (normD - patD) - rawK;
+}
+
 export function drawRleMaskOverlay({
     viewport,
     volumeMaskRle,          // full 3D RLE from backend

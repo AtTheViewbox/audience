@@ -1,9 +1,8 @@
 import { useState, useContext, useRef, useEffect } from 'react';
 import { UserContext } from '../../context/UserContext';
 import { DataContext, DataDispatchContext } from '../../context/DataContext';
-import { Sparkles, X, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { setMaskOverlayVisible } from '../../lib/medgemma-utils';
 
 import AgentChat from './AgentChat';
 
@@ -21,12 +20,8 @@ export default function MedGemmaButton() {
   const measuredBtn = useRef({ w: 148, h: 40 }); // fallback dims
 
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Constrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" },
+    { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Contrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Compare with Normal**: Side-by-side reference CT comparison (or press **N**)\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" },
   ]);
-
-  // Mask toggle state — shown only when a mask exists
-  const [hasMask, setHasMask] = useState(false);
-  const [maskVisible, setMaskVisibleState] = useState(true);
 
   const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
 
@@ -75,15 +70,6 @@ export default function MedGemmaButton() {
     }, 80);
   };
 
-  const handleToggleMask = () => {
-    const viewport = renderingEngine?.getViewport('0-vp');
-    if (!viewport) return;
-    const next = !maskVisible;
-    setMaskVisibleState(next);
-    setMaskOverlayVisible(viewport, next, 'medgemma-overlay');
-    viewport.element?.__rleRenderOnce?.();
-  };
-
   const card = {
     background: '#020617', // slate-950
     border: '1px solid #1e293b', // slate-800
@@ -117,22 +103,6 @@ export default function MedGemmaButton() {
         </div>
 
         <div className="flex items-center gap-1" style={{ opacity: contentVisible ? 1 : 0, transition: 'opacity 0.15s ease', pointerEvents: contentVisible ? 'auto' : 'none' }}>
-          {/* Mask toggle — only shown when a mask exists */}
-          {hasMask && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleToggleMask(); }}
-              title={maskVisible ? 'Hide mask overlay' : 'Show mask overlay'}
-              className={`flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-semibold transition-colors border ${maskVisible
-                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20'
-                : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                }`}
-            >
-              {maskVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-              <span>Mask</span>
-            </button>
-          )}
-
-          {/* Close */}
           <button
             onClick={(e) => { e.stopPropagation(); handleClose(); }}
             className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
@@ -159,10 +129,8 @@ export default function MedGemmaButton() {
           userData={userData}
           supabaseClient={supabaseClient}
           dispatch={dispatch}
-          onMaskReady={(has) => {
-            setHasMask(has);
-            if (has) setMaskVisibleState(true);
-          }}
+          dataDispatch={dispatch}
+          onMaskReady={() => {}}
         />
       </div>
     </div>,

@@ -249,6 +249,9 @@ export default function Viewport(props) {
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        // When externally synced (Compare-with-Normal), block all user scrolling
+        if (el?.dataset.voiSynced) return;
+
         const delta = event.deltaY > 0 ? 1 : -1;
         const currentId = viewport.getCurrentImageId();
         const current = s.indexOf(currentId);
@@ -257,10 +260,6 @@ export default function Viewport(props) {
           if (loadedSetRef.current.has(i)) {
             viewport.setImageIdIndex(i);
 
-            // Force our VOI onto the new image — setImageIdIndex may
-            // auto-compute VOI from image metadata on first display.
-            // Both calls are synchronous, so the browser only paints
-            // the corrected frame.
             if (voiRef.current) {
               viewport.setProperties({
                 voiRange: voiRef.current,

@@ -42,6 +42,10 @@ initialData.sessionMeta = { mode: "TEAM", owner: "" }
 initialData.activeUsers = [];
 initialData.toolSelected = "scroll";
 
+// Compare with Normal state
+initialData.lastSegmentation = null;   // { structures, results, orientation, maskTransform }
+initialData.compareNormal = null;      // { active, structure, scrollOffset, normalCentroidSlice, patientCentroidSlice, normalMaskData, originalLd, originalVd }
+
 // Added for Broadcast-based ownership arbitration
 initialData.shareClock = 0;  // last share change timestamp (ms since epoch)
 initialData.shareBy = "";    // last user who changed it (tie-break)
@@ -763,7 +767,6 @@ export function dataReducer(data, action) {
             );
             break;
         case 'update_session_owner':
-            // Update session owner when user logs in
             new_data = {
                 ...data,
                 sessionMeta: {
@@ -771,6 +774,44 @@ export function dataReducer(data, action) {
                     owner: action.payload
                 }
             };
+            break;
+        case 'store_segmentation':
+            new_data = { ...data, lastSegmentation: action.payload };
+            break;
+        case 'activate_compare_normal': {
+            const { normalVd, scrollOffset, normalCentroidSlice, patientCentroidSlice, normalMaskDataList, structure } = action.payload;
+            new_data = {
+                ...data,
+                compareNormal: {
+                    active: true,
+                    structure,
+                    scrollOffset,
+                    normalCentroidSlice,
+                    patientCentroidSlice,
+                    normalMaskDataList,
+                    originalLd: { ...data.ld },
+                    originalVd: [...data.vd],
+                },
+                ld: { r: 1, c: 2 },
+                vd: [...data.vd, normalVd],
+            };
+            break;
+        }
+        case 'deactivate_compare_normal': {
+            if (!data.compareNormal) { new_data = data; break; }
+            new_data = {
+                ...data,
+                ld: data.compareNormal.originalLd,
+                vd: data.compareNormal.originalVd,
+                compareNormal: null,
+            };
+            break;
+        }
+        case 'request_compare_normal':
+            new_data = { ...data, compareNormalRequested: true };
+            break;
+        case 'clear_compare_normal_request':
+            new_data = { ...data, compareNormalRequested: false };
             break;
         default:
             throw Error('Unknown action: ' + action.type);

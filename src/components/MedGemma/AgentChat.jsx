@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import * as cornerstone from '@cornerstonejs/core';
 import { Button } from '@/components/ui/button';
+import { DataContext } from '../../context/DataContext';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-    Bot, Loader2, Send, User, Share,
-    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search
+    Bot, Loader2, Send, User, Share, Square,
+    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search, GitCompare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -68,6 +69,7 @@ const STEP_META = {
     windowing: { icon: Layers, label: 'Adjusting window', color: 'text-blue-400', bg: 'bg-blue-950/30', border: 'border-blue-800/50' },
     modality: { icon: Search, label: 'Detecting modality', color: 'text-purple-400', bg: 'bg-purple-950/30', border: 'border-purple-800/50' },
     segmentation: { icon: Eye, label: 'Segmenting structure', color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/50' },
+    compare: { icon: GitCompare, label: 'Comparing with normal', color: 'text-teal-400', bg: 'bg-teal-950/30', border: 'border-teal-800/50' },
     summary: { icon: MessageSquare, label: 'Analyzing images', color: 'text-cyan-400', bg: 'bg-cyan-950/30', border: 'border-cyan-800/50' },
     share: { icon: Link, label: 'Generating share link', color: 'text-amber-400', bg: 'bg-amber-950/30', border: 'border-amber-800/50' },
     error: { icon: Zap, label: 'Error', color: 'text-red-400', bg: 'bg-red-950/30', border: 'border-red-800/50' },
@@ -187,13 +189,22 @@ export default function AgentChat({
     supabaseClient,
     dispatch,      // DataDispatchContext dispatch — used to join sessions reactively
     onMaskReady,   // (hasMask: bool) => void
+    dataDispatch,  // DataContext dispatch for storing segmentation results
 }) {
+    const { data: ctxData } = useContext(DataContext);
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
     const [activeMasks, setActiveMasks] = useState([]);
     const scrollRef = useRef(null);
     const textareaRef = useRef(null);
     const studyCacheRef = useRef(null);
+    const abortRef = useRef(null);
+    const lastSegRef = useRef(null);
+
+    // Keep lastSegRef in sync with context — covers segmentation done outside the chat
+    useEffect(() => {
+        if (ctxData?.lastSegmentation) lastSegRef.current = ctxData.lastSegmentation;
+    }, [ctxData?.lastSegmentation]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -209,7 +220,23 @@ export default function AgentChat({
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    const agentFetch = (url, opts = {}) =>
+        fetch(url, { ...opts, signal: abortRef.current?.signal });
+
     const getViewport = () => renderingEngine?.getViewport('0-vp') ?? null;
+
+    const getPatientWwWc = () => {
+        try {
+            const vp = getViewport();
+            if (!vp) return null;
+            const { voiRange } = vp.getProperties();
+            if (!voiRange) return null;
+            return {
+                ww: Math.round(voiRange.upper - voiRange.lower),
+                wc: Math.round((voiRange.upper + voiRange.lower) / 2),
+            };
+        } catch (_) { return null; }
+    };
 
     const getDicomUrls = (viewport) => {
         if (!viewport) return [];
@@ -285,7 +312,7 @@ export default function AgentChat({
 
         let result = { modality: 'Unknown', orientation: 'axial', confidence: 0, reasoning: '' };
         try {
-            const resp = await fetch(`${BASE_URL}/detect-modality`, {
+            const resp = await agentFetch(`${BASE_URL}/detect-modality`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dicom_urls: dicomUrls }),
@@ -406,7 +433,7 @@ export default function AgentChat({
     };
 
     // ── Agent dispatch ────────────────────────────────────────────────────────
-    const runAgent = async (userMessage, history) => {
+    const runAgent = async (userMessage, history, signal) => {
         const viewport = getViewport();
         const dicomUrls = getDicomUrls(viewport);
 
@@ -423,7 +450,7 @@ export default function AgentChat({
                     content: m.content.slice(0, 300) // truncate long AI outputs
                 }));
 
-            const routeResp = await fetch(`${BASE_URL}/agent-route`, {
+            const routeResp = await agentFetch(`${BASE_URL}/agent-route`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: userMessage, history: cleanHistory })
@@ -438,14 +465,20 @@ export default function AgentChat({
         }
 
         // ── Client-side fallback: catch missed explain_finding ────────────────
-        // If router said 'chat' but message clearly references a radiology finding/report
-        // AND there's no prior assistant message (so it's not a follow-up), override.
         if (action === 'chat') {
             const hasPriorAssistant = history.some(m => m.role === 'assistant' && m.content);
             const findingKeywords = /radiology\s*report|impression|finding|opacity|nodule|lesion|effusion|infiltrat|consolidat|mass|atelectasis|pneumonia|explain\s+(my|the|this)\s+(report|scan|finding|impression)/i;
             if (!hasPriorAssistant && findingKeywords.test(userMessage)) {
                 action = 'explain_finding';
                 params = { ...params, finding: userMessage };
+            }
+        }
+
+        // ── Client-side fallback: catch missed compare_normal ─────────────────
+        if (action === 'chat') {
+            const compareKeywords = /compare\s*(with|to)?\s*normal|normal\s*(comparison|reference|ct)|side\s*by\s*side.*normal|healthy\s*(scan|ct|reference)|what\s*(does|would)\s*normal\s*look/i;
+            if (compareKeywords.test(userMessage)) {
+                action = 'compare_normal';
             }
         }
 
@@ -460,7 +493,7 @@ export default function AgentChat({
                     reply = `Window/level adjustment is only available for **CT scans**. The current study appears to be **${winModality}**, which doesn't use Hounsfield Unit windowing.`;
                 } else {
                     addStep({ type: 'windowing', label: 'Adjusting window', status: 'running', result: null });
-                    const winResp = await fetch(`${BASE_URL}/check-window`, {
+                    const winResp = await agentFetch(`${BASE_URL}/check-window`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: userMessage })
@@ -495,7 +528,7 @@ export default function AgentChat({
                     if (modality === 'CT') {
                         addStep({ type: 'windowing', label: `Optimizing ${modality} window`, status: 'running', result: null });
                         try {
-                            const winResp = await fetch(`${BASE_URL}/check-window`, {
+                            const winResp = await agentFetch(`${BASE_URL}/check-window`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ text: `Show me the ${findingText}` })
@@ -524,7 +557,7 @@ export default function AgentChat({
                         addStep({ type: 'segmentation', label: 'Identifying structures in finding', status: 'running', result: null });
                         let structures = [];
                         try {
-                            const identResp = await fetch(`${BASE_URL}/identify_structure`, {
+                            const identResp = await agentFetch(`${BASE_URL}/identify_structure`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ text: findingText })
@@ -542,7 +575,7 @@ export default function AgentChat({
                             addStep({ type: 'segmentation', label: `Segmenting ${structures.length} structure(s)`, status: 'running', result: null });
 
                             try {
-                                const segResp = await fetch(`${BASE_URL}/segment_dicom`, {
+                                const segResp = await agentFetch(`${BASE_URL}/segment_dicom`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ dicom_urls: dicomUrls, structures, modality, orientation })
@@ -628,6 +661,16 @@ export default function AgentChat({
                                     );
                                     const names = foundResults.map(r => friendlyStructureLabel(r.structure)).join(', ');
                                     updateLastStep({ status: 'done', result: `${names} segmented — ${picked.length} slices selected` });
+
+                                    const segPayload = {
+                                        structures: foundResults.map(r => r.structure),
+                                        results: foundResults,
+                                        orientation: segData.orientation || orientation,
+                                        maskTransform,
+                                        dicomUrls,
+                                    };
+                                    lastSegRef.current = segPayload;
+                                    dataDispatch?.({ type: 'store_segmentation', payload: segPayload });
                                 } else {
                                     updateLastStep({ status: 'done', result: 'No structures found, using nearby slices' });
                                 }
@@ -650,7 +693,7 @@ export default function AgentChat({
 
                     addStep({ type: 'summary', label: `Generating analysis from ${summaryDicomUrls.length} slices`, status: 'running', result: null });
                     try {
-                        const resp = await fetch(`${BASE_URL}/summary-multi`, {
+                        const resp = await agentFetch(`${BASE_URL}/summary-multi`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -690,7 +733,7 @@ export default function AgentChat({
                     const { modality: detectedModality, orientation: detectedOrientation } = await detectStudyInfo(dicomUrls, { showStep: false });
 
                     // Identify structure(s)
-                    const identResp = await fetch(`${BASE_URL}/identify_structure`, {
+                    const identResp = await agentFetch(`${BASE_URL}/identify_structure`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: structureHint })
@@ -707,7 +750,7 @@ export default function AgentChat({
                         updateLastStep({ status: 'done', result: `Structures: ${labels}` });
                         addStep({ type: 'segmentation', label: `Segmenting ${structures.length > 1 ? `${structures.length} structures` : labels}…`, status: 'running', result: null });
 
-                        const segResp = await fetch(`${BASE_URL}/segment_dicom`, {
+                        const segResp = await agentFetch(`${BASE_URL}/segment_dicom`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ dicom_urls: dicomUrls, structures, modality: detectedModality, orientation: detectedOrientation })
@@ -758,8 +801,112 @@ export default function AgentChat({
 
                             const names = foundResults.map(r => friendlyStructureLabel(r.structure)).join(', ');
                             updateLastStep({ status: 'done', result: `${names} segmented` });
-                            reply = `**${names}** ${foundResults.length > 1 ? 'have' : 'has'} been highlighted on the viewport. Use the structure toggles to show/hide individual masks.`;
+                            reply = `**${names}** ${foundResults.length > 1 ? 'have' : 'has'} been highlighted on the viewport. Use the structure toggles to show/hide individual masks.\n\nPress **N** to compare with a normal reference CT.`;
+
+                            const segPayload2 = {
+                                structures: foundResults.map(r => r.structure),
+                                results: foundResults,
+                                orientation: segData.orientation || detectedOrientation,
+                                maskTransform,
+                                dicomUrls,
+                            };
+                            lastSegRef.current = segPayload2;
+                            dataDispatch?.({ type: 'store_segmentation', payload: segPayload2 });
                         }
+                    }
+                }
+
+            } else if (action === 'compare_normal') {
+                const seg = lastSegRef.current;
+
+                if (!seg?.results?.length) {
+                    addStep({ type: 'compare', label: 'Comparing with normal reference', status: 'error', result: 'Segment a structure first (e.g. "show me the liver").' });
+                    reply = 'Please segment a structure first (e.g. "show me the liver"), then try comparing with normal.';
+                } else if (!dicomUrls.length) {
+                    addStep({ type: 'compare', label: 'Comparing with normal reference', status: 'error', result: 'No DICOM loaded.' });
+                    reply = 'No imaging study is currently loaded. Please load a DICOM study first.';
+                } else {
+                    const foundResults = seg.results;
+                    const structureNames = foundResults.map(r => friendlyStructureLabel(r.structure));
+
+                    addStep({
+                        type: 'compare',
+                        label: `Fetching normal reference for ${structureNames.join(', ')}`,
+                        status: 'running',
+                        result: null,
+                    });
+
+                    // Fetch atlas for ALL structures in parallel
+                    const atlasResults = [];
+                    const atlasPromises = foundResults.map(async (result) => {
+                        try {
+                            const resp = await agentFetch(`${BASE_URL}/normal-atlas/${result.structure}`);
+                            const atlasData = await resp.json();
+                            if (!atlasData.error) {
+                                return { structure: result.structure, atlas: atlasData, patientResult: result };
+                            }
+                        } catch { /* skip */ }
+                        return null;
+                    });
+                    const settled = (await Promise.all(atlasPromises)).filter(Boolean);
+                    atlasResults.push(...settled);
+
+                    if (!atlasResults.length) {
+                        updateLastStep({ status: 'error', result: 'No normal reference found for these structures.' });
+                        reply = 'Could not find normal reference data for the segmented structures. The atlas may not include them yet.';
+                    } else {
+                        const primary = atlasResults[0];
+                        const segMaskTransform = seg.maskTransform || DEFAULT_MASK_XFORM;
+
+                        // Patient centroid in viewport slice space
+                        const patD = primary.patientResult.shape[2];
+                        const patVoxelZ = primary.patientResult.centroid_voxel[2];
+                        const patRawZ = segMaskTransform.flipZ
+                            ? (patD - 1 - Math.round(patVoxelZ))
+                            : Math.round(patVoxelZ);
+                        const patCentroidSlice = patRawZ - (segMaskTransform.zOffset || 0);
+
+                        // Normal centroid in viewport slice space
+                        const normMaskXform = getMaskTransform(primary.atlas.orientation || 'axial');
+                        const normD = primary.atlas.shape[2];
+                        const normVoxelZ = primary.atlas.centroid_voxel[2];
+                        const normRawZ = normMaskXform.flipZ
+                            ? (normD - 1 - Math.round(normVoxelZ))
+                            : Math.round(normVoxelZ);
+                        const normCentroidSlice = normRawZ - (normMaskXform.zOffset || 0);
+
+                        const patVoi = getPatientWwWc();
+                        const normalVd = {
+                            s: primary.atlas.dicom_urls.map(url =>
+                                url.startsWith('dicomweb:') ? url : `dicomweb:${url}`
+                            ),
+                            ww: String(patVoi?.ww ?? primary.atlas.ww ?? 400),
+                            wc: String(patVoi?.wc ?? primary.atlas.wc ?? 50),
+                            ci: String(normCentroidSlice),
+                        };
+
+                        const normalMaskDataList = atlasResults.map(({ atlas }) => ({
+                            mask_rle: atlas.mask_rle,
+                            shape: atlas.shape,
+                            centroid_voxel: atlas.centroid_voxel,
+                            orientation: atlas.orientation || 'axial',
+                        }));
+
+                        dataDispatch?.({
+                            type: 'activate_compare_normal',
+                            payload: {
+                                normalVd,
+                                scrollOffset: 0,
+                                normalCentroidSlice: normCentroidSlice,
+                                patientCentroidSlice: patCentroidSlice,
+                                structure: primary.structure,
+                                normalMaskDataList,
+                            },
+                        });
+
+                        const names = atlasResults.map(a => friendlyStructureLabel(a.structure)).join(', ');
+                        updateLastStep({ status: 'done', result: `${names} — comparison ready` });
+                        reply = `**Compare with Normal** — showing **${names}** side by side with a healthy reference CT, registered by structure centroid.\n\nPress **N** to close the comparison when done.`;
                     }
                 }
 
@@ -776,7 +923,7 @@ export default function AgentChat({
 
             } else {
                 // Plain chat
-                const chatResp = await fetch(`${BASE_URL}/chat`, {
+                const chatResp = await agentFetch(`${BASE_URL}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -807,15 +954,150 @@ export default function AgentChat({
         setChatInput('');
         setChatLoading(true);
 
+        const controller = new AbortController();
+        abortRef.current = controller;
+
         try {
-            const reply = await runAgent(chatInput, history);
+            const reply = await runAgent(chatInput, history, controller.signal);
             finaliseMessage(reply);
         } catch (err) {
-            finaliseMessage(`Sorry, something went wrong: ${err.message}`);
+            if (err.name === 'AbortError') {
+                finaliseMessage('Stopped.');
+            } else {
+                finaliseMessage(`Sorry, something went wrong: ${err.message}`);
+            }
         } finally {
+            abortRef.current = null;
             setChatLoading(false);
         }
     };
+
+    const handleStop = () => {
+        abortRef.current?.abort();
+    };
+
+    // ── Run Compare with Normal as a standalone chat action ───────────────────
+    // Used by the N hotkey (via compareNormalRequested) and the agent route.
+    const runCompareNormalChat = useCallback(async () => {
+        if (chatLoading) return;
+
+        const seg = lastSegRef.current;
+        if (!seg?.results?.length) {
+            toast.info('Segment a structure first, then press N to compare.', { duration: 3000 });
+            return;
+        }
+
+        const viewport = getViewport();
+        const dicomUrls = getDicomUrls(viewport);
+        if (!dicomUrls.length) {
+            toast.info('No DICOM loaded.', { duration: 3000 });
+            return;
+        }
+
+        // Inject a synthetic user message + pending assistant message
+        setMessages(prev => [
+            ...prev,
+            { role: 'user', content: 'Compare with normal' },
+            { role: 'assistant', content: '', steps: [], _pending: true },
+        ]);
+        setChatLoading(true);
+
+        // Yield to let React commit the pending message before adding steps
+        await new Promise(r => setTimeout(r, 0));
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        try {
+            const foundResults = seg.results;
+            const segMaskTransform = seg.maskTransform || DEFAULT_MASK_XFORM;
+            const structureNames = foundResults.map(r => friendlyStructureLabel(r.structure));
+
+            addStep({
+                type: 'compare',
+                label: `Fetching normal reference for ${structureNames.join(', ')}`,
+                status: 'running',
+                result: null,
+            });
+
+            const atlasPromises = foundResults.map(async (result) => {
+                try {
+                    const resp = await fetch(`${BASE_URL}/normal-atlas/${result.structure}`, { signal: controller.signal });
+                    const atlasData = await resp.json();
+                    if (!atlasData.error) return { structure: result.structure, atlas: atlasData, patientResult: result };
+                } catch { /* skip */ }
+                return null;
+            });
+            const atlasResults = (await Promise.all(atlasPromises)).filter(Boolean);
+
+            if (!atlasResults.length) {
+                updateLastStep({ status: 'error', result: 'No normal reference found for these structures.' });
+                finaliseMessage('Could not find normal reference data. The atlas may not include them yet.');
+            } else {
+                const primary = atlasResults[0];
+
+                const patD = primary.patientResult.shape[2];
+                const patVoxelZ = primary.patientResult.centroid_voxel[2];
+                const patRawZ = segMaskTransform.flipZ ? (patD - 1 - Math.round(patVoxelZ)) : Math.round(patVoxelZ);
+                const patCentroidSlice = patRawZ - (segMaskTransform.zOffset || 0);
+
+                const normMaskXform = getMaskTransform(primary.atlas.orientation || 'axial');
+                const normD = primary.atlas.shape[2];
+                const normVoxelZ = primary.atlas.centroid_voxel[2];
+                const normRawZ = normMaskXform.flipZ ? (normD - 1 - Math.round(normVoxelZ)) : Math.round(normVoxelZ);
+                const normCentroidSlice = normRawZ - (normMaskXform.zOffset || 0);
+
+                const patVoi = getPatientWwWc();
+                const normalVd = {
+                    s: primary.atlas.dicom_urls.map(url => url.startsWith('dicomweb:') ? url : `dicomweb:${url}`),
+                    ww: String(patVoi?.ww ?? primary.atlas.ww ?? 400),
+                    wc: String(patVoi?.wc ?? primary.atlas.wc ?? 50),
+                    ci: String(normCentroidSlice),
+                };
+
+                const normalMaskDataList = atlasResults.map(({ atlas }) => ({
+                    mask_rle: atlas.mask_rle,
+                    shape: atlas.shape,
+                    centroid_voxel: atlas.centroid_voxel,
+                    orientation: atlas.orientation || 'axial',
+                }));
+
+                dataDispatch?.({
+                    type: 'activate_compare_normal',
+                    payload: {
+                        normalVd,
+                        scrollOffset: 0,
+                        normalCentroidSlice: normCentroidSlice,
+                        patientCentroidSlice: patCentroidSlice,
+                        structure: primary.structure,
+                        normalMaskDataList,
+                    },
+                });
+
+                const names = atlasResults.map(a => friendlyStructureLabel(a.structure)).join(', ');
+                updateLastStep({ status: 'done', result: `${names} — comparison ready` });
+                finaliseMessage(`**Compare with Normal** — showing **${names}** side by side with a healthy reference CT.\n\nPress **N** to close.`);
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                finaliseMessage('Stopped.');
+            } else {
+                updateLastStep({ status: 'error', result: err.message });
+                finaliseMessage(`Failed to load normal reference: ${err.message}`);
+            }
+        } finally {
+            abortRef.current = null;
+            setChatLoading(false);
+        }
+    }, [chatLoading, BASE_URL, dataDispatch]);
+
+    // ── React to hotkey-triggered compare request (N key) ────────────────────
+    useEffect(() => {
+        if (ctxData?.compareNormalRequested) {
+            dataDispatch?.({ type: 'clear_compare_normal_request' });
+            runCompareNormalChat();
+        }
+    }, [ctxData?.compareNormalRequested, runCompareNormalChat, dataDispatch]);
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
@@ -880,15 +1162,27 @@ export default function AgentChat({
                         className="flex-1 pr-8 py-1.5 px-3 text-xs bg-slate-900/50 text-slate-100 border border-slate-800 rounded-lg placeholder:text-slate-500 resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-blue-500/30 leading-relaxed disabled:opacity-50"
                         style={{ minHeight: '32px' }}
                     />
-                    <Button
-                        type="submit"
-                        size="icon"
-                        disabled={!chatInput.trim() || chatLoading}
-                        className="absolute right-1 bottom-1 h-7 w-7 text-slate-400 hover:text-blue-400 hover:bg-slate-800"
-                        variant="ghost"
-                    >
-                        {chatLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                    </Button>
+                    {chatLoading ? (
+                        <Button
+                            type="button"
+                            size="icon"
+                            onClick={handleStop}
+                            className="absolute right-1 bottom-1 h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-950/40"
+                            variant="ghost"
+                        >
+                            <Square className="h-3 w-3 fill-current" />
+                        </Button>
+                    ) : (
+                        <Button
+                            type="submit"
+                            size="icon"
+                            disabled={!chatInput.trim()}
+                            className="absolute right-1 bottom-1 h-7 w-7 text-slate-400 hover:text-blue-400 hover:bg-slate-800"
+                            variant="ghost"
+                        >
+                            <Send className="h-3 w-3" />
+                        </Button>
+                    )}
                 </form>
                 {/* Capability hints */}
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -896,7 +1190,9 @@ export default function AgentChat({
                         'Adjust window',
                         'Show an organ',
                         'Explain a finding',
+                        'Compare with normal',
                         'Share session',
+                        'Detect modality',
                     ].map(hint => (
                         <button
                             key={hint}

@@ -3,6 +3,7 @@ import Fab from './Fab'
 import Tools from './Tools'
 import SessionUsers from './SessionUsers'
 import MedGemmaButton from './MedGemma/MedGemmaButton'
+import CompareNormal from './CompareNormal'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
 
@@ -19,6 +20,7 @@ function MainPage() {
         <Fab />
         <SessionUsers />
         <MedGemmaButton />
+        <CompareNormal />
         <Toaster position="top-right" />
       </>
   )
