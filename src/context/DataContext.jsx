@@ -45,6 +45,9 @@ initialData.toolSelected = "scroll";
 // Compare with Normal state
 initialData.lastSegmentation = null;   // { structures, results, orientation, maskTransform }
 initialData.compareNormal = null;      // { active, structure, scrollOffset, normalCentroidSlice, patientCentroidSlice, normalMaskData, originalLd, originalVd }
+initialData.chatHistory = [
+    { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Contrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Compare with Normal**: Side-by-side reference CT comparison (or press **N**)\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" }
+];
 
 // Added for Broadcast-based ownership arbitration
 initialData.shareClock = 0;  // last share change timestamp (ms since epoch)
@@ -214,7 +217,7 @@ export const DataProvider = ({ children }) => {
 
                 var { data, errorSession } = await cl
                     .from("viewbox")
-                    .select("user, url_params, session_id,mode")
+                    .select("user, url_params, session_id,mode,chat_history")
                     .eq("session_id", initialData?.s);
 
                 if (errorSession) throw errorSession;
@@ -236,7 +239,7 @@ export const DataProvider = ({ children }) => {
                         })
                     }
                     // Explicitly pass owner here to ensure it is set even if not previously in state
-                    dispatch({ type: "update_viewport_data", payload: { ...newData, mode: data[0].mode, owner: data[0].user } })
+                    dispatch({ type: "update_viewport_data", payload: { ...newData, mode: data[0].mode, owner: data[0].user, chatHistory: data[0].chat_history } })
                 }
             }
 
@@ -245,7 +248,7 @@ export const DataProvider = ({ children }) => {
             if (!userData.is_anonymous) {
                 var { data, errorCurrentSession } = await cl
                     .from("viewbox")
-                    .select("user, url_params, session_id,mode")
+                    .select("user, url_params, session_id,mode,chat_history")
                     .eq("user", userData.id);
                 if (errorCurrentSession) throw errorCurrentSession;
 
@@ -292,9 +295,8 @@ export const DataProvider = ({ children }) => {
                 .select("user")
                 .eq("session_id", data.sessionId)
                 .eq("user", userData.id)
-                .single()
                 .then(({ data: sessionData, error }) => {
-                    if (sessionData && !error) {
+                    if (sessionData && sessionData.length > 0 && !error) {
                         // This user owns the session - update sessionMeta.owner
                         console.log('Updating session owner to:', userData.id);
                         console.log('shareController exists:', !!data.shareController);
@@ -457,6 +459,15 @@ export const DataProvider = ({ children }) => {
                     }
                 )
             }
+
+            // Listen for chat messages shared across the session
+            interaction_channel.on(
+                'broadcast',
+                { event: 'chat-updated' },
+                (payload) => {
+                    dispatch({ type: 'update_chat_history', payload: payload.payload.messages })
+                }
+            )
 
             dispatch({ type: 'sharing_controller_initialized', payload: { shareController: share_controller, interactionChannel: interaction_channel, rosterChannel: roster_channel } })
 
@@ -679,6 +690,9 @@ export function dataReducer(data, action) {
                 sessionMeta: sessionMeta,
                 isRequestLoading: false,
             };
+            if (action.payload.chatHistory) {
+                new_data.chatHistory = action.payload.chatHistory;
+            }
             break;
         case 'sharing_controller_initialized':
             new_data = { ...data, ...action.payload }
@@ -690,6 +704,9 @@ export function dataReducer(data, action) {
                 mode: action.payload.mode ?? data.sessionMeta?.mode
             }
             new_data = { ...data, sessionId: sessionId, sessionMeta: sessionMeta2, isRequestLoading: false }
+            break;
+        case 'update_chat_history':
+            new_data = { ...data, chatHistory: action.payload };
             break;
 
         case 'apply_share_change': {

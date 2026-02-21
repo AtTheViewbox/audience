@@ -19,13 +19,34 @@ export default function MedGemmaButton() {
   const cardRef = useRef(null);
   const measuredBtn = useRef({ w: 148, h: 40 }); // fallback dims
 
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Contrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Compare with Normal**: Side-by-side reference CT comparison (or press **N**)\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" },
-  ]);
+  const messages = data.chatHistory || [];
+  const latestMessages = useRef(messages);
+  latestMessages.current = messages; // Always keep the latest reference synchronously
 
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  const setMessages = (newMessagesOrUpdater) => {
+    let newHistory;
+    if (typeof newMessagesOrUpdater === 'function') {
+      newHistory = newMessagesOrUpdater(latestMessages.current);
+    } else {
+      newHistory = newMessagesOrUpdater;
+    }
 
-  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
+    latestMessages.current = newHistory; // Update immediately for synchronous setMessages calls
+
+    dispatch({ type: 'update_chat_history', payload: newHistory });
+
+    if (data.interactionChannel) {
+      data.interactionChannel.send({
+        type: 'broadcast',
+        event: 'chat-updated',
+        payload: { messages: newHistory }
+      });
+    }
+  };
+
+  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
   // Measure button size before first interaction
   useEffect(() => {
@@ -36,6 +57,16 @@ export default function MedGemmaButton() {
       };
     }
   }, []);
+
+  useEffect(() => {
+    const onOpenRequest = () => {
+      if (phase === 'button') {
+        handleOpen();
+      }
+    };
+    window.addEventListener('medgemma-open-chat', onOpenRequest);
+    return () => window.removeEventListener('medgemma-open-chat', onOpenRequest);
+  }, [phase]);
 
   const handleOpen = () => {
     const { w: bw, h: bh } = measuredBtn.current;

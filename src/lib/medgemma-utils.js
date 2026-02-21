@@ -360,7 +360,7 @@ export function drawRleMaskOverlay({
         const imgH = dimensions?.[1];
         if (!imgW || !imgH) return;
 
-        const D = shape[2];
+        const D = shape ? shape[2] : 0;
         const z = viewport.getCurrentImageIdIndex();
         if (z < 0 || z >= D) return;
 

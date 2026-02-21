@@ -136,10 +136,11 @@ function ThinkingDots() {
 }
 
 // ── Message bubble ────────────────────────────────────────────────────────────
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, onRecallState }) {
     const isUser = msg.role === 'user';
     const isPending = !!msg._pending;
     const hasSteps = (msg.steps?.length ?? 0) > 0;
+    const hasState = !!msg.viewportState;
 
     return (
         <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -170,6 +171,17 @@ function MessageBubble({ msg }) {
                         {isUser ? msg.content : (
                             <div className="markdown-content [&_p]:text-slate-200 [&_li]:text-slate-200 [&_h1]:text-slate-100 [&_h2]:text-slate-100 [&_h3]:text-slate-100 [&_strong]:text-slate-100 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1">
                                 <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            </div>
+                        )}
+                        {!isUser && hasState && (
+                            <div className="mt-2 pt-2 border-t border-slate-700/50 flex justify-end">
+                                <button
+                                    onClick={() => onRecallState?.(msg.viewportState)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-md transition-colors text-[10px] font-medium border border-blue-500/20"
+                                >
+                                    <Eye className="h-3 w-3" />
+                                    Recall View
+                                </button>
                             </div>
                         )}
                     </div>
@@ -231,6 +243,7 @@ export default function AgentChat({
             if (!vp) return null;
             const { voiRange } = vp.getProperties();
             if (!voiRange) return null;
+
             return {
                 ww: Math.round(voiRange.upper - voiRange.lower),
                 wc: Math.round((voiRange.upper + voiRange.lower) / 2),
@@ -245,21 +258,14 @@ export default function AgentChat({
 
     const applyWindowing = async (viewport, wwHU, wcHU) => {
         try {
-            const imageId = viewport.getCurrentImageId();
-            let slope = 1, intercept = 0;
-            const image = cornerstone.cache.getImage(imageId);
-            if (image) {
-                slope = image.slope ?? 1;
-                intercept = image.intercept ?? 0;
-            } else {
-                const lut = cornerstone.metaData.get('modalityLutModule', imageId) || {};
-                slope = lut.rescaleSlope ?? 1;
-                intercept = lut.rescaleIntercept ?? 0;
-            }
-            const wwSV = wwHU / slope;
-            const wcSV = (wcHU - intercept) / slope;
-            viewport.setProperties({ voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwSV, wcSV) });
+            viewport.setProperties({
+                voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwHU, wcHU),
+                isComputedVOI: false
+            });
             viewport.render();
+
+            // Dispatch mouseup to tell Viewport.jsx to save this new VOI range to its scroll cache
+            viewport.element?.dispatchEvent(new MouseEvent('mouseup'));
         } catch (err) {
             console.error('Windowing failed:', err);
         }
@@ -374,17 +380,86 @@ export default function AgentChat({
         });
     };
 
-    // Finalises the pending assistant message with content
-    const finaliseMessage = (content) => {
+    // Finalises the pending assistant message with content and optional viewport state
+    const finaliseMessage = (content, viewportState = null) => {
         setMessages(prev => {
             const msgs = [...prev];
             const last = msgs[msgs.length - 1];
             if (last?.role === 'assistant' && last._pending) {
-                return [...msgs.slice(0, -1), { ...last, content, _pending: false }];
+                return [...msgs.slice(0, -1), { ...last, content, viewportState, _pending: false }];
             }
             return msgs;
         });
     };
+
+    // ── Apply stored viewport state ───────────────────────────────────────────
+    const applyViewportState = async (state) => {
+        if (!state) return;
+        const viewport = getViewport();
+        if (!viewport) return;
+
+        try {
+            // Restore windowing
+            if (state.windowing) {
+                await applyWindowing(viewport, state.windowing.ww, state.windowing.wc);
+            }
+
+            // Restore slice index
+            if (state.sliceIndex !== undefined) {
+                const cam = viewport.getCamera();
+                viewport.setImageIdIndex(state.sliceIndex);
+                viewport.setCamera(cam);
+                viewport.render();
+            }
+
+            // Restore Compare Normal state
+            if (state.compareNormal) {
+                dataDispatch?.({ type: 'activate_compare_normal', payload: state.compareNormal });
+            } else if (ctxData?.compareNormal?.active) {
+                // Deactivate if the recalled state wasn't a compare normal state
+                dataDispatch?.({ type: 'deactivate_compare_normal' });
+            }
+
+            // Restore Masks
+            clearAllMasks();
+            if (state.segmentation && state.segmentation.results?.length > 0) {
+                const patMasks = [];
+                state.segmentation.results.forEach((res, i) => {
+                    const overlayClass = `medgemma-mask-${i}`;
+                    const colorHex = MASK_COLORS[i % MASK_COLORS.length];
+                    const maskTransform = state.segmentation.maskTransform || DEFAULT_MASK_XFORM;
+
+                    // Ensure visible defaults to true if not explicitly set
+                    const isVisible = state.activeMasks ? state.activeMasks[i]?.visible !== false : true;
+
+                    drawRleMaskOverlay({
+                        viewport, volumeMaskRle: res.mask_rle, shape: res.shape,
+                        overlayClass, colorHex, ...maskTransform,
+                    });
+                    setMaskOverlayVisible(viewport, isVisible, overlayClass);
+
+                    patMasks.push({
+                        structure: res.structure, overlayClass, colorHex,
+                        visible: isVisible, label: friendlyStructureLabel(res.structure),
+                    });
+                });
+                setActiveMasks(patMasks);
+                onMaskReady?.(true);
+
+                // Update context to match restored segmentation
+                lastSegRef.current = state.segmentation;
+                dataDispatch?.({ type: 'store_segmentation', payload: state.segmentation });
+
+            }
+
+            toast.success('Viewport state restored.');
+
+        } catch (err) {
+            console.error('Failed to restore viewport state:', err);
+            toast.error('Could not fully restore the viewport state.');
+        }
+    };
+
 
     // ── Share session ─────────────────────────────────────────────────────────
     const handleShareSession = async () => {
@@ -818,6 +893,7 @@ export default function AgentChat({
 
             } else if (action === 'compare_normal') {
                 const seg = lastSegRef.current;
+                let compareNormalPayload = null;
 
                 if (!seg?.results?.length) {
                     addStep({ type: 'compare', label: 'Comparing with normal reference', status: 'error', result: 'Segment a structure first (e.g. "show me the liver").' });
@@ -893,16 +969,19 @@ export default function AgentChat({
                             orientation: atlas.orientation || 'axial',
                         }));
 
+                        const payload = {
+                            normalVd,
+                            scrollOffset: 0,
+                            normalCentroidSlice: normCentroidSlice,
+                            patientCentroidSlice: patCentroidSlice,
+                            structure: primary.structure,
+                            normalMaskDataList,
+                        };
+                        compareNormalPayload = payload;
+
                         dataDispatch?.({
                             type: 'activate_compare_normal',
-                            payload: {
-                                normalVd,
-                                scrollOffset: 0,
-                                normalCentroidSlice: normCentroidSlice,
-                                patientCentroidSlice: patCentroidSlice,
-                                structure: primary.structure,
-                                normalMaskDataList,
-                            },
+                            payload,
                         });
 
                         const names = atlasResults.map(a => friendlyStructureLabel(a.structure)).join(', ');
@@ -941,7 +1020,19 @@ export default function AgentChat({
             reply = `Sorry, I ran into an error: ${err.message}`;
         }
 
-        return reply;
+        // Capture the final viewport state before returning
+        let finalViewportState = null;
+        if (viewport && reply && !reply.startsWith('Sorry, I ran into an error')) {
+            finalViewportState = {
+                sliceIndex: viewport.getCurrentImageIdIndex?.(),
+                windowing: getPatientWwWc(),
+                segmentation: lastSegRef.current || null,
+                activeMasks: [...activeMasks], // Clone the active mask visibility array
+                compareNormal: typeof compareNormalPayload !== 'undefined' ? compareNormalPayload : (ctxData?.compareNormal?.active ? ctxData.compareNormal : null)
+            };
+        }
+
+        return { reply, viewportState: finalViewportState };
     };
 
     // ── Submit handler ────────────────────────────────────────────────────────
@@ -959,8 +1050,8 @@ export default function AgentChat({
         abortRef.current = controller;
 
         try {
-            const reply = await runAgent(chatInput, history, controller.signal);
-            finaliseMessage(reply);
+            const { reply, viewportState } = await runAgent(chatInput, history, controller.signal);
+            finaliseMessage(reply, viewportState);
         } catch (err) {
             if (err.name === 'AbortError') {
                 finaliseMessage('Stopped.');
@@ -1064,21 +1155,31 @@ export default function AgentChat({
                     orientation: atlas.orientation || 'axial',
                 }));
 
+                const payload = {
+                    normalVd,
+                    scrollOffset: 0,
+                    normalCentroidSlice: normCentroidSlice,
+                    patientCentroidSlice: patCentroidSlice,
+                    structure: primary.structure,
+                    normalMaskDataList,
+                };
+
                 dataDispatch?.({
                     type: 'activate_compare_normal',
-                    payload: {
-                        normalVd,
-                        scrollOffset: 0,
-                        normalCentroidSlice: normCentroidSlice,
-                        patientCentroidSlice: patCentroidSlice,
-                        structure: primary.structure,
-                        normalMaskDataList,
-                    },
+                    payload,
                 });
 
                 const names = atlasResults.map(a => friendlyStructureLabel(a.structure)).join(', ');
                 updateLastStep({ status: 'done', result: `${names} — comparison ready` });
-                finaliseMessage(`**Compare with Normal** — showing **${names}** side by side with a healthy reference CT.\n\nPress **N** to close.`);
+
+                const finalViewportState = {
+                    sliceIndex: viewport.getCurrentImageIdIndex?.(),
+                    windowing: getPatientWwWc(),
+                    segmentation: lastSegRef.current || null,
+                    activeMasks: [...activeMasks],
+                    compareNormal: payload
+                };
+                finaliseMessage(`**Compare with Normal** — showing **${names}** side by side with a healthy reference CT.\n\nPress **N** to close.`, finalViewportState);
             }
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -1107,7 +1208,7 @@ export default function AgentChat({
             <ScrollArea className="flex-1 bg-slate-950/20">
                 <div className="p-2 space-y-3 pb-2">
                     {messages.map((msg, i) => (
-                        <MessageBubble key={i} msg={msg} />
+                        <MessageBubble key={i} msg={msg} onRecallState={applyViewportState} />
                     ))}
 
                     {/* Share button — only when logged in and enough messages */}

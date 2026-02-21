@@ -118,7 +118,7 @@ export default function CompareNormal() {
             }
         };
 
-        const setup = () => {
+        const setup = async () => {
             if (cancelled) return;
             const patientVp = renderingEngine.getViewport('0-vp');
             const refVp = renderingEngine.getViewport('1-vp');
@@ -178,6 +178,17 @@ export default function CompareNormal() {
             const patIdx = patientVp.getCurrentImageIdIndex();
             const syncNormalIdx = Math.round(normCentroid + (patIdx - patCentroid) * ratio);
             const clampedCentroid = Math.max(0, Math.min(syncNormalIdx, refImages.length - 1));
+
+            try {
+                // Ensure the exact target slice is fully downloaded into memory BEFORE we navigate to it
+                // This prevents Cornerstone from asynchronously computing an inverted VOI when the image finally resolves
+                await cornerstone.imageLoader.loadAndCacheImage(refImages[clampedCentroid]);
+            } catch (err) {
+                console.warn('Preload failed for centroid target:', err);
+            }
+
+            if (cancelled) return;
+
             refVp.setImageIdIndex(clampedCentroid);
             pushPatientVoi(patientVp, refVp);
             refVp.render();
@@ -260,7 +271,10 @@ export default function CompareNormal() {
             if (e.key === 'n' || e.key === 'N') {
                 e.preventDefault();
                 if (isActive) deactivateCompare();
-                else dispatch({ type: 'request_compare_normal' });
+                else {
+                    dispatch({ type: 'request_compare_normal' });
+                    window.dispatchEvent(new CustomEvent('medgemma-open-chat'));
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);

@@ -41,6 +41,7 @@ const Mode = {
   TEAM: "TEAM",
 };
 function ShareTab() {
+  const { data: viewboxData } = useContext(DataContext);
   const { dispatch } = useContext(DataDispatchContext);
   const { userDispatch } = useContext(UserDispatchContext);
   const { userData, supabaseClient } = useContext(UserContext).data;
@@ -125,7 +126,7 @@ function ShareTab() {
       console.log(queryParams.toString());
       const { data, update_error } = await supabaseClient
         .from("viewbox")
-        .upsert({ user: userData.id, url_params: queryParams.toString() })
+        .upsert({ user: userData.id, url_params: queryParams.toString(), chat_history: viewboxData.chatHistory || [] })
         .select();
       queryParams.set("s", data[0].session_id);
       if (update_error) throw delete_error;
@@ -168,6 +169,10 @@ function ShareTab() {
 
       if (delete_error) throw delete_error;
 
+      console.log("---- DEBUG GENERATE SHARED SESSION ----");
+      console.log("viewboxData.chatHistory BEFORE upsert:", viewboxData.chatHistory);
+      console.log("---------------------------------------");
+
       const { data, insert_error } = await supabaseClient
         .from("viewbox")
         .upsert([
@@ -176,6 +181,7 @@ function ShareTab() {
             url_params: queryParams.toString(),
             visibility: visibility,
             mode: presentationModeSwitch ? Mode.PRESENTATION : Mode.TEAM,
+            chat_history: viewboxData.chatHistory || [],
           },
         ])
         .select();
