@@ -59,7 +59,7 @@ export function generateGridURL(
     col
 ) {
     const URL_genereated = new URL(
-         window.location.protocol + '//' + window.location.host + window.location.pathname
+        window.location.protocol + '//' + window.location.host + window.location.pathname
     );
 
     URL_genereated.searchParams.append("m", "true");
@@ -165,7 +165,6 @@ export function checkUrlQuery(object, search) {
     return 0;
 }
 
-
 export function getAdjustedWC(
     wc,
     metadata
@@ -186,18 +185,15 @@ export function getAdjustedWW(
     return (ww) / (metadata.rescaleSlope)
 }
 
-
 export function getReveredAdjustedWW(
-
     metadata
 ) {
-
     return (metadata.ww) * (metadata.rescaleSlope)
 }
 
 export function getReveredAdjustedWC(
     metadata
 ) {
-
     return (metadata.wc * metadata.rescaleSlope + metadata.rescaleIntercept)
 }
+

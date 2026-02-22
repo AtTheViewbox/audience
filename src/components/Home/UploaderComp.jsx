@@ -157,11 +157,12 @@ export function UploaderComp({ onUploadComplete }) {
           rawWindowCenter = Array.isArray(dataset.WindowCenter) ? dataset.WindowCenter[0] : dataset.WindowCenter;
         }
 
-        // Adjust window values using rescale slope and intercept
-        if (rawWindowWidth) {
+        // Adjust window values using rescale slope and intercept to store RAW values
+        // Cornerstone StackViewport requires RAW values instead of HU
+        if (rawWindowWidth !== null) {
           windowWidth = rawWindowWidth / rescaleSlope;
         }
-        if (rawWindowCenter) {
+        if (rawWindowCenter !== null) {
           windowCenter = (rawWindowCenter - rescaleIntercept) / rescaleSlope;
         }
 

@@ -244,9 +244,21 @@ export default function AgentChat({
             const { voiRange } = vp.getProperties();
             if (!voiRange) return null;
 
+            let slope = 1;
+            let intercept = 0;
+            const imageId = vp.getCurrentImageId?.();
+            const image = imageId ? cornerstone.cache.getImage(imageId) : null;
+            if (image) {
+                slope = image.slope ?? 1;
+                intercept = image.intercept ?? 0;
+            }
+
+            const lowerHU = voiRange.lower * slope + intercept;
+            const upperHU = voiRange.upper * slope + intercept;
+
             return {
-                ww: Math.round(voiRange.upper - voiRange.lower),
-                wc: Math.round((voiRange.upper + voiRange.lower) / 2),
+                ww: Math.round(upperHU - lowerHU),
+                wc: Math.round((upperHU + lowerHU) / 2),
             };
         } catch (_) { return null; }
     };
@@ -258,8 +270,20 @@ export default function AgentChat({
 
     const applyWindowing = async (viewport, wwHU, wcHU) => {
         try {
+            let ww = wwHU;
+            let wc = wcHU;
+
+            const imageId = viewport.getCurrentImageId?.();
+            const image = imageId ? cornerstone.cache.getImage(imageId) : null;
+            if (image) {
+                const slope = image.slope ?? 1;
+                const intercept = image.intercept ?? 0;
+                ww = wwHU / slope;
+                wc = (wcHU - intercept) / slope;
+            }
+
             viewport.setProperties({
-                voiRange: cornerstone.utilities.windowLevel.toLowHighRange(wwHU, wcHU),
+                voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
                 isComputedVOI: false
             });
             viewport.render();
