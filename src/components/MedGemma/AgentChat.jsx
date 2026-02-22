@@ -505,6 +505,7 @@ export default function AgentChat({
                     url_params: queryParams.toString(),
                     visibility: Visibility.PUBLIC,
                     mode: Mode.TEAM,
+                    chat_history: messages,
                 }])
                 .select();
             if (error) throw error;
