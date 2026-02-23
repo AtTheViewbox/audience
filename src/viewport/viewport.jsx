@@ -635,18 +635,18 @@ export default function Viewport(props) {
             bottom: 12,
             left: 140, // Offset to the right of the share button
             zIndex: 100,
-            background: 'rgba(15, 15, 20, 0.75)', // Slightly more transparent background
-            color: 'rgba(255, 255, 255, 0.8)', // Softer white for the label text
-            padding: '4px 8px', // Reduced padding
-            borderRadius: 6, // Slightly smaller border radius
-            fontSize: 12, // Reduced font size
-            fontWeight: 400, // Lighter font weight for the label
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            background: 'transparent', // Fully transparent background
+            color: 'rgba(255, 255, 255, 0.9)', // Brighter white for text since background is gone
+            padding: '4px 8px',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 500, // Slightly bolder base font for readability without background
+            backdropFilter: 'none', // Removed blur since background is transparent
+            WebkitBackdropFilter: 'none',
             fontFamily: 'Inter, system-ui, sans-serif',
             pointerEvents: 'none',
             letterSpacing: '0.01em',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)', // Softer shadow
+            textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 1px 8px rgba(0,0,0,0.4)', // Added text shadow for contrast against scans
           }}>
             Slice <span style={{ color: 'white', fontWeight: 600 }}>{currentImageIndex + 1}</span> / {viewport_data.s.length}
           </div>
