@@ -627,28 +627,30 @@ export default function Viewport(props) {
       </div>
 
       {/* Slice Indicator */}
-      {viewport_data && viewport_data.s.length > 1 && (
-        <div style={{
-          position: 'absolute',
-          bottom: 12,
-          left: 140, // Offset to the right of the share button
-          zIndex: 100,
-          background: 'rgba(15, 15, 20, 0.75)', // Slightly more transparent background
-          color: 'rgba(255, 255, 255, 0.8)', // Softer white for the label text
-          padding: '4px 8px', // Reduced padding
-          borderRadius: 6, // Slightly smaller border radius
-          fontSize: 12, // Reduced font size
-          fontWeight: 400, // Lighter font weight for the label
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          pointerEvents: 'none',
-          letterSpacing: '0.01em',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)', // Softer shadow
-        }}>
-          Slice <span style={{ color: 'white', fontWeight: 600 }}>{currentImageIndex + 1}</span> / {viewport_data.s.length}
-        </div>
-      )}
+      {viewport_data && viewport_data.s.length > 1 && searchParams.get("preview") !== "true" && (() => {
+        try { return window.self === window.top; } catch (e) { return false; }
+      })() && (
+          <div style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 140, // Offset to the right of the share button
+            zIndex: 100,
+            background: 'rgba(15, 15, 20, 0.75)', // Slightly more transparent background
+            color: 'rgba(255, 255, 255, 0.8)', // Softer white for the label text
+            padding: '4px 8px', // Reduced padding
+            borderRadius: 6, // Slightly smaller border radius
+            fontSize: 12, // Reduced font size
+            fontWeight: 400, // Lighter font weight for the label
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            pointerEvents: 'none',
+            letterSpacing: '0.01em',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)', // Softer shadow
+          }}>
+            Slice <span style={{ color: 'white', fontWeight: 600 }}>{currentImageIndex + 1}</span> / {viewport_data.s.length}
+          </div>
+        )}
     </div>
   );
 }
