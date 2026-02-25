@@ -6,10 +6,12 @@ import { DataContext } from '../../context/DataContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Bot, Loader2, Send, User, Share, Square,
-    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search, GitCompare
+    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search, GitCompare, LogIn
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import DialogPage from '../DialogPage';
 import {
     drawRleMaskOverlay,
     setMaskOverlayVisible,
@@ -213,6 +215,43 @@ export default function AgentChat({
     const abortRef = useRef(null);
     const lastSegRef = useRef(null);
 
+    const [credits, setCredits] = useState(null);
+    const [creditsLoading, setCreditsLoading] = useState(false);
+    const [loginOpen, setLoginOpen] = useState(false);
+    const isAnonymous = !userData || userData.is_anonymous;
+
+    // Fetch credits from Supabase
+    useEffect(() => {
+        const fetchCredits = async () => {
+            if (isAnonymous || !supabaseClient) return;
+            setCreditsLoading(true);
+            try {
+                let { data, error } = await supabaseClient
+                    .from('chat_credits')
+                    .select('credits_remaining')
+                    .eq('user_id', userData.id)
+                    .single();
+
+                if (error && error.code === 'PGRST116') {
+                    // Not found, insert default 15 credits
+                    const { data: newRow, error: insertError } = await supabaseClient
+                        .from('chat_credits')
+                        .insert([{ user_id: userData.id, credits_remaining: 15 }])
+                        .select('credits_remaining')
+                        .single();
+                    if (!insertError && newRow) setCredits(newRow.credits_remaining);
+                } else if (!error && data) {
+                    setCredits(data.credits_remaining);
+                }
+            } catch (err) {
+                console.error("Failed to fetch credits", err);
+            } finally {
+                setCreditsLoading(false);
+            }
+        };
+        fetchCredits();
+    }, [userData, supabaseClient, isAnonymous]);
+
     // Keep lastSegRef in sync with context — covers segmentation done outside the chat
     useEffect(() => {
         if (ctxData?.lastSegmentation) lastSegRef.current = ctxData.lastSegmentation;
@@ -232,8 +271,20 @@ export default function AgentChat({
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    const agentFetch = (url, opts = {}) =>
-        fetch(url, { ...opts, signal: abortRef.current?.signal });
+    const agentFetch = async (url, opts = {}) => {
+        let headers = { ...opts.headers };
+        if (supabaseClient && !isAnonymous) {
+            const { data } = await supabaseClient.auth.getSession();
+            if (data?.session?.access_token) {
+                headers['Authorization'] = `Bearer ${data.session.access_token}`;
+            }
+        }
+        const res = await fetch(url, { ...opts, headers, signal: abortRef.current?.signal });
+        if (res.status === 402) {
+            throw new Error('STATUS_402_CREDITS_DEPLETED');
+        }
+        return res;
+    };
 
     const getViewport = () => renderingEngine?.getViewport('0-vp') ?? null;
 
@@ -1065,6 +1116,11 @@ export default function AgentChat({
         if (e) e.preventDefault();
         if (!chatInput.trim() || chatLoading) return;
 
+        if (credits !== null && credits <= 0) {
+            toast.error("You're out of AI credits. Please upgrade or wait for a refill.");
+            return;
+        }
+
         const userMsg = { role: 'user', content: chatInput };
         const history = [...messages, userMsg];
         setMessages([...history, { role: 'assistant', content: '', steps: [], _pending: true }]);
@@ -1080,6 +1136,10 @@ export default function AgentChat({
         } catch (err) {
             if (err.name === 'AbortError') {
                 finaliseMessage('Stopped.');
+            } else if (err.message === 'STATUS_402_CREDITS_DEPLETED') {
+                toast.error("You're out of AI credits. Please upgrade or wait for a refill.");
+                finaliseMessage('Message blocked: out of AI credits.');
+                setCredits(0);
             } else {
                 finaliseMessage(`Sorry, something went wrong: ${err.message}`);
             }
@@ -1108,6 +1168,11 @@ export default function AgentChat({
         const dicomUrls = getDicomUrls(viewport);
         if (!dicomUrls.length) {
             toast.info('No DICOM loaded.', { duration: 3000 });
+            return;
+        }
+
+        if (credits !== null && credits <= 0) {
+            toast.error("You're out of AI credits. Please upgrade or wait for a refill.");
             return;
         }
 
@@ -1140,10 +1205,12 @@ export default function AgentChat({
             const atlasPromises = foundResults.map(async (result) => {
                 try {
                     const orientation = seg?.orientation || 'axial';
-                    const resp = await fetch(`${BASE_URL}/normal-atlas/${result.structure}?orientation=${orientation}`, { signal: controller.signal });
+                    const resp = await agentFetch(`${BASE_URL}/normal-atlas/${result.structure}?orientation=${orientation}`);
                     const atlasData = await resp.json();
                     if (!atlasData.error) return { structure: result.structure, atlas: atlasData, patientResult: result };
-                } catch { /* skip */ }
+                } catch (err) {
+                    if (err.message === 'STATUS_402_CREDITS_DEPLETED') throw err;
+                }
                 return null;
             });
             const atlasResults = (await Promise.all(atlasPromises)).filter(Boolean);
@@ -1209,6 +1276,10 @@ export default function AgentChat({
         } catch (err) {
             if (err.name === 'AbortError') {
                 finaliseMessage('Stopped.');
+            } else if (err.message === 'STATUS_402_CREDITS_DEPLETED') {
+                toast.error("You're out of AI credits. Please upgrade or wait for a refill.");
+                finaliseMessage('Message blocked: out of AI credits.');
+                setCredits(0);
             } else {
                 updateLastStep({ status: 'error', result: err.message });
                 finaliseMessage(`Failed to load normal reference: ${err.message}`);
@@ -1275,62 +1346,103 @@ export default function AgentChat({
                 </div>
             )}
 
-            {/* Input */}
+            {/* Input or Login Prompt */}
             <div className="p-2 bg-slate-950 border-t border-slate-800">
-                <form onSubmit={handleSubmit} className="flex gap-2 items-end relative">
-                    <textarea
-                        ref={textareaRef}
-                        rows={1}
-                        value={chatInput}
-                        onChange={e => setChatInput(e.target.value)}
-                        placeholder="Ask anything, or say 'show me the liver'…"
-                        disabled={chatLoading}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-                        className="flex-1 pr-8 py-1.5 px-3 text-xs bg-slate-900/50 text-slate-100 border border-slate-800 rounded-lg placeholder:text-slate-500 resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-blue-500/30 leading-relaxed disabled:opacity-50"
-                        style={{ minHeight: '32px' }}
-                    />
-                    {chatLoading ? (
-                        <Button
-                            type="button"
-                            size="icon"
-                            onClick={handleStop}
-                            className="absolute right-1 bottom-1 h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-950/40"
-                            variant="ghost"
-                        >
-                            <Square className="h-3 w-3 fill-current" />
-                        </Button>
-                    ) : (
-                        <Button
-                            type="submit"
-                            size="icon"
-                            disabled={!chatInput.trim()}
-                            className="absolute right-1 bottom-1 h-7 w-7 text-slate-400 hover:text-blue-400 hover:bg-slate-800"
-                            variant="ghost"
-                        >
-                            <Send className="h-3 w-3" />
-                        </Button>
-                    )}
-                </form>
-                {/* Capability hints */}
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {[
-                        'Adjust window',
-                        'Show an organ',
-                        'Explain a finding',
-                        'Compare with normal',
-                        'Share session',
-                        'Detect modality',
-                    ].map(hint => (
+                {isAnonymous ? (
+                    <div className="flex flex-col items-center justify-center py-5 px-3 text-center space-y-3 bg-slate-900/40 rounded-xl border border-slate-800/60 mt-1 mb-2 mx-1">
+                        <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-inner">
+                            <Bot className="h-5 w-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-slate-200">Log in to use AI Assistant</h3>
+                            <p className="text-xs text-slate-500 mt-1.5 max-w-[220px] mx-auto leading-relaxed">
+                                Sign in to unlock conversational AI, organ segmentation, and anomaly detection.
+                            </p>
+                        </div>
                         <button
-                            key={hint}
-                            onClick={() => setChatInput(hint)}
-                            className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
+                            onClick={() => setLoginOpen(true)}
+                            className="mt-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium border border-slate-700 rounded-md transition-colors shadow-sm"
                         >
-                            {hint}
+                            Log In / Sign Up
                         </button>
-                    ))}
-                </div>
+                    </div>
+                ) : (
+                    <>
+                        <form onSubmit={handleSubmit} className="flex gap-2 items-end relative">
+                            <textarea
+                                ref={textareaRef}
+                                rows={1}
+                                value={chatInput}
+                                onChange={e => setChatInput(e.target.value)}
+                                placeholder="Ask anything, or say 'show me the liver'…"
+                                disabled={chatLoading || (credits !== null && credits <= 0)}
+                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
+                                className="flex-1 pr-8 py-1.5 px-3 text-xs bg-slate-900/50 text-slate-100 border border-slate-800 rounded-lg placeholder:text-slate-500 resize-none overflow-hidden focus:outline-none focus:ring-1 focus:ring-blue-500/30 leading-relaxed disabled:opacity-50"
+                                style={{ minHeight: '32px' }}
+                            />
+                            {chatLoading ? (
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    onClick={handleStop}
+                                    className="absolute right-1 bottom-1 h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-950/40"
+                                    variant="ghost"
+                                >
+                                    <Square className="h-3 w-3 fill-current" />
+                                </Button>
+                            ) : (
+                                <Button
+                                    type="submit"
+                                    size="icon"
+                                    disabled={!chatInput.trim() || (credits !== null && credits <= 0)}
+                                    className="absolute right-1 bottom-1 h-7 w-7 text-slate-400 hover:text-blue-400 hover:bg-slate-800"
+                                    variant="ghost"
+                                >
+                                    <Send className="h-3 w-3" />
+                                </Button>
+                            )}
+                        </form>
+
+                        <div className="flex justify-between items-start mt-1.5">
+                            {/* Capability hints */}
+                            <div className="flex flex-wrap gap-1.5 flex-1">
+                                {[
+                                    'Adjust window',
+                                    'Show an organ',
+                                    'Explain a finding',
+                                    'Compare with normal',
+                                    'Share session',
+                                    'Detect modality',
+                                ].map(hint => (
+                                    <button
+                                        key={hint}
+                                        onClick={() => setChatInput(hint)}
+                                        className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
+                                    >
+                                        {hint}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Credit Badge */}
+                            {!creditsLoading && credits !== null && (
+                                <div className="flex items-center gap-1 text-[10px] pr-1 pl-2 pt-0.5 whitespace-nowrap" title={`${credits} credits remaining`}>
+                                    <Zap className={`h-3 w-3 ${credits > 0 ? 'text-amber-400 fill-amber-400/20' : 'text-slate-600'}`} />
+                                    <span className={credits > 0 ? 'text-slate-400 font-medium' : 'text-red-400 font-medium'}>
+                                        {credits} left
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
+            {/* Login Popup */}
+            <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+                <DialogContent>
+                    <DialogPage />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

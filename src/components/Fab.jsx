@@ -56,7 +56,7 @@ function Fab() {
       </Button>
 
 
-      <DialogContent >
+      <DialogContent>
         <DialogPage />
       </DialogContent>
     </Dialog>
