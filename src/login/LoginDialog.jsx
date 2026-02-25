@@ -51,7 +51,7 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider: provider,
       options: {
-        redirectTo: window.location.origin
+        redirectTo: window.location.origin + window.location.pathname
       }
     });
     if (error) {
