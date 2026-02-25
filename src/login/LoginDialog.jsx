@@ -47,6 +47,19 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
     }
   };
 
+  const handleOAuthLogin = async (provider) => {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) {
+      console.error(`OAuth error for ${provider}:`, error);
+      setLoginError(true);
+    }
+  };
+
   const handleSignUp = async () => {
     const name = document.getElementById("name").value;
     const email = document.getElementById("email").value;
@@ -121,6 +134,7 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
             loginError={loginError}
             switchToSignUp={() => setLoginState(LoginState.SIGN_UP)}
             switchToReset={() => setLoginState(LoginState.FORGET_PASSWORD)}
+            onGoogleLogin={() => handleOAuthLogin('google')}
           />
         );
 
@@ -132,6 +146,7 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
             error={signUpError}
             success={signUpSuccess}
             switchToLogin={goToLogin}
+            onGoogleLogin={() => handleOAuthLogin('google')}
           />
         );
 

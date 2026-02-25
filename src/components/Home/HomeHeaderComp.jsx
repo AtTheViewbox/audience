@@ -11,7 +11,7 @@ import {
     DialogContent,
     DialogTitle
 } from "@/components/ui/dialog";
-import { LoginDialog } from "../../login/LoginDialog.jsx";
+import DialogPage from "../DialogPage.jsx";
 
 function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
@@ -86,8 +86,8 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
                 </div> :
                 <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
                     <Button variant="ghost" className="text-xs font-medium text-slate-400 hover:text-slate-100 border border-slate-800" onClick={() => setDialogIsOpen(true)}>Login</Button>
-                    <DialogContent className="bg-slate-950 border-slate-800">
-                        <LoginDialog showHeader={true} />
+                    <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100">
+                        <DialogPage />
                     </DialogContent>
                 </Dialog>
             }
