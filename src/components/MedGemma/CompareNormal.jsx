@@ -357,6 +357,9 @@ function getMaskTransform(orientation) {
             return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: -1 };
         case 'sagittal':
             return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: -1 };
+        case 'head':
+            // Head CT needs flipZ false to align correctly since its slices go inferior to superior
+            return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: false, zOffset: 0 };
         case 'axial':
         default:
             return { xyOrder: 'xMajor', flipX: false, flipY: true, flipZ: true, zOffset: -1 };

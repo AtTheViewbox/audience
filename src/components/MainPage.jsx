@@ -4,6 +4,7 @@ import Tools from './Tools'
 import SessionUsers from './SessionUsers'
 import MedGemmaButton from './MedGemma/MedGemmaButton'
 import CompareNormal from './MedGemma/CompareNormal'
+import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
@@ -22,6 +23,7 @@ function MainPage() {
         <SessionUsers />
         <MedGemmaButton />
         <CompareNormal />
+        <AtlasOverlayMenu />
         <OnboardingOverlay page="viewer" />
         <Toaster position="top-right" />
       </>
