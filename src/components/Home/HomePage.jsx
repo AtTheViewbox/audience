@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight } from "lucide-react"
+import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,9 +9,13 @@ import HomeHeaderComp from "./HomeHeaderComp"
 import AddCaseDialog from "./AddCaseDialog"
 import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Filter } from "../../lib/constants"
 import { unflatten, flatten } from "flat";
 import BuilderPage from "./Builder/BuilderPage";
+import OnboardingOverlay from "../OnboardingOverlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +40,46 @@ export default function HomePage() {
   const minRightWidth = 240
   const maxRightWidth = 500
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editVisibility, setEditVisibility] = useState("PRIVATE");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (selectedSeries) {
+      setEditName(selectedSeries.name || "");
+      setEditDescription(selectedSeries.description || "");
+      setEditVisibility(selectedSeries.visibility || "PRIVATE");
+      setIsEditing(false);
+    }
+  }, [selectedSeries]);
+
+  const handleSave = async () => {
+    if (!selectedSeries) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabaseClient
+        .from("studies")
+        .update({
+          name: editName,
+          description: editDescription,
+          visibility: editVisibility
+        })
+        .eq("id", selectedSeries.id);
+
+      if (error) throw error;
+
+      const updated = { ...selectedSeries, name: editName, description: editDescription, visibility: editVisibility };
+      setSelectedSeries(updated);
+      setIsEditing(false);
+      getSeries();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleUploadComplete = (url) => {
     console.log("HomePage: handleUploadComplete triggered with URL:", url);
@@ -224,239 +268,292 @@ export default function HomePage() {
   }, [filter]);
 
   return (
-    <div className="flex h-screen bg-background relative text-foreground">
-      <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+    <>
+      <div className="flex h-screen bg-background relative text-foreground">
+        <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden w-full">
-        <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden w-full">
+          <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
 
-        <div className="flex-1 flex overflow-hidden relative">
-          {filter === Filter.BUILDER ? (
-            <BuilderPage
-              allSeries={seriesList}
-              filteredSeries={displaySeriesList}
-              uploadedUrl={uploadedUrl}
-              onClearUpload={() => setUploadedUrl("")}
-              onStudySaved={getSeries}
-            />
-          ) : (
-            <>
-              <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
-                  <div className="flex items-center gap-4">
-                    {!userData?.is_anonymous ? (
-                      <AddCaseDialog onStudyAdded={getSeries} />
-                    ) : null}
-                  </div>
-                </div>
-
-                {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
-                  <div
-                    key={study.id}
-                    className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="font-medium">{study.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Created by: {study.userID}
-                        </p>
-                      </div>
-                    </div>
+          <div className="flex-1 flex overflow-hidden relative">
+            {filter === Filter.BUILDER ? (
+              <BuilderPage
+                allSeries={seriesList}
+                filteredSeries={displaySeriesList}
+                uploadedUrl={uploadedUrl}
+                onClearUpload={() => setUploadedUrl("")}
+                onStudySaved={getSeries}
+              />
+            ) : (
+              <>
+                <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
+                  <div className="flex items-center justify-between mb-8">
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
                     <div className="flex items-center gap-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => window.open(study.metadata[0].url)}
-                      >
-                        <ExternalLink className="size-4 text-muted-foreground" />
-                        <span className="sr-only">Open in new tab</span>
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8">
-                            <MoreHorizontal className="size-4" />
-                            <span className="sr-only">More options</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => deleteStudy(study.id)}
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {!userData?.is_anonymous ? (
+                        <AddCaseDialog onStudyAdded={getSeries} />
+                      ) : null}
                     </div>
                   </div>
-                ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {displaySeriesList.map((series) => (
-                    <Card
-                      key={series.id}
-                      className={`relative group cursor-pointer bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
-                        }`}
-                      onClick={() => setSelectedSeries(series)}
+
+                  {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
+                    <div
+                      key={study.id}
+                      className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
                     >
-                      {filter === Filter.MYSTUDIES ? (
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <p className="font-medium">{study.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Created by: {study.userID}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(series.id);
-                          }}
-                          aria-label="Delete series"
+                          className="size-8"
+                          onClick={() => window.open(study.metadata[0].url)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <ExternalLink className="size-4 text-muted-foreground" />
+                          <span className="sr-only">Open in new tab</span>
                         </Button>
-                      ) : null}
-                      <CardHeader className="pb-2">
-                        <div className="flex items-start gap-3">
-                          <div>
-                            <CardTitle className="text-base text-slate-100 font-semibold mb-1">
-                              {series.name}
-                            </CardTitle>
-                            <CardDescription className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                              {series.description && series.description.length > 100
-                                ? series.description.slice(0, 100) + "..."
-                                : series.description || "No description"}
-                            </CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardFooter className="pt-2 text-xs text-muted-foreground">
-                        Created on{" "}
-                        {
-                          series.last_accessed ? new Date(series.last_accessed)
-                            .toISOString()
-                            .split("T")[0] : series.created_at ? new Date(series.created_at)
-                              .toISOString()
-                              .split("T")[0] : "Unknown date"
-                        }
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>}
-              </div>
-
-              {/* Desktop Resize Handle */}
-              <div
-                className="w-px cursor-col-resize bg-slate-800 hover:bg-blue-500/40 transition-colors hidden md:block"
-                onMouseDown={() => setIsResizingRight(true)}
-              />
-
-              {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
-              <div
-                className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
-                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 md:static md:z-auto' : 'hidden md:flex'}
-            `}
-                style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
-              >
-                {/* Mobile Back Button */}
-                <div className="md:hidden p-4 border-b flex items-center">
-                  <Button variant="ghost" onClick={() => {
-                    setSelectedSeries(null);
-                    setUploadedUrl("");
-                  }}>
-                    <ChevronRight className="h-4 w-4 rotate-180 mr-2" />
-                    Back to List
-                  </Button>
-                </div>
-
-                {selectedSeries && (
-                  <>
-                    <div className="border-b bg-muted/20">
-                      <div className="flex flex-col items-center text-center">
-                        <div className="w-full aspect-square bg-black overflow-hidden border-b transition-colors">
-                          <iframe
-                            src={
-                              selectedSeries?.url_params
-                                ? getIframeURL(selectedSeries?.url_params, true)
-                                : ""
-                            }
-                            title={`${selectedSeries.name}`}
-                            className="w-full h-full border-0"
-                            allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          ></iframe>
-                        </div>
-
-                        <div className="p-4 w-full text-left">
-                          <h3 className="text-lg font-bold tracking-tight">
-                            {selectedSeries.name}
-                          </h3>
-                          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-1">
-                            Created by {selectedSeries.owner}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-4 p-4">
-                        <div className="flex gap-2">
-                          <Button
-                            className="flex-1"
-                            onClick={() => {
-                              window.open(
-                                selectedSeries?.url_params
-                                  ? getIframeURL(selectedSeries?.url_params)
-                                  : "",
-                                "_blank"
-                              );
-                            }}
-                          >
-                            Launch to New Tab
-                          </Button>
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            value={
-                              selectedSeries?.url_params
-                                ? getIframeURL(selectedSeries?.url_params)
-                                : "" ?? ""
-                            }
-                            readOnly
-                            className="bg-slate-900/50 border-slate-800 text-slate-300 text-xs h-9"
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-9 w-9 text-slate-400 hover:text-slate-100 border border-slate-800 hover:bg-slate-900"
-                            onClick={() => {
-                              navigator.clipboard.writeText(
-                                selectedSeries?.url_params
-                                  ? getIframeURL(selectedSeries?.url_params)
-                                  : ""
-                              );
-                              setCopyClicked(true);
-                            }}
-                          >
-                            {copyClicked ? (
-                              <Check className="h-4" />
-                            ) : (
-                              <Copy className="h-4" />
-                            )}
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="size-8">
+                              <MoreHorizontal className="size-4" />
+                              <span className="sr-only">More options</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => deleteStudy(study.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                    <ScrollArea className="flex-1 bg-slate-950/20">
-                      <div className="p-6">
-                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Description</h4>
-                        <p className="text-sm text-slate-300 leading-relaxed italic">
-                          {selectedSeries.description}
-                        </p>
+                  ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {displaySeriesList.map((series) => (
+                      <Card
+                        key={series.id}
+                        className={`relative group cursor-pointer bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
+                          }`}
+                        onClick={() => setSelectedSeries(series)}
+                      >
+                        {filter === Filter.MYSTUDIES ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(series.id);
+                            }}
+                            aria-label="Delete series"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        ) : null}
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start gap-3">
+                            <div>
+                              <CardTitle className="text-base text-slate-100 font-semibold mb-1">
+                                {series.name}
+                              </CardTitle>
+                              <CardDescription className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                                {series.description && series.description.length > 100
+                                  ? series.description.slice(0, 100) + "..."
+                                  : series.description || "No description"}
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardFooter className="pt-2 text-xs text-muted-foreground">
+                          Created on{" "}
+                          {
+                            series.last_accessed ? new Date(series.last_accessed)
+                              .toISOString()
+                              .split("T")[0] : series.created_at ? new Date(series.created_at)
+                                .toISOString()
+                                .split("T")[0] : "Unknown date"
+                          }
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>}
+                </div>
+
+                {/* Desktop Resize Handle */}
+                <div
+                  className="w-px cursor-col-resize bg-slate-800 hover:bg-blue-500/40 transition-colors hidden md:block"
+                  onMouseDown={() => setIsResizingRight(true)}
+                />
+
+                {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
+                <div
+                  className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
+                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 md:static md:z-auto' : 'hidden md:flex'}
+            `}
+                  style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
+                >
+                  {/* Mobile Back Button */}
+                  <div className="md:hidden p-4 border-b flex items-center">
+                    <Button variant="ghost" onClick={() => {
+                      setSelectedSeries(null);
+                      setUploadedUrl("");
+                    }}>
+                      <ChevronRight className="h-4 w-4 rotate-180 mr-2" />
+                      Back to List
+                    </Button>
+                  </div>
+
+                  {selectedSeries && (
+                    <>
+                      <div className="border-b bg-muted/20">
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-full aspect-square bg-black overflow-hidden border-b transition-colors">
+                            <iframe
+                              src={
+                                selectedSeries?.url_params
+                                  ? getIframeURL(selectedSeries?.url_params, true)
+                                  : ""
+                              }
+                              title={`${selectedSeries.name}`}
+                              className="w-full h-full border-0"
+                              allow="accelerometer;  clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            ></iframe>
+                          </div>
+
+                          <div className="p-4 w-full text-left">
+                            {isEditing ? (
+                              <div className="space-y-4">
+                                <Input
+                                  value={editName}
+                                  onChange={e => setEditName(e.target.value)}
+                                  className="font-bold text-lg h-9 bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                                  placeholder="Viewbox Name"
+                                />
+                                <div className="flex items-center space-x-2 mt-2">
+                                  <Switch
+                                    checked={editVisibility === "PUBLIC"}
+                                    onCheckedChange={(checked) => setEditVisibility(checked ? "PUBLIC" : "PRIVATE")}
+                                  />
+                                  <Label className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Public Viewbox</Label>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="text-lg font-bold tracking-tight">
+                                    {selectedSeries.name}
+                                  </h3>
+                                  <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-2 flex items-center gap-2">
+                                    {selectedSeries.visibility === "PUBLIC" ? (
+                                      <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">PUBLIC</span>
+                                    ) : (
+                                      <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded border border-red-500/30">PRIVATE</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {filter === Filter.MYSTUDIES && (
+                                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)} className="h-8 w-8 text-slate-400 hover:text-slate-100 hover:bg-slate-800 ml-4 rounded-full">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-4 p-4">
+                          <div className="flex gap-2">
+                            <Button
+                              className="flex-1"
+                              onClick={() => {
+                                window.open(
+                                  selectedSeries?.url_params
+                                    ? getIframeURL(selectedSeries?.url_params)
+                                    : "",
+                                  "_blank"
+                                );
+                              }}
+                            >
+                              Launch to New Tab
+                            </Button>
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              value={
+                                selectedSeries?.url_params
+                                  ? getIframeURL(selectedSeries?.url_params)
+                                  : "" ?? ""
+                              }
+                              readOnly
+                              className="bg-slate-900/50 border-slate-800 text-slate-300 text-xs h-9"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-9 w-9 text-slate-400 hover:text-slate-100 border border-slate-800 hover:bg-slate-900"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  selectedSeries?.url_params
+                                    ? getIframeURL(selectedSeries?.url_params)
+                                    : ""
+                                );
+                                setCopyClicked(true);
+                              }}
+                            >
+                              {copyClicked ? (
+                                <Check className="h-4" />
+                              ) : (
+                                <Copy className="h-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </ScrollArea>
-                  </>
-                )}
-              </div>
-            </>
-          )}
+                      <ScrollArea className="flex-1 bg-slate-950/20">
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Description</h4>
+                            {isEditing && (
+                              <div className="flex gap-3">
+                                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} className="h-8 px-3 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800">Cancel</Button>
+                                <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-8 px-4 text-xs bg-slate-100 hover:bg-white text-slate-900 font-semibold shadow-sm transition-all hover:scale-[1.02]">Save Changes</Button>
+                              </div>
+                            )}
+                          </div>
+                          {isEditing ? (
+                            <div className="pt-2">
+                              <Textarea
+                                value={editDescription}
+                                onChange={e => setEditDescription(e.target.value)}
+                                className="text-sm bg-slate-900 border-slate-700 text-slate-200 resize-none placeholder:text-slate-500 p-4 min-h-[150px] max-h-[300px] overflow-y-auto focus-visible:ring-1 focus-visible:ring-slate-600 shadow-inner"
+                                placeholder="Add a detailed description for cases, findings, and more..."
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-300 leading-relaxed italic whitespace-pre-wrap mt-2">
+                              {selectedSeries.description || "No description provided."}
+                            </p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      <OnboardingOverlay page="home" />
+    </>
   );
 }

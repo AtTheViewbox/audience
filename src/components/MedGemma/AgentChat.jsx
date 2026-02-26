@@ -703,6 +703,7 @@ export default function AgentChat({
 
                     // ── 3. Segment (CT or MRI only) ───────────────────────────
                     let summaryDicomUrls = null;
+                    let relativeLocation = null;
 
                     if (['CT', 'MRI', 'MR'].includes(modality)) {
                         addStep({ type: 'segmentation', label: 'Identifying structures in finding', status: 'running', result: null });
@@ -716,6 +717,7 @@ export default function AgentChat({
                             if (identResp.ok) {
                                 const identData = await identResp.json();
                                 structures = identData.structures || (identData.structure ? [identData.structure] : []);
+                                relativeLocation = identData.relative_location || null;
                             }
                         } catch (_) { }
 
@@ -855,6 +857,9 @@ export default function AgentChat({
                         if (!resp.ok) throw new Error('Summary failed');
                         const summaryData = await resp.json();
                         reply = summaryData.summary || 'No summary generated.';
+                        if (relativeLocation) {
+                            reply += `\n\n*Note: ${relativeLocation}*`;
+                        }
                         updateLastStep({ status: 'done', result: `Analysis complete` });
                     } catch (sumErr) {
                         updateLastStep({ status: 'error', result: sumErr.message });
@@ -892,6 +897,7 @@ export default function AgentChat({
                     if (!identResp.ok) throw new Error('Structure identification failed');
                     const identData = await identResp.json();
                     const structures = identData.structures || (identData.structure ? [identData.structure] : []);
+                    const relativeLocation = identData.relative_location || null;
 
                     if (!structures.length) {
                         updateLastStep({ status: 'done', result: 'No structure identified.' });
@@ -953,6 +959,10 @@ export default function AgentChat({
                             const names = foundResults.map(r => friendlyStructureLabel(r.structure)).join(', ');
                             updateLastStep({ status: 'done', result: `${names} segmented` });
                             reply = `**${names}** ${foundResults.length > 1 ? 'have' : 'has'} been highlighted on the viewport. Use the structure toggles to show/hide individual masks.\n\nPress **N** to compare with a normal reference CT.`;
+
+                            if (relativeLocation) {
+                                reply += `\n\n*Note: ${relativeLocation}*`;
+                            }
 
                             const segPayload2 = {
                                 structures: foundResults.map(r => r.structure),

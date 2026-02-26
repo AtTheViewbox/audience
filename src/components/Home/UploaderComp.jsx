@@ -215,6 +215,33 @@ export function UploaderComp({ onUploadComplete }) {
       // Generate viewer URL with row=1, col=1
       const viewerURL = metadata ? generateGridURL([metadata], 1, 1) : null;
 
+      // Auto-insert into studies table so it appears in "Your Viewbox"
+      if (viewerURL && userData?.id) {
+        try {
+          // Extract search params from the full viewer URL (same logic as AddCaseDialog)
+          const parsedUrl = new URL(viewerURL);
+          const searchParams = parsedUrl.search.substring(1); // Remove leading '?'
+
+          const { error: studyInsertError } = await supabaseClient
+            .from('studies')
+            .insert({
+              owner: userData.id,
+              name: seriesName || `Upload ${new Date().toLocaleDateString()}`,
+              description: '',
+              url_params: searchParams,
+              visibility: 'PRIVATE',
+            });
+
+          if (studyInsertError) {
+            console.error("Error saving to studies table:", studyInsertError);
+          } else {
+            console.log("Study saved to studies table successfully");
+          }
+        } catch (studyErr) {
+          console.error("Exception saving to studies:", studyErr);
+        }
+      }
+
       if (onUploadComplete && viewerURL) {
         onUploadComplete(viewerURL);
       }
