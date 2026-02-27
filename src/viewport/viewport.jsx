@@ -3,7 +3,7 @@ import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
 import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
-import { Circle } from "lucide-react"
+
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
 import { toast } from "sonner";
 
@@ -19,8 +19,7 @@ export default function Viewport(props) {
   const viewport_data = vd[viewport_idx];
   const pointerRef = useRef(null);
 
-  // State for sparse stack management
-  const [sortedLoadedIndices, setSortedLoadedIndices] = useState([0]);
+
   const queueRef = useRef(null);
   const lastTapTimeRef = useRef(0);
   const voiRef = useRef(null);
@@ -236,86 +235,80 @@ export default function Viewport(props) {
 
       addCornerstoneTools();
       setViewportReady(true);
-      setSortedLoadedIndices([initialIndex]);
 
       // Start the intelligent queue
       startQueue(s, viewportId, initialIndex);
 
-      // Intercept wheel events in the CAPTURE phase — this runs before
-      // Cornerstone's StackScrollMouseWheelTool (which listens in the
-      // bubble phase). We stop propagation so Cornerstone never sees
-      // the event, then navigate ourselves only to cached images.
+      // ─── Monkeypatch: gate ALL navigation to loaded images ───
+      // StackScrollTool, programmatic calls, everything goes through
+      // setImageIdIndex — by patching it we catch every code path.
+      let _gating = false;               // re-entrancy guard
+      const _origSetImageIdIndex = viewport.setImageIdIndex.bind(viewport);
+
+      viewport.setImageIdIndex = async (index) => {
+        if (_gating) return _origSetImageIdIndex(index);
+        _gating = true;
+
+        let target = index;
+        if (!loadedSetRef.current.has(index)) {
+          // Find nearest loaded image in scroll direction
+          const prev = prevImageIndexRef.current;
+          const dir = index >= prev ? 1 : -1;
+          let nearest = -1;
+          for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
+            if (loadedSetRef.current.has(i)) { nearest = i; break; }
+          }
+          if (nearest === -1) nearest = prev;
+          target = nearest;
+
+        }
+
+        try {
+          const result = await _origSetImageIdIndex(target);
+
+          // Apply saved VOI AFTER the new image is ready
+          if (voiRef.current) {
+            viewport.setProperties({
+              voiRange: voiRef.current,
+              invert: invertRef.current,
+              isComputedVOI: false,
+            });
+            viewport.render();
+          }
+
+          prevImageIndexRef.current = target;
+          setCurrentImageIndex(target);
+          if (queueRef.current) queueRef.current.updateFocus(target);
+
+          return result;
+        } finally {
+          _gating = false;
+        }
+      };
+
+      // ─── Wheel handler ───
+      // Still intercept wheel in capture phase to block voiSynced mode
+      // and to control direction; the monkeypatch handles gating & VOI.
       const handleWheel = (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();
 
-        // When externally synced (Compare-with-Normal), block all user scrolling
         if (el?.dataset.voiSynced) return;
 
         const delta = event.deltaY > 0 ? 1 : -1;
         const currentId = viewport.getCurrentImageId();
         const current = s.indexOf(currentId);
 
+        // Navigate to next loaded image in scroll direction
         for (let i = current + delta; i >= 0 && i < s.length; i += delta) {
           if (loadedSetRef.current.has(i)) {
-            viewport.setImageIdIndex(i);
-
-            if (voiRef.current) {
-              viewport.setProperties({
-                voiRange: voiRef.current,
-                invert: invertRef.current,
-                isComputedVOI: false,
-              });
-              viewport.render();
-            }
-
-            prevImageIndexRef.current = i;
-            setCurrentImageIndex(i);
-            if (queueRef.current) {
-              queueRef.current.updateFocus(i);
-            }
+            viewport.setImageIdIndex(i); // goes through our gate
             break;
           }
         }
       };
 
-      // Fallback for non-wheel navigation (touch drag, programmatic).
-      // Still gates to loaded images, but the wheel handler above is
-      // the primary defense for desktop scrolling.
-      const handleImageChange = (event) => {
-        const imageId = viewport.getCurrentImageId();
-        const targetIndex = s.indexOf(imageId);
-
-        if (queueRef.current) {
-          queueRef.current.updateFocus(targetIndex);
-        }
-
-        if (!loadedSetRef.current.has(targetIndex)) {
-          const prev = prevImageIndexRef.current;
-          const dir = targetIndex >= prev ? 1 : -1;
-
-          let nearest = -1;
-          for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
-            if (loadedSetRef.current.has(i)) {
-              nearest = i;
-              break;
-            }
-          }
-
-          if (nearest === -1) nearest = prev;
-
-          if (nearest !== targetIndex) {
-            viewport.setImageIdIndex(nearest);
-            prevImageIndexRef.current = nearest;
-            setCurrentImageIndex(nearest);
-            return;
-          }
-        }
-
-        prevImageIndexRef.current = targetIndex;
-        setCurrentImageIndex(targetIndex);
-      };
-
+      // ─── User windowing capture ───
       const captureUserVoi = () => {
         const props = viewport.getProperties();
         if (props.voiRange) {
@@ -326,13 +319,14 @@ export default function Viewport(props) {
 
       const el = elementRef.current;
       el?.addEventListener('wheel', handleWheel, { capture: true, passive: false });
-      el?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
       el?.addEventListener('mouseup', captureUserVoi);
       el?.addEventListener('touchend', captureUserVoi);
 
       return () => {
+        // Restore original setImageIdIndex
+        viewport.setImageIdIndex = _origSetImageIdIndex;
+
         el?.removeEventListener('wheel', handleWheel, true);
-        el?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', handleImageChange);
         el?.removeEventListener('mouseup', captureUserVoi);
         el?.removeEventListener('touchend', captureUserVoi);
 
@@ -390,14 +384,7 @@ export default function Viewport(props) {
     queue.start();
   };
 
-  // Effect: Sync state changes if needed (e.g. metadata updates)
-  useEffect(() => {
-    if (rendering_engine && viewportReady && viewport_data) {
-      // We no longer need to update the stack manually when images load
-      // because we use a dense stack from the start. 
-      // This allows the AI and user to scroll to any index instantly.
-    }
-  }, [viewportReady, rendering_engine]);
+
 
   // Double-tap detection for pointer tool selection (only when sharing is active)
   useEffect(() => {
@@ -482,10 +469,14 @@ export default function Viewport(props) {
           // 1. Handle Windowing Changes
           if (!isWindowSame) {
             const { ww, wc } = viewport_data;
+            const newRange = cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
             viewport.setProperties({
-              voiRange: cornerstone.utilities.windowLevel.toLowHighRange(ww, wc),
+              voiRange: newRange,
               isComputedVOI: false,
             });
+            // Keep voiRef in sync so the IMAGE_RENDERED safety net
+            // doesn't revert shared windowing changes.
+            voiRef.current = newRange;
           }
 
           // 2. Handle Slice (CI) Changes
@@ -500,6 +491,7 @@ export default function Viewport(props) {
               const currentIndex = viewport.getCurrentImageIdIndex();
 
               if (foundIndex !== -1 && foundIndex !== currentIndex) {
+                // Monkeypatch on setImageIdIndex handles loaded-image gating
                 viewport.setImageIdIndex(foundIndex);
               }
             }
