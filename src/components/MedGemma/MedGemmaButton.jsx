@@ -14,6 +14,7 @@ export default function MedGemmaButton() {
   const { dispatch } = useContext(DataDispatchContext);
   const { renderingEngine } = data;
 
+  const [isMounted, setIsMounted] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const [phase, setPhase] = useState('button'); // 'button' | 'open'
   const cardRef = useRef(null);
@@ -50,6 +51,7 @@ export default function MedGemmaButton() {
 
   // Measure button size before first interaction
   useEffect(() => {
+    setIsMounted(true);
     if (cardRef.current) {
       measuredBtn.current = {
         w: cardRef.current.offsetWidth,
@@ -105,6 +107,16 @@ export default function MedGemmaButton() {
     background: '#020617', // slate-950
     border: '1px solid #1e293b', // slate-800
   };
+
+  // Safe guard: Do not create portal if we are not mounted or on main branch
+  if (!isMounted || typeof document === 'undefined' || !document.body) {
+    return null;
+  }
+
+  // Hide on main branch
+  if (import.meta.env.BUILD_ENV === 'main') {
+    return null;
+  }
 
   const portal = createPortal(
     <div
@@ -167,7 +179,6 @@ export default function MedGemmaButton() {
     </div>,
     document.body
   );
-  // Commented out for staging and main branches
-  return null;
-  // return portal;
+
+  return portal;
 }
