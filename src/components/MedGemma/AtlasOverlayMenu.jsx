@@ -226,7 +226,11 @@ export default function AtlasOverlayMenu() {
             <PopoverTrigger asChild>
                 <Button
                     size="icon"
-                    className="fixed right-[172px] top-[12px] bg-indigo-600/90 hover:bg-indigo-500 text-white shadow-lg z-50 rounded-md"
+                    className={`fixed top-[12px] bg-indigo-600/90 hover:bg-indigo-500 text-white shadow-lg z-50 rounded-md ${
+                        import.meta.env.BUILD_ENV === 'main' || import.meta.env.BUILD_ENV === 'staging' 
+                            ? 'right-[12px]' 
+                            : 'right-[172px]'
+                    }`}
                     title="Atlas Mask Overlays"
                 >
                     <Layers className="h-5 w-5" />
