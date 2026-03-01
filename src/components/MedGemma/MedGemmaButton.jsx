@@ -44,9 +44,9 @@ export default function MedGemmaButton() {
     }
   };
 
-  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
+  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api.modal.run`;
 
-  //const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
+  const BASE_URL = `https://mfei1225--medgemma-dual-agent-v11-api-dev.modal.run`;
 
   // Measure button size before first interaction
   useEffect(() => {
