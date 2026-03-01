@@ -8,6 +8,7 @@
     "build": "vite build",
     "deploy": "gh-pages -d dist",
     "build:staging": "cross-env BUILD_ENV=staging vite build",
+    "build:main": "cross-env BUILD_ENV=main vite build",
     "build:medgemma": "cross-env BUILD_ENV=medgemma vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
