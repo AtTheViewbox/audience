@@ -167,6 +167,7 @@ export default function MedGemmaButton() {
     </div>,
     document.body
   );
-
-  return portal;
+  // Commented out for staging and main branches
+  return null;
+  // return portal;
 }
