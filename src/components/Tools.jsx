@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair } from "lucide-react";
 import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
+import { UserContext } from '../context/UserContext.jsx';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 function Tools() {
     const { dispatch } = useContext(DataDispatchContext);
     const { sharingUser, toolSelected } = useContext(DataContext).data;
+    const { userData } = useContext(UserContext).data;
 
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
@@ -73,7 +75,7 @@ function Tools() {
                         <span>&nbsp;Scroll</span>
                     </DropdownMenuRadioItem>
 
-                    {sharingUser && (
+                    {(sharingUser && userData && sharingUser === userData.id) && (
                         <DropdownMenuRadioItem value="pointer">
                             <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
                             <span>&nbsp;Pointer</span>
