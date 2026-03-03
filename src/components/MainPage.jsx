@@ -2,7 +2,6 @@ import Layout from '../layout/layout';
 import Fab from './Fab'
 import Tools from './Tools'
 import SessionUsers from './SessionUsers'
-import MedGemmaButton from './MedGemma/MedGemmaButton'
 import CompareNormal from './MedGemma/CompareNormal'
 import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
@@ -21,7 +20,6 @@ function MainPage() {
         <Tools />
         <Fab />
         <SessionUsers />
-        <MedGemmaButton />
         <CompareNormal />
         <AtlasOverlayMenu />
         <OnboardingOverlay page="viewer" />
