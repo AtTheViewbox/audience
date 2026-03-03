@@ -87,6 +87,7 @@ export default function CompareNormal() {
         let refEl = null;
         let patEl = null;
         let voiInterval = null;
+        let pushingVoi = false; // re-entrancy guard for VOI sync
 
         const blocker = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
 
@@ -106,12 +107,14 @@ export default function CompareNormal() {
                 // Push properties natively. Cornerstone 3D correctly processes Modality LUTs internally.
                 const props = patientVp.getProperties();
                 if (props && props.voiRange) {
+                    pushingVoi = true;
                     refVp.setProperties({
                         voiRange: props.voiRange,
                         invert: props.invert ?? false,
                         isComputedVOI: false
                     });
                     refVp.render();
+                    pushingVoi = false;
                 }
             } catch (err) {
                 console.warn('Sync VOI failed:', err);
@@ -217,6 +220,7 @@ export default function CompareNormal() {
             };
 
             const enforceVoiOnRef = () => {
+                if (pushingVoi) return; // avoid re-entrancy loop
                 pushPatientVoi(patientVp, refVp);
             };
 
@@ -228,6 +232,7 @@ export default function CompareNormal() {
             patEl?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', syncToRef);
             patEl?.addEventListener('CORNERSTONE_VOI_MODIFIED', syncVoiOnly);
             refEl?.addEventListener('CORNERSTONE_STACK_NEW_IMAGE', enforceVoiOnRef);
+            refEl?.addEventListener('CORNERSTONE_VOI_MODIFIED', enforceVoiOnRef);
 
             syncToRef();
 
@@ -236,6 +241,7 @@ export default function CompareNormal() {
                 patEl?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', syncToRef);
                 patEl?.removeEventListener('CORNERSTONE_VOI_MODIFIED', syncVoiOnly);
                 refEl?.removeEventListener('CORNERSTONE_STACK_NEW_IMAGE', enforceVoiOnRef);
+                refEl?.removeEventListener('CORNERSTONE_VOI_MODIFIED', enforceVoiOnRef);
                 if (refEl) {
                     refEl.removeEventListener('wheel', blocker, true);
                     refEl.removeEventListener('mousedown', blocker, true);

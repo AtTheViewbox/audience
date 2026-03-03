@@ -12,7 +12,7 @@ export default function Viewport(props) {
   const searchParams = new URLSearchParams(location.search);
   const elementRef = useRef(null);
 
-  const { vd, toolSelected, coordData, sharingUser } = useContext(DataContext).data;
+  const { vd, toolSelected, coordData, sharingUser, compareNormal } = useContext(DataContext).data;
   const { userData } = useContext(UserContext).data;
   const { viewport_idx, rendering_engine } = props;
   const [viewportReady, setViewportReady] = useState(false);
@@ -624,21 +624,22 @@ export default function Viewport(props) {
       })() && (
           <div style={{
             position: 'absolute',
-            bottom: 12,
-            left: 140, // Offset to the right of the share button
+            bottom: compareNormal?.active ? 52 : 12,
+            left: compareNormal?.active ? '50%' : 140,
+            transform: compareNormal?.active ? 'translateX(-50%)' : 'none',
             zIndex: 100,
-            background: 'transparent', // Fully transparent background
-            color: 'rgba(255, 255, 255, 0.9)', // Brighter white for text since background is gone
+            background: 'transparent',
+            color: 'rgba(255, 255, 255, 0.9)',
             padding: '4px 8px',
             borderRadius: 6,
             fontSize: 12,
-            fontWeight: 500, // Slightly bolder base font for readability without background
-            backdropFilter: 'none', // Removed blur since background is transparent
+            fontWeight: 500,
+            backdropFilter: 'none',
             WebkitBackdropFilter: 'none',
             fontFamily: 'Inter, system-ui, sans-serif',
             pointerEvents: 'none',
             letterSpacing: '0.01em',
-            textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 1px 8px rgba(0,0,0,0.4)', // Added text shadow for contrast against scans
+            textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 1px 8px rgba(0,0,0,0.4)',
           }}>
             Slice <span style={{ color: 'white', fontWeight: 600 }}>{currentImageIndex + 1}</span> / {viewport_data.s.length}
           </div>
