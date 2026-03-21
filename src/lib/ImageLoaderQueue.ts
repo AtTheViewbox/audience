@@ -39,11 +39,10 @@ export class ImageLoaderQueue {
         isMobile: boolean = false
     ) {
 
-        // Set base concurrency based on device
-        // Mobile: Very conservative to prevent WASM memory exhaustion
-        this.baseConcurrency = isMobile ? 1 : 3;
-        // Mobile: Only 2x boost to avoid memory issues (1→2 instead of 2→4)
-        this.idleConcurrency = isMobile ? 2 : 6;
+        // HTTP/2 multiplexes over a single connection, so higher concurrency is safe.
+        // Mobile: conservative to prevent WASM memory exhaustion.
+        this.baseConcurrency = isMobile ? 1 : 4;
+        this.idleConcurrency = isMobile ? 2 : 10;
         this.concurrency = this.baseConcurrency;
 
         this.onImageLoaded = onImageLoaded;

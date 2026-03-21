@@ -80,6 +80,24 @@ function recreateListFromList(strs) {
     return true; // The lists match
 }
 
+const DICOM_CDN = 'https://dicom.attheviewbox.dev';
+const S3_BUCKET_PREFIX = 'https://s3.amazonaws.com/elasticbeanstalk-us-east-1-843279806438/';
+
+export function rewriteImageUrl(url: string): string {
+    const schemeMatch = url.match(/^(dicomweb:|wadouri:)/);
+    const scheme = schemeMatch ? schemeMatch[0] : '';
+    const rawUrl = scheme ? url.slice(scheme.length) : url;
+
+    if (rawUrl.startsWith(DICOM_CDN)) return url;
+
+    if (rawUrl.startsWith(S3_BUCKET_PREFIX)) {
+        const key = rawUrl.slice(S3_BUCKET_PREFIX.length);
+        return scheme + DICOM_CDN + '/' + key;
+    }
+
+    return url;
+}
+
 export function smallestInStack(s){
     const numbers = s.map(url => {
         const match = url.match(/(\d+)\.dcm\.gz/); 

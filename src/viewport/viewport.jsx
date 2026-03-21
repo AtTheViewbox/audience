@@ -5,6 +5,7 @@ import * as cornerstone from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
+import { rewriteImageUrl } from '../lib/inputParser.ts';
 import { toast } from "sonner";
 
 
@@ -192,7 +193,8 @@ export default function Viewport(props) {
     dispatch({ type: 'viewport_ready', payload: { viewportId: viewport_idx } });
 
     const viewport = rendering_engine.getViewport(viewportId);
-    const { s, ww, wc } = viewport_data;
+    const { s: rawUrls, ww, wc } = viewport_data;
+    const s = rawUrls.map(rewriteImageUrl);
 
     let initialIndex = 0;
     // Match absolute instance number from URL
