@@ -41,6 +41,24 @@ git commit -m "Initial dist subtree commit"
 git subtree push --prefix dist origin gh-pages
 ```
 
+## Deploy on Cloudflare Pages (attheviewbox.dev)
+
+Production builds use `BUILD_ENV=production` so asset URLs use `/` (not `/audience/`). One-time setup: log in to Cloudflare and create the Pages project if it does not exist yet.
+
+```bash
+npx wrangler login
+npx wrangler pages project create attheviewbox --production-branch medgemma   # only once
+```
+
+Deploy the current `dist` after building:
+
+```bash
+npm run build:production && npx wrangler pages deploy dist --project-name=attheviewbox --branch=medgemma --commit-dirty=true
+```
+
+- **`--commit-dirty=true`** silences the warning when you have uncommitted git changes.
+- Attach **attheviewbox.dev** under **Workers & Pages → attheviewbox → Custom domains** in the Cloudflare dashboard; if DNS is on Cloudflare, add a **CNAME** for `@` → `attheviewbox.pages.dev` (proxied) if it is not created automatically.
+
 ## Run in Discord
 Navigate to server and run:
 ```bash

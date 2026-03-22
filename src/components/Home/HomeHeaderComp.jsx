@@ -33,11 +33,11 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
 
     return (
         <header className="h-16 border-b border-slate-800 bg-slate-950 flex items-center justify-between px-6">
-            <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="flex items-center gap-2 w-full lg:w-auto">
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="md:hidden mr-2 text-slate-400 hover:text-slate-100 hover:bg-slate-900/50"
+                    className="lg:hidden mr-2 text-slate-400 hover:text-slate-100 hover:bg-slate-900/50"
                     onClick={() => setMobileMenuOpen(true)}
                 >
                     <Menu className="h-5 w-5" />
@@ -49,7 +49,7 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
                         Browse
                     </Button>
                 ) : (
-                    <div className="relative flex-1 md:flex-none">
+                    <div className="relative flex-1 lg:flex-none">
                         <div className="relative flex items-center w-full">
                             <div className="absolute left-3 text-slate-500">
                                 <Search className="h-4 w-4" />
@@ -57,7 +57,7 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
                             <Input
                                 type="text"
                                 placeholder="Search studies..."
-                                className="w-full md:w-[400px] pl-9 pr-10 h-10 rounded-lg bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 transition-all duration-300 animate-in fade-in slide-in-from-left-4"
+                                className="w-full lg:w-[400px] pl-9 pr-10 h-10 rounded-lg bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 transition-all duration-300 animate-in fade-in slide-in-from-left-4"
                                 autoComplete="off"
                                 onChange={(e) => setSearch(e.target.value)}
                             />

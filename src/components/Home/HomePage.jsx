@@ -33,8 +33,15 @@ export default function HomePage() {
   const [displaySeriesList, setdisplaySeriesList] = useState([])
   const [pacsbinStudyList, setPacsbinStudyList] = useState([])
   const { supabaseClient, userData } = useContext(UserContext).data;
-  const [rightPanelWidth, setRightPanelWidth] = useState(400) // 80 * 4 = 320px (w-80)
+  const [rightPanelWidth, setRightPanelWidth] = useState(400)
   const [isResizingRight, setIsResizingRight] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024)
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [copyClicked, setCopyClicked] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState("");
   const minRightWidth = 240
@@ -235,7 +242,7 @@ export default function HomePage() {
       setSeriesList(data);
       setdisplaySeriesList(data)
       // Only auto-select first series on desktop
-      if (window.innerWidth >= 768) {
+      if (window.innerWidth >= 1024) {
         setSelectedSeries(data[0]);
       } else {
         setSelectedSeries(null);
@@ -337,7 +344,7 @@ export default function HomePage() {
                         </DropdownMenu>
                       </div>
                     </div>
-                  ))}</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  ))}</div> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                     {displaySeriesList.map((series) => (
                       <Card
                         key={series.id}
@@ -390,19 +397,19 @@ export default function HomePage() {
 
                 {/* Desktop Resize Handle */}
                 <div
-                  className="w-px cursor-col-resize bg-slate-800 hover:bg-blue-500/40 transition-colors hidden md:block"
+                  className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden lg:block"
                   onMouseDown={() => setIsResizingRight(true)}
                 />
 
-                {/* Preview Panel - Desktop: Side, Mobile: Full Overlay */}
+                {/* Preview Panel - Desktop: Side, Mobile/Tablet: Full Overlay */}
                 <div
                   className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
-                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 md:static md:z-auto' : 'hidden md:flex'}
+                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'}
             `}
-                  style={{ width: (window.innerWidth >= 768) ? `${rightPanelWidth}px` : '100%' }}
+                  style={{ width: isDesktop ? `${rightPanelWidth}px` : '100%' }}
                 >
-                  {/* Mobile Back Button */}
-                  <div className="md:hidden p-4 border-b flex items-center">
+                  {/* Mobile/Tablet Back Button */}
+                  <div className="lg:hidden p-4 border-b flex items-center">
                     <Button variant="ghost" onClick={() => {
                       setSelectedSeries(null);
                       setUploadedUrl("");

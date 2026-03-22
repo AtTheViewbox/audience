@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair } from "lucide-react";
+import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair, SquareDashedMousePointer, Flame } from "lucide-react";
 import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
 import { UserContext } from '../context/UserContext.jsx';
@@ -14,8 +14,10 @@ import {
 
 function Tools() {
     const { dispatch } = useContext(DataDispatchContext);
-    const { sharingUser, toolSelected } = useContext(DataContext).data;
+    const { sharingUser, toolSelected, sessionId, sessionMeta, heatmapVisible } = useContext(DataContext).data;
     const { userData } = useContext(UserContext).data;
+
+    const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
 
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
@@ -30,12 +32,15 @@ function Tools() {
         setPosition(toolSelected);
     }, [toolSelected]);
 
-    // Auto-switch from pointer to scroll when sharing stops
+    // Auto-switch session-only tools to scroll when sharing/session ends
     useEffect(() => {
         if (!sharingUser && toolSelected === "pointer") {
             selectTool("scroll");
         }
-    }, [sharingUser, toolSelected]);
+        if (!sessionId && toolSelected === "annotate") {
+            selectTool("scroll");
+        }
+    }, [sharingUser, sessionId, toolSelected]);
 
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
@@ -45,7 +50,6 @@ function Tools() {
             <DropdownMenuTrigger asChild style={mobile ? {} : { display: "none" }} >
                 <Button
                     size={"icon"}
-                    //variant="ghost"
                     style={{
                         backgroundColor: 'transparent',
                         position: 'fixed', left: '10px', top: '10px',
@@ -79,6 +83,20 @@ function Tools() {
                         <DropdownMenuRadioItem value="pointer">
                             <Crosshair strokeWidth={0.75} className="mr-2 h-4 w-4" />
                             <span>&nbsp;Pointer</span>
+                        </DropdownMenuRadioItem>
+                    )}
+
+                    {sessionId && !isSessionOwner && (
+                        <DropdownMenuRadioItem value="annotate">
+                            <SquareDashedMousePointer strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                            <span>&nbsp;Annotate</span>
+                        </DropdownMenuRadioItem>
+                    )}
+
+                    {isSessionOwner && (
+                        <DropdownMenuRadioItem value="heatmap" onClick={(e) => { e.preventDefault(); dispatch({ type: 'toggle_heatmap' }); }}>
+                            <Flame strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                            <span>&nbsp;{heatmapVisible ? "Hide" : "Show"} Heatmap</span>
                         </DropdownMenuRadioItem>
                     )}
                 </DropdownMenuRadioGroup>

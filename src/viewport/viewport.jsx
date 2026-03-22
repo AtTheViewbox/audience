@@ -77,6 +77,7 @@ export default function Viewport(props) {
       StackScrollTool,
       ZoomTool,
       ProbeTool,
+      RectangleROITool,
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
@@ -85,46 +86,45 @@ export default function Viewport(props) {
     const toolGroupId = `${viewport_idx}-tl`;
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
-    // Safety check if toolGroup somehow doesn't exist yet
     if (!toolGroup) return;
+
+    const passiveAll = () => {
+      toolGroup.setToolPassive(WindowLevelTool.toolName);
+      toolGroup.setToolPassive(ZoomTool.toolName);
+      toolGroup.setToolPassive(PanTool.toolName);
+      toolGroup.setToolPassive(StackScrollTool.toolName);
+      toolGroup.setToolPassive(ProbeTool.toolName);
+      toolGroup.setToolPassive(RectangleROITool.toolName);
+    };
 
     switch (toolSelected) {
       case "pan":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(ZoomTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolPassive(ProbeTool.toolName);
+        passiveAll();
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "zoom":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolPassive(ProbeTool.toolName);
+        passiveAll();
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "window":
-        toolGroup.setToolPassive(ZoomTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
-        toolGroup.setToolPassive(ProbeTool.toolName);
+        passiveAll();
         toolGroup.setToolActive(WindowLevelTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "scroll":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(ZoomTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(ProbeTool.toolName);
+        passiveAll();
         toolGroup.setToolActive(StackScrollTool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
         break;
       case "pointer":
-        toolGroup.setToolPassive(WindowLevelTool.toolName);
-        toolGroup.setToolPassive(ZoomTool.toolName);
-        toolGroup.setToolPassive(PanTool.toolName);
-        toolGroup.setToolPassive(StackScrollTool.toolName);
+        passiveAll();
         toolGroup.setToolActive(ProbeTool.toolName);
         break;
+      case "annotate": {
+        passiveAll();
+        toolGroup.setToolActive(RectangleROITool.toolName, { bindings: [{ mouseButton: MouseBindings.Primary }], });
+        break;
+      }
     }
+
 
   }, [toolSelected, viewportReady, viewport_idx]);
 
@@ -138,6 +138,7 @@ export default function Viewport(props) {
       StackScrollTool,
       ZoomTool,
       ProbeTool,
+      RectangleROITool,
       ToolGroupManager,
       Enums: csToolsEnums,
     } = cornerstoneTools;
@@ -156,6 +157,9 @@ export default function Viewport(props) {
       toolGroup.addTool(ZoomTool.toolName);
       toolGroup.addTool(StackScrollTool.toolName, { loop: false });
       toolGroup.addTool(ProbeTool.toolName);
+      toolGroup.addTool(RectangleROITool.toolName, {
+        configuration: { getTextLines: () => [] },
+      });
 
       if (mobile) {
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ numTouchPoints: 2 }], });
@@ -248,13 +252,16 @@ export default function Viewport(props) {
       const _origSetImageIdIndex = viewport.setImageIdIndex.bind(viewport);
 
       viewport.setImageIdIndex = async (index) => {
-        if (_gating) return _origSetImageIdIndex(index);
+        if (_gating) {
+          const result = _origSetImageIdIndex(index);
+          viewport.targetImageIdIndex = index;
+          return result;
+        }
         _gating = true;
 
         let target = index;
         if (!loadedSetRef.current.has(index)) {
-          // Find nearest loaded image in scroll direction
-          const prev = prevImageIndexRef.current;
+          const prev = viewport.getCurrentImageIdIndex();
           const dir = index >= prev ? 1 : -1;
           let nearest = -1;
           for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
@@ -262,13 +269,12 @@ export default function Viewport(props) {
           }
           if (nearest === -1) nearest = prev;
           target = nearest;
-
         }
 
         try {
           const result = await _origSetImageIdIndex(target);
+          viewport.targetImageIdIndex = target;
 
-          // Apply saved VOI AFTER the new image is ready
           if (voiRef.current) {
             viewport.setProperties({
               voiRange: voiRef.current,
@@ -620,7 +626,7 @@ export default function Viewport(props) {
 
       </div>
 
-      {/* Slice Indicator */}
+      {/* Slice Indicator - commented out
       {viewport_data && viewport_data.s.length > 1 && searchParams.get("preview") !== "true" && (() => {
         try { return window.self === window.top; } catch (e) { return false; }
       })() && (
@@ -646,6 +652,7 @@ export default function Viewport(props) {
             Slice <span style={{ color: 'white', fontWeight: 600 }}>{currentImageIndex + 1}</span> / {viewport_data.s.length}
           </div>
         )}
+      */}
     </div>
   );
 }

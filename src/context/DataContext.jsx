@@ -16,8 +16,6 @@ import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
 
-const queryParams = new URLSearchParams(window.location.search);
-const isEmbedded = queryParams.get('frame_id') != null;
 var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
 // create initial data object from URL query string
 
@@ -48,6 +46,10 @@ initialData.compareNormal = null;      // { active, structure, scrollOffset, nor
 initialData.chatHistory = [
     { role: 'assistant', content: "Hi! I'm MedGemma. I can help you analyze medical images with the following tools:\n\n- **Adjust Contrast/Brightness**: Optimize CT/X-Ray contrast\n- **Explain Finding**: Full pipeline analysis of report text\n- **Show Organ**: Anatomical segmentation & navigation\n- **Compare with Normal**: Side-by-side reference CT comparison (or press **N**)\n- **Detect Modality**: Identify scan type (CT, MRI, X-Ray)\n- **Share Session**: Generate a collaborative link\n\nHow can I assist you today?" }
 ];
+
+// Bounding-box annotation submissions from viewers
+initialData.submittedAnnotations = {};
+initialData.heatmapVisible = false;
 
 // Added for Broadcast-based ownership arbitration
 initialData.shareClock = 0;  // last share change timestamp (ms since epoch)
@@ -194,6 +196,7 @@ export const DataProvider = ({ children }) => {
                 ZoomTool,
                 ProbeTool,
 
+                RectangleROITool,
             } = cornerstoneTools;
 
             cornerstoneTools.addTool(PanTool);
@@ -202,7 +205,21 @@ export const DataProvider = ({ children }) => {
             cornerstoneTools.addTool(StackScrollMouseWheelTool);
             cornerstoneTools.addTool(ZoomTool);
             cornerstoneTools.addTool(ProbeTool);
+            cornerstoneTools.addTool(RectangleROITool);
 
+            const existingDefaults = cornerstoneTools.annotation.config.style.getDefaultToolStyles();
+            cornerstoneTools.annotation.config.style.setDefaultToolStyles({
+                ...existingDefaults,
+                RectangleROI: {
+                    color: 'rgb(34, 211, 238)',
+                    colorHighlighted: 'rgb(103, 232, 249)',
+                    colorSelected: 'rgb(165, 243, 252)',
+                    colorLocked: 'rgb(34, 211, 238)',
+                    lineWidth: '2',
+                    lineDash: '',
+                    textBoxVisibility: false,
+                },
+            });
 
             const eventListenerManager = new utilities.eventListener.MultiTargetEventListenerManager();
 
@@ -262,26 +279,13 @@ export const DataProvider = ({ children }) => {
 
 
         setupCornerstone()
-        // Set up Supabase if not embedded, OR if embedded but user is the session owner
-        const isOwner = userData && initialData.sessionMeta.owner === userData.id;
-        if (!isEmbedded || isOwner) {
 
-            setupSupabase().then(() => { // is this actually an async function? It doesn't seem to make async calls
-
-
-                dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
-
-
-            })
-        }
-
+        setupSupabase().then(() => {
+            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
+        })
 
         return () => {
-            // Clean up if we set up Supabase (not embedded OR is owner)
-            if (!isEmbedded || isOwner) {
-
-                userDispatch({ type: 'clean_up_supabase' })
-            }
+            userDispatch({ type: 'clean_up_supabase' })
         }
 
     }, []);
@@ -466,6 +470,15 @@ export const DataProvider = ({ children }) => {
                 { event: 'chat-updated' },
                 (payload) => {
                     dispatch({ type: 'update_chat_history', payload: payload.payload.messages })
+                }
+            )
+
+            // Listen for bounding-box annotation submissions
+            interaction_channel.on(
+                'broadcast',
+                { event: 'annotations-submitted' },
+                (payload) => {
+                    dispatch({ type: 'annotation_received', payload: payload.payload })
                 }
             )
 
@@ -829,6 +842,23 @@ export function dataReducer(data, action) {
             break;
         case 'clear_compare_normal_request':
             new_data = { ...data, compareNormalRequested: false };
+            break;
+        case 'annotation_received': {
+            const { userId, userName, boxes } = action.payload;
+            new_data = {
+                ...data,
+                submittedAnnotations: {
+                    ...data.submittedAnnotations,
+                    [userId]: { userName, boxes }
+                }
+            };
+            break;
+        }
+        case 'clear_all_annotations':
+            new_data = { ...data, submittedAnnotations: {} };
+            break;
+        case 'toggle_heatmap':
+            new_data = { ...data, heatmapVisible: !data.heatmapVisible };
             break;
         default:
             throw Error('Unknown action: ' + action.type);

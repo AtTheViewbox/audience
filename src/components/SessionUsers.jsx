@@ -1,13 +1,8 @@
 import { useState, useContext, useEffect, useMemo } from 'react';
 import { DataContext, } from '../context/DataContext.jsx';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-const CDN = `https://cdn.discordapp.com`
-const SIZE = 256
-const MAX_VISIBLE_AVATARS = 3
-
-const queryParams = new URLSearchParams(window.location.search);
-const isEmbedded = queryParams.get('frame_id') != null;
+const MAX_VISIBLE_AVATARS = 3;
 
 function SessionUsers() {
   const { sharingUser, activeUsers, sessionId } = useContext(DataContext).data;
@@ -42,14 +37,6 @@ function SessionUsers() {
     setOrderedUsers(copy);
   }, [sharingUser]); // important: DON'T depend on sharingUser here
 
-  function getAvatarUrl(user) {
-    if (user.discordData.avatar != null) {
-      return `${CDN}/avatars/${user.discordData.id}/${user.discordData.avatar}.png?size=${SIZE}`;
-    } else {
-      const defaultAvatarIndex = (BigInt(user.discordData.id) >> 22n) % 6n;
-      return `${CDN}/embed/avatars/${defaultAvatarIndex}.png?size=${SIZE}`;
-    }
-  }
   function getInitial(user) {
     if (!user?.name) return "?";
 
@@ -81,7 +68,7 @@ function SessionUsers() {
           marginLeft: user.user === sharingUser ? '0.6rem' : '-0.2rem',
           marginRight: user.user === sharingUser ? '0.6rem' : '-0.2rem'
         }}>
-          {isEmbedded ? <AvatarImage src={getAvatarUrl(user)} /> : <AvatarFallback className="bg-slate-800 text-slate-300 text-[10px] font-bold">{getInitial(user)}</AvatarFallback>}
+          <AvatarFallback className="bg-slate-800 text-slate-300 text-[10px] font-bold">{getInitial(user)}</AvatarFallback>
         </Avatar>
 
       </div>

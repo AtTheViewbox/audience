@@ -6,6 +6,8 @@ import MedGemmaButton from './MedGemma/MedGemmaButton'
 import CompareNormal from './MedGemma/CompareNormal'
 import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
+import AnnotationPanel from './AnnotationPanel'
+import HeatmapOverlay from './HeatmapOverlay'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
 
@@ -24,6 +26,8 @@ function MainPage() {
         <MedGemmaButton />
         <CompareNormal />
         <AtlasOverlayMenu />
+        <AnnotationPanel />
+        <HeatmapOverlay />
         <OnboardingOverlay page="viewer" />
         <Toaster position="top-right" />
       </>

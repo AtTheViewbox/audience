@@ -19,17 +19,20 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
     const { userData } = useContext(UserContext).data;
 
     const [isResizingLeft, setIsResizingLeft] = useState(false)
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024)
 
     const minLeftWidth = 180
     const maxLeftWidth = 400
 
+    useEffect(() => {
+        const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
 
     useEffect(() => {
         document.documentElement.classList.add("dark")
-        return () => {
-            // If you want to remove dark mode when navigating away
-            // document.documentElement.classList.remove('dark');
-        }
+        return () => {}
     }, [])
 
 
@@ -61,10 +64,10 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
 
     return (
         <>
-            {/* Mobile Overlay */}
+            {/* Mobile/Tablet Overlay */}
             {mobileMenuOpen && (
                 <div
-                    className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden"
+                    className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm lg:hidden"
                     onClick={() => setMobileMenuOpen(false)}
                 />
             )}
@@ -72,12 +75,11 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
             {/* Left Sidebar */}
             <div
                 className={cn(
-                    "bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0",
-                    // Mobile: Fixed, Full Height, Slide in
-                    "fixed inset-y-0 left-0 z-50 w-64 md:static md:z-auto",
+                    "bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
+                    "fixed inset-y-0 left-0 z-50 w-64 lg:static lg:z-auto",
                     mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                 )}
-                style={{ width: (window.innerWidth >= 768) ? `${leftPanelWidth}px` : undefined }}
+                style={{ width: isDesktop ? `${leftPanelWidth}px` : undefined }}
             >
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-6">
@@ -85,7 +87,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="md:hidden text-slate-400 hover:text-slate-100"
+                            className="lg:hidden text-slate-400 hover:text-slate-100"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             <X className="h-4 w-4" />
@@ -181,7 +183,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
 
             {/* Resize handle for left panel - Desktop Only */}
             <div
-                className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden md:block"
+                className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden lg:block"
                 onMouseDown={() => setIsResizingLeft(true)}
             />
         </>
