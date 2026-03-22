@@ -14,6 +14,7 @@ function HeatmapOverlay() {
 
   const renderingRef = useRef(null);
   renderingRef.current = renderingEngine;
+  const prevHeatmapVisible = useRef(false);
 
   const submissionCount = Object.keys(submittedAnnotations || {}).length;
   const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
@@ -45,11 +46,40 @@ function HeatmapOverlay() {
 
   useEffect(() => {
     if (!isSessionOwner || submissionCount === 0 || !renderingEngine || !heatmapVisible) {
+      prevHeatmapVisible.current = heatmapVisible;
       if (renderingEngine) {
         renderingEngine.getViewports().forEach((vp) => clearBoxHeatmap(vp));
       }
       return;
     }
+
+    // Jump to the slice with the most annotations when heatmap is first shown
+    if (heatmapVisible && !prevHeatmapVisible.current) {
+      const boxes = allBoxes();
+      if (boxes.length > 0) {
+        const counts = {};
+        for (const b of boxes) {
+          if (b.imageId) counts[b.imageId] = (counts[b.imageId] || 0) + 1;
+        }
+        let bestId = null, bestCount = 0;
+        for (const [id, c] of Object.entries(counts)) {
+          if (c > bestCount) { bestId = id; bestCount = c; }
+        }
+        if (bestId) {
+          const viewports = renderingEngine.getViewports();
+          for (const vp of viewports) {
+            const ids = vp.getImageIds?.();
+            if (!ids) continue;
+            const idx = ids.indexOf(bestId);
+            if (idx !== -1) {
+              vp.setImageIdIndex(idx);
+              break;
+            }
+          }
+        }
+      }
+    }
+    prevHeatmapVisible.current = heatmapVisible;
 
     renderAll();
 

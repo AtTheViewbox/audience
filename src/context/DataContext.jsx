@@ -16,7 +16,8 @@ import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
 
-var initialData = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
+const queryParams = new URLSearchParams(window.location.search);
+var initialData = unflatten(Object.fromEntries(queryParams));
 // create initial data object from URL query string
 
 if (initialData.vd) {
@@ -262,7 +263,7 @@ export const DataProvider = ({ children }) => {
 
             // Only look for existing sessions for real (non-anonymous) logged-in users
             // Anonymous users cannot create sessions, so this query would never return results
-            if (!userData.is_anonymous) {
+            if (userData && !userData.is_anonymous) {
                 var { data, errorCurrentSession } = await cl
                     .from("viewbox")
                     .select("user, url_params, session_id,mode,chat_history")
@@ -281,6 +282,9 @@ export const DataProvider = ({ children }) => {
         setupCornerstone()
 
         setupSupabase().then(() => {
+            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
+        }).catch((err) => {
+            console.error('setupSupabase failed:', err);
             dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
         })
 
@@ -364,32 +368,75 @@ export const DataProvider = ({ children }) => {
                 dispatch({ type: 'apply_share_change', payload });
             })
 
+            // Roster channel — Presence + broadcast for initial state sync
+            // Workaround for Supabase bug #43561: presence_state never fires,
+            // so we use broadcast to let existing users announce themselves to newcomers.
+            const rosterState = {};
+            const myName = userData?.user_metadata?.full_name || userData.email;
             const roster_channel = supabaseClient.channel(`${data.sessionId}-roster`, {
-                config: { presence: { key: userData.id } }
-            });
-
-            roster_channel.subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    roster_channel.track({
-                        email: userData.email,
-                        name: userData?.user_metadata?.full_name || userData.email,
-                    });
+                config: {
+                    presence: { key: userData.id },
+                    broadcast: { self: false },
                 }
             });
 
-            roster_channel.on('presence', { event: 'sync' }, () => {
-                const presenceState = roster_channel.presenceState();
-                const list = Object.entries(presenceState).map(([id, infos]) => {
-                    const info = (infos && infos[0]) || {};
-                    return {
-                        user: id,
-                        name: info.name || id,
-                        isSharing: id === data.sharingUser
-                    };
-                });
+            const dispatchRoster = () => {
+                const list = Object.entries(rosterState).map(([id, name]) => ({ user: id, name }));
                 dispatch({ type: 'roster_updated', payload: list });
-            });
+            };
 
+            roster_channel
+                .on('presence_state', {}, (event) => {
+                    Object.entries(event).forEach(([key, val]) => {
+                        const meta = val?.metas?.[0] || val?.[0] || {};
+                        rosterState[key] = meta.name || key;
+                    });
+                    dispatchRoster();
+                })
+                .on('presence_diff', {}, (event) => {
+                    if (event.joins) {
+                        Object.entries(event.joins).forEach(([key, val]) => {
+                            const meta = val?.metas?.[0] || val?.[0] || {};
+                            rosterState[key] = meta.name || key;
+                        });
+                    }
+                    if (event.leaves) {
+                        Object.entries(event.leaves).forEach(([key]) => {
+                            delete rosterState[key];
+                        });
+                    }
+                    dispatchRoster();
+                    // When someone new joins, announce ourselves so they discover us
+                    if (event.joins && !event.joins[userData.id]) {
+                        roster_channel.send({
+                            type: 'broadcast', event: 'roster-announce',
+                            payload: { userId: userData.id, name: myName }
+                        });
+                    }
+                })
+                .on('broadcast', { event: 'roster-announce' }, ({ payload }) => {
+                    if (!rosterState[payload.userId]) {
+                        rosterState[payload.userId] = payload.name;
+                        dispatchRoster();
+                        // Reply so the announcer also discovers us
+                        roster_channel.send({
+                            type: 'broadcast', event: 'roster-announce',
+                            payload: { userId: userData.id, name: myName }
+                        });
+                    }
+                })
+                .subscribe(async (status) => {
+                    if (status === 'SUBSCRIBED') {
+                        await roster_channel.track({ name: myName });
+                        // Announce ourselves so existing users reply with their info
+                        roster_channel.send({
+                            type: 'broadcast', event: 'roster-announce',
+                            payload: { userId: userData.id, name: myName }
+                        });
+                    }
+                });
+
+            // Interaction channel — broadcast only
             const interaction_channel = supabaseClient.channel(`${data.sessionId}-interaction-channel`, {
                 config: {
                     broadcast: { self: false },
@@ -402,7 +449,6 @@ export const DataProvider = ({ children }) => {
                 }
             })
 
-
             if (data.sessionMeta.mode == "TEAM" || userData.id == data.sessionMeta.owner) {
 
                 interaction_channel.on(
@@ -412,18 +458,15 @@ export const DataProvider = ({ children }) => {
                         const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
                         const sharedImageId = payload.payload.imageId;
 
-                        // Find the imageId in local stack
                         const localStack = viewport.getImageIds();
                         const localIndex = localStack.indexOf(sharedImageId);
 
                         if (localIndex !== -1) {
-                            // Image loaded locally, display it
                             const currentCamera = viewport.getCamera();
                             viewport.setImageIdIndex(localIndex);
                             viewport.setCamera(currentCamera);
                             viewport.render();
                         } else {
-                            // Image not loaded yet, skip gracefully
                             console.log('Shared image not loaded yet:', sharedImageId);
                         }
                     }
@@ -441,30 +484,15 @@ export const DataProvider = ({ children }) => {
                     }
                 )
 
-                {/*  interaction_channel.on(
-                    'broadcast',
-                    { event: 'camera-changed' },
-                    (payload) => {
-                        const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
-                        if (payload.payload.camera) {
-                            // viewport.setCamera(payload.payload.camera);
-                            // viewport.render();
-                        }
-                    }
-                ) */}
-
-
                 interaction_channel.on(
                     'broadcast',
                     { event: 'pointer-changed' },
                     (payload) => {
                         dispatch({ type: 'set_pointer', payload: { coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ, viewport: payload.payload.viewport } })
-
                     }
                 )
             }
 
-            // Listen for chat messages shared across the session
             interaction_channel.on(
                 'broadcast',
                 { event: 'chat-updated' },
@@ -473,7 +501,6 @@ export const DataProvider = ({ children }) => {
                 }
             )
 
-            // Listen for bounding-box annotation submissions
             interaction_channel.on(
                 'broadcast',
                 { event: 'annotations-submitted' },
@@ -484,17 +511,11 @@ export const DataProvider = ({ children }) => {
 
             dispatch({ type: 'sharing_controller_initialized', payload: { shareController: share_controller, interactionChannel: interaction_channel, rosterChannel: roster_channel } })
 
-        }
-
-        return () => {
-            if (data.shareController) {
-                data.shareController.unsubscribe();
+            return () => {
+                if (data.shareController) data.shareController.unsubscribe();
+                if (data.rosterChannel) { data.rosterChannel.untrack?.(); data.rosterChannel.unsubscribe(); }
+                if (data.interactionChannel) data.interactionChannel.unsubscribe();
             }
-            if (data.rosterChannel) {
-                data.rosterChannel.untrack?.();
-                data.rosterChannel.unsubscribe();
-            }
-            if (data.interactionChannel) data.interactionChannel.unsubscribe();
         }
     }, [data.sessionId, supabaseClient]);
 
