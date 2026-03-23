@@ -2,7 +2,6 @@ import { useState, useContext, useRef, useEffect } from 'react';
 import { UserContext } from '../../context/UserContext';
 import { DataContext, DataDispatchContext } from '../../context/DataContext';
 import { Sparkles, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
 
 import AgentChat from './AgentChat';
 
@@ -108,7 +107,7 @@ export default function MedGemmaButton() {
     border: '1px solid #1e293b', // slate-800
   };
 
-  // Safe guard: Do not create portal if we are not mounted or on main branch
+  // Safe guard: wait for mount (layout measurement)
   if (!isMounted || typeof document === 'undefined' || !document.body) {
     return null;
   }
@@ -118,21 +117,33 @@ export default function MedGemmaButton() {
     return null;
   }
 
-  const portal = createPortal(
+  // Collapsed: sits in parent right rail (relative). Open: panel is fixed so it can cover Atlas;
+  // wrapper keeps the collapsed width in the flex row so Atlas does not shift.
+  const isExpanded = phase === 'open';
+  const { w: btnW, h: btnH } = measuredBtn.current;
+
+  return (
     <div
-      ref={cardRef}
-      onClick={phase === 'button' ? handleOpen : undefined}
-      className="fixed z-50 flex flex-col overflow-hidden shadow-2xl select-text"
-      style={{
-        top: R,
-        right: R,
-        width: measuredBtn.current.w,
-        height: measuredBtn.current.h,
-        borderRadius: 10,
-        cursor: phase === 'button' ? 'pointer' : 'default',
-        ...card,
-      }}
+      className="shrink-0 self-center"
+      style={
+        isExpanded
+          ? { width: btnW, minHeight: btnH }
+          : undefined
+      }
     >
+      <div
+        ref={cardRef}
+        onClick={phase === 'button' ? handleOpen : undefined}
+        className={`flex flex-col overflow-hidden shadow-2xl select-text ${isExpanded ? 'fixed z-[120]' : 'relative z-auto'}`}
+        style={{
+          ...(isExpanded ? { top: R, right: R } : {}),
+          width: btnW,
+          height: btnH,
+          borderRadius: 10,
+          cursor: phase === 'button' ? 'pointer' : 'default',
+          ...card,
+        }}
+      >
       {/* ── Header ── */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-4 bg-slate-900/40"
@@ -176,9 +187,7 @@ export default function MedGemmaButton() {
           onMaskReady={() => { }}
         />
       </div>
-    </div>,
-    document.body
+    </div>
+    </div>
   );
-
-  return portal;
 }

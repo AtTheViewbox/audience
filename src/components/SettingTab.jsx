@@ -1,27 +1,107 @@
 import { Button } from "@/components/ui/button"
-import { ChevronRight, LogOut, Home, LogIn } from "lucide-react";
-import { useContext } from "react";
-import { UserContext } from "../context/UserContext"
+import { ChevronRight, LogOut, Home } from "lucide-react";
+import { useContext, useEffect, useState } from "react";
+import { UserContext, UserDispatchContext } from "../context/UserContext"
 import { useNavigate } from "react-router-dom";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import {
+  getShowMedGemmaButton,
+  getAutoTransferSession,
+  setShowMedGemmaLocal,
+} from "../lib/userPreferences"
 
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 
 
 function SettingTab() {
   const { userData, supabaseClient } = useContext(UserContext).data;
+  const { userDispatch } = useContext(UserDispatchContext);
   const navigate = useNavigate();
 
-  // Guard against null userData (e.g. during logout transition)
-  if (!userData) return null;
+  const [showMedGemma, setShowMedGemma] = useState(false);
+  const [autoTransfer, setAutoTransfer] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const isAnonymous = userData?.is_anonymous;
+
+  useEffect(() => {
+    if (!userData) return;
+    setShowMedGemma(getShowMedGemmaButton(userData));
+    setAutoTransfer(getAutoTransferSession(userData));
+  }, [
+    userData,
+    userData?.id,
+    userData?.is_anonymous,
+    userData?.user_metadata?.show_medgemma_button,
+    userData?.user_metadata?.auto_transfer_session,
+  ]);
+
+  function mergeUserMetadata(patch) {
+    return {
+      ...userData,
+      user_metadata: { ...userData.user_metadata, ...patch },
+    };
+  }
+
+  async function persistMedGemma(checked) {
+    setShowMedGemma(checked);
+    if (isAnonymous) {
+      setShowMedGemmaLocal(checked);
+      return;
+    }
+    const prev = userData.user_metadata?.show_medgemma_button;
+    userDispatch({
+      type: 'auth_update',
+      payload: { session: { user: mergeUserMetadata({ show_medgemma_button: checked }) } },
+    });
+    setSaving(true);
+    try {
+      const { error } = await supabaseClient.auth.updateUser({
+        data: { show_medgemma_button: checked },
+      });
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+      userDispatch({
+        type: 'auth_update',
+        payload: { session: { user: mergeUserMetadata({ show_medgemma_button: prev }) } },
+      });
+      setShowMedGemma(!checked);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function persistAutoTransfer(checked) {
+    setAutoTransfer(checked);
+    const prev = userData.user_metadata?.auto_transfer_session;
+    userDispatch({
+      type: 'auth_update',
+      payload: { session: { user: mergeUserMetadata({ auto_transfer_session: checked }) } },
+    });
+    setSaving(true);
+    try {
+      const { error } = await supabaseClient.auth.updateUser({
+        data: { auto_transfer_session: checked },
+      });
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+      userDispatch({
+        type: 'auth_update',
+        payload: { session: { user: mergeUserMetadata({ auto_transfer_session: prev }) } },
+      });
+      setAutoTransfer(!checked);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function logOut() {
 
@@ -47,7 +127,8 @@ function SettingTab() {
       .substring(0, 2)
   }
 
-  const isAnonymous = userData.is_anonymous;
+  if (!userData) return null;
+
   const displayName = userData.user_metadata?.name || userData.email || "Guest User";
   const displayEmail = isAnonymous ? "Anonymous Session" : userData.email;
 
@@ -65,7 +146,40 @@ function SettingTab() {
             <p className="text-sm text-muted-foreground">{displayEmail}</p>
           </div>
         </div>
-        <div className="mt-4 space-y-2">
+
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="pref-medgemma" className="text-sm font-medium">MedGemma AI button</Label>
+              <p className="text-xs text-muted-foreground">
+                Show the assistant button on the viewer.
+              </p>
+            </div>
+            <Switch
+              id="pref-medgemma"
+              checked={showMedGemma}
+              disabled={saving}
+              onCheckedChange={persistMedGemma}
+            />
+          </div>
+
+          <div className={`flex items-center justify-between gap-4 rounded-lg border border-slate-200 dark:border-slate-800 p-3 ${isAnonymous ? 'opacity-60' : ''}`}>
+            <div className="space-y-0.5">
+              <Label htmlFor="pref-autotransfer" className="text-sm font-medium">Auto-transfer share session</Label>
+              <p className="text-xs text-muted-foreground">
+                If you already have an active share session and open a different study, automatically move the session to the current study (same as Transfer Session).
+              </p>
+            </div>
+            <Switch
+              id="pref-autotransfer"
+              checked={autoTransfer}
+              disabled={saving || isAnonymous}
+              onCheckedChange={persistAutoTransfer}
+            />
+          </div>
+
+          <Separator />
+
           <Button
             variant="ghost"
             className="w-full justify-start text-left h-auto py-3"

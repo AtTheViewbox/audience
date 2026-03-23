@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { UserContext, UserDispatchContext } from "../context/UserContext"
 import { Visibility } from "../lib/constants.js";
+import { transferSessionToCurrentUrl } from "../lib/transferSharedSession.js";
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -123,36 +124,15 @@ function ShareTab() {
       return;
     }
     try {
-      console.log(queryParams.toString());
-      const { data, update_error } = await supabaseClient
-        .from("viewbox")
-        .upsert({ user: userData.id, url_params: queryParams.toString(), chat_history: viewboxData.chatHistory || [] })
-        .select();
-      queryParams.set("s", data[0].session_id);
-      if (update_error) throw delete_error;
-      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
-
-      const newQueryParams = new URLSearchParams("");
-      newQueryParams.set("s", data[0].session_id);
-      setVisibility(data[0].visibility);
-      setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
-      setShareLink(
-        `${window.location.origin + window.location.pathname
-        }?${newQueryParams.toString()}`
-      );
-      setQRCodeValue(
-        `${window.location.origin + window.location.pathname
-        }?${newQueryParams.toString()}`
-      );
-      dispatch({
-        type: "connect_to_sharing_session",
-        payload: { sessionId: data[0].session_id },
+      await transferSessionToCurrentUrl({
+        supabaseClient,
+        userId: userData.id,
+        chatHistory: viewboxData.chatHistory || [],
+        dispatch,
       });
-
-      //TODO: Fix buggy tranfering sessions, but reloading works for now.
-      window.location.reload();
     } catch (error) {
-      console.log(error.code);
+      console.error(error);
+      toast.error('Could not transfer session.');
     }
   }
 

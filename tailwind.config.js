@@ -66,10 +66,21 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        // Atlas popover — similar timing/easing to MedGemma chat open (380ms cubic)
+        "atlas-popover-in": {
+          "0%": { opacity: "0", transform: "translateY(-12px) scale(0.94)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "atlas-popover-out": {
+          "0%": { opacity: "1", transform: "translateY(0) scale(1)" },
+          "100%": { opacity: "0", transform: "translateY(-8px) scale(0.96)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "atlas-popover-in": "atlas-popover-in 0.38s cubic-bezier(0.4, 0, 0.2, 1) both",
+        "atlas-popover-out": "atlas-popover-out 0.26s cubic-bezier(0.4, 0, 0.2, 1) both",
       },
     },
   },
