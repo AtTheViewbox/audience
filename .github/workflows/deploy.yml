@@ -24,10 +24,9 @@ jobs:
 
       - run: npm run build:production
 
-      - name: Deploy to Cloudflare Pages (production)
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Must match the Cloudflare Pages "Production branch" (prod → attheviewbox.dev).
-          command: pages deploy dist --project-name=attheviewbox --branch=prod
+          command: pages deploy dist --project-name=attheviewbox
