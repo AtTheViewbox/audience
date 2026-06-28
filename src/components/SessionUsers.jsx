@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { DataContext, } from '../context/DataContext.jsx';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
@@ -9,38 +9,48 @@ function SessionUsers() {
 
   const [orderedUsers, setOrderedUsers] = useState([]);
 
-
+  // Keep a stable display order while syncing membership AND the latest data
+  // (names can resolve after a user first appears), then float the sharing
+  // user to the front. Runs on any change to the roster or who's sharing.
   useEffect(() => {
-    // Build a set of current IDs
-    const incomingIds = new Set(activeUsers.map(u => u.user));
-    // Keep existing order for users still present
-    const kept = orderedUsers.filter(u => incomingIds.has(u.user));
+    setOrderedUsers((prev) => {
+      const byId = new Map((activeUsers || []).map((u) => [u.user, u]));
 
-    // Append any new users at the end, in the order they appear
-    const seen = new Set(kept.map(u => u.user));
-    const appended = activeUsers.filter(u => !seen.has(u.user));
+      // Preserve prior order for users still present, but pull fresh data so
+      // updated names/flags are reflected instead of stale snapshots.
+      const kept = prev
+        .filter((u) => byId.has(u.user))
+        .map((u) => byId.get(u.user));
 
-    setOrderedUsers([...kept, ...appended]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    console.log(orderedUsers)
-  }, [activeUsers]); // important: DON'T depend on sharingUser here
+      const seen = new Set(kept.map((u) => u.user));
+      const appended = (activeUsers || []).filter((u) => !seen.has(u.user));
 
-  useEffect(() => {
+      let next = [...kept, ...appended];
 
-    if (!sharingUser) return;
-    const i = orderedUsers.findIndex(u => u.user === sharingUser);
-    if (i <= 0) return;          // not found or already first
-    const copy = orderedUsers.slice();
-    const [item] = copy.splice(i, 1);        // remove at i
-    copy.unshift(item);
-    console.log(copy)
-    setOrderedUsers(copy);
-  }, [sharingUser]); // important: DON'T depend on sharingUser here
+      if (sharingUser) {
+        const i = next.findIndex((u) => u.user === sharingUser);
+        if (i > 0) {
+          next = next.slice();
+          const [item] = next.splice(i, 1);
+          next.unshift(item);
+        }
+      }
+
+      return next;
+    });
+  }, [activeUsers, sharingUser]);
+
+  // A name is only meaningful if it isn't just the raw user id fallback.
+  function displayName(user) {
+    if (!user?.name || user.name === user.user) return "Anonymous User";
+    return user.name;
+  }
 
   function getInitial(user) {
-    if (!user?.name) return "?";
+    const name = displayName(user);
+    if (name === "Anonymous User") return "?";
 
-    const parts = user.name.trim().split(/\s+/); // split by spaces
+    const parts = name.trim().split(/\s+/); // split by spaces
     const firstInitial = parts[0]?.[0]?.toUpperCase() || "";
     const secondInitial = parts[1]?.[0]?.toUpperCase() || "";
 
@@ -59,7 +69,7 @@ function SessionUsers() {
         className="relative group"
       >
         <div className="absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 w-48 p-3 mb-2 bottom-full left-1/2 transform -translate-x-1/2 bg-slate-950 border border-slate-800 rounded-lg shadow-xl">
-          <p className="text-xs font-medium text-slate-200">{user.name ? user.name : "Anonymous User"}</p>
+          <p className="text-xs font-medium text-slate-200">{displayName(user)}</p>
           <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 rotate-45 bg-slate-950 border-r border-b border-slate-800"></div>
         </div>
         <Avatar key={user.user} className={`transition-all duration-300 group-hover:scale-110 ring-1 ${user.user === sharingUser ? 'ring-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'ring-slate-700'} ring-offset-1 ring-offset-slate-950`} style={{

@@ -170,7 +170,11 @@ function ShareTab() {
       // once a shared session is created, need to now create a room
       dispatch({
         type: "connect_to_sharing_session",
-        payload: { sessionId: data[0].session_id, mode: data[0].mode },
+        payload: {
+          sessionId: data[0].session_id,
+          mode: data[0].mode,
+          owner: userData.id,
+        },
       });
       const newQueryParams = new URLSearchParams();
       newQueryParams.set("s", data[0].session_id);

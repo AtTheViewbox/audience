@@ -6,46 +6,55 @@ import {
   clearBoxHeatmap,
   removeBoxHeatmap,
 } from "../lib/heatmapUtils.js";
+import {
+  collectSubmissionHeatmapBoxes,
+  collectAnswerKeyBoxes,
+  snapToBoxAtIndex,
+} from "../lib/heatmapNavigation.js";
+import { setPersistedBoxAnnotationsVisible } from "../lib/answerKeyBoxes.js";
 
 function HeatmapOverlay() {
-  const { sessionId, sessionMeta, submittedAnnotations, renderingEngine, heatmapVisible } =
-    useContext(DataContext).data;
+  const {
+    sessionId,
+    sessionMeta,
+    submittedAnnotations,
+    persistedAnswerBoxes,
+    renderingEngine,
+    heatmapVisible,
+  } = useContext(DataContext).data;
   const { userData } = useContext(UserContext).data;
 
   const renderingRef = useRef(null);
   renderingRef.current = renderingEngine;
   const prevHeatmapVisible = useRef(false);
 
-  const submissionCount = Object.keys(submittedAnnotations || {}).length;
   const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
 
-  const allBoxes = useCallback(() => {
-    const boxes = [];
-    for (const userId of Object.keys(submittedAnnotations || {})) {
-      const sub = submittedAnnotations[userId];
-      if (sub?.boxes) {
-        boxes.push(...sub.boxes);
-      }
-    }
-    return boxes;
-  }, [submittedAnnotations]);
+  const submissionBoxes = useCallback(
+    () => collectSubmissionHeatmapBoxes(submittedAnnotations),
+    [submittedAnnotations]
+  );
 
   const renderAll = useCallback(() => {
     const engine = renderingRef.current;
     if (!engine) return;
-    const boxes = allBoxes();
-    const viewports = engine.getViewports();
-    viewports.forEach((vp) => {
+    const boxes = submissionBoxes();
+    engine.getViewports().forEach((vp) => {
       if (boxes.length > 0) {
         renderBoxHeatmap(vp, boxes);
       } else {
         clearBoxHeatmap(vp);
       }
     });
-  }, [allBoxes]);
+  }, [submissionBoxes]);
 
   useEffect(() => {
-    if (!isSessionOwner || submissionCount === 0 || !renderingEngine || !heatmapVisible) {
+    if (!isSessionOwner || !renderingEngine || !sessionId) return;
+    setPersistedBoxAnnotationsVisible(renderingEngine, heatmapVisible);
+  }, [isSessionOwner, renderingEngine, sessionId, heatmapVisible]);
+
+  useEffect(() => {
+    if (!isSessionOwner || !renderingEngine || !heatmapVisible) {
       prevHeatmapVisible.current = heatmapVisible;
       if (renderingEngine) {
         renderingEngine.getViewports().forEach((vp) => clearBoxHeatmap(vp));
@@ -53,35 +62,23 @@ function HeatmapOverlay() {
       return;
     }
 
-    // Jump to the slice with the most annotations when heatmap is first shown
-    if (heatmapVisible && !prevHeatmapVisible.current) {
-      const boxes = allBoxes();
-      if (boxes.length > 0) {
-        const counts = {};
-        for (const b of boxes) {
-          if (b.imageId) counts[b.imageId] = (counts[b.imageId] || 0) + 1;
-        }
-        let bestId = null, bestCount = 0;
-        for (const [id, c] of Object.entries(counts)) {
-          if (c > bestCount) { bestId = id; bestCount = c; }
-        }
-        if (bestId) {
-          const viewports = renderingEngine.getViewports();
-          for (const vp of viewports) {
-            const ids = vp.getImageIds?.();
-            if (!ids) continue;
-            const idx = ids.indexOf(bestId);
-            if (idx !== -1) {
-              vp.setImageIdIndex(idx);
-              break;
-            }
-          }
-        }
-      }
-    }
-    prevHeatmapVisible.current = heatmapVisible;
+    let cancelled = false;
 
-    renderAll();
+    const run = async () => {
+      const answerBoxes = collectAnswerKeyBoxes(persistedAnswerBoxes);
+
+      if (heatmapVisible && !prevHeatmapVisible.current && answerBoxes.length > 0) {
+        await snapToBoxAtIndex(renderingEngine, answerBoxes, 0);
+      }
+
+      if (cancelled) return;
+      prevHeatmapVisible.current = heatmapVisible;
+      requestAnimationFrame(() => {
+        if (!cancelled) renderAll();
+      });
+    };
+
+    run();
 
     const handler = () => requestAnimationFrame(renderAll);
     const viewports = renderingEngine.getViewports();
@@ -89,14 +86,29 @@ function HeatmapOverlay() {
 
     elements.forEach((el) => {
       el.addEventListener("CORNERSTONE_IMAGE_RENDERED", handler);
+      el.addEventListener("CORNERSTONE_STACK_NEW_IMAGE", handler);
     });
 
     return () => {
+      cancelled = true;
       elements.forEach((el) => {
         el.removeEventListener("CORNERSTONE_IMAGE_RENDERED", handler);
+        el.removeEventListener("CORNERSTONE_STACK_NEW_IMAGE", handler);
       });
     };
-  }, [isSessionOwner, submissionCount, renderingEngine, heatmapVisible, renderAll]);
+  }, [
+    isSessionOwner,
+    renderingEngine,
+    heatmapVisible,
+    renderAll,
+    submissionBoxes,
+    persistedAnswerBoxes,
+  ]);
+
+  useEffect(() => {
+    if (!isSessionOwner || !heatmapVisible || !renderingEngine) return;
+    renderAll();
+  }, [submittedAnnotations, isSessionOwner, heatmapVisible, renderingEngine, renderAll]);
 
   useEffect(() => {
     return () => {

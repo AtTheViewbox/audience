@@ -17,6 +17,7 @@ import {
 
 import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
+import AnnotationTab from "./AnnotationTab.jsx";
 
 export const AuthMode = {
   LOGIN: "login",
@@ -57,11 +58,14 @@ function DialogPage() {
       </DialogHeader>
 
       <Tabs value={tabValue} onValueChange={setTabValue}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={`grid w-full ${isAnonymous ? "grid-cols-2" : "grid-cols-3"}`}>
           {isAnonymous ? (
             <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>
           ) : (
             <TabsTrigger value="sharing">Share</TabsTrigger>
+          )}
+          {!isAnonymous && (
+            <TabsTrigger value="annotate">Questions</TabsTrigger>
           )}
           <TabsTrigger value="setting">Setting</TabsTrigger>
         </TabsList>
@@ -73,6 +77,12 @@ function DialogPage() {
         ) : (
           <TabsContent value="sharing">
             <ShareTab />
+          </TabsContent>
+        )}
+
+        {!isAnonymous && (
+          <TabsContent value="annotate">
+            <AnnotationTab />
           </TabsContent>
         )}
 

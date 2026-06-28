@@ -21,8 +21,24 @@ export function getAutoTransferSession(userData) {
   return userData.user_metadata?.auto_transfer_session === true;
 }
 
+const LS_SHOW_LEADERBOARD = 'atvb_pref_show_leaderboard';
+
 export function setShowMedGemmaLocal(value) {
   if (value) localStorage.setItem(LS_SHOW_MEDGEMMA, 'true');
   else localStorage.removeItem(LS_SHOW_MEDGEMMA);
+  window.dispatchEvent(new CustomEvent(PREF_EVENT));
+}
+
+/** Leaderboard visible after submit / in owner panel (default on). */
+export function getLeaderboardEnabled(userData) {
+  if (!userData || userData.is_anonymous) {
+    return localStorage.getItem(LS_SHOW_LEADERBOARD) !== 'false';
+  }
+  return userData.user_metadata?.show_leaderboard !== false;
+}
+
+export function setLeaderboardEnabledLocal(value) {
+  if (value) localStorage.removeItem(LS_SHOW_LEADERBOARD);
+  else localStorage.setItem(LS_SHOW_LEADERBOARD, 'false');
   window.dispatchEvent(new CustomEvent(PREF_EVENT));
 }

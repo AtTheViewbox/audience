@@ -4,6 +4,27 @@ const OVERLAY_CLASS = 'annotation-heatmap';
 const BLUR_PX = 12;
 const MAX_ALPHA = 0.65;
 
+export function normalizeImageId(id) {
+    if (!id) return '';
+    try {
+        return decodeURI(String(id)).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+    } catch {
+        return String(id).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+    }
+}
+
+function boxMatchesImage(box, currentImageId) {
+    if (!box?.imageId || !currentImageId) return false;
+    if (box.imageId === currentImageId) return true;
+    return normalizeImageId(box.imageId) === normalizeImageId(currentImageId);
+}
+
+function toWorldPoint(p) {
+    if (Array.isArray(p)) return p;
+    if (p && typeof p === 'object') return [p.x, p.y, p.z ?? 0];
+    return null;
+}
+
 function heatColor(t) {
     // 0 = transparent, low = blue, mid = yellow, high = red/white
     if (t <= 0) return [0, 0, 0, 0];
@@ -46,7 +67,7 @@ export function renderBoxHeatmap(viewport, allBoxes) {
     const currentImageId = viewport.getCurrentImageId?.();
     if (!currentImageId || !allBoxes || allBoxes.length === 0) return;
 
-    const matchingBoxes = allBoxes.filter((b) => b.imageId === currentImageId);
+    const matchingBoxes = allBoxes.filter((b) => boxMatchesImage(b, currentImageId));
     if (matchingBoxes.length === 0) return;
 
     // Build accumulator at canvas resolution
@@ -57,7 +78,11 @@ export function renderBoxHeatmap(viewport, allBoxes) {
         const pts = box.points;
         if (!pts || pts.length < 2) continue;
 
-        const canvasPts = pts.map((p) => viewport.worldToCanvas(p));
+        const canvasPts = pts
+            .map((p) => toWorldPoint(p))
+            .filter(Boolean)
+            .map((world) => viewport.worldToCanvas(world));
+        if (canvasPts.length < 2) continue;
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const [cx, cy] of canvasPts) {

@@ -1,8 +1,9 @@
-import { createContext, useState, useEffect, useReducer, useContext } from "react";
+import { createContext, useState, useEffect, useReducer, useContext, useRef } from "react";
 import { unflatten, flatten } from "flat";
 import { recreateList } from '../lib/inputParser.ts';
 
 import * as cornerstone from '@cornerstonejs/core';
+import { eventTarget } from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
@@ -12,6 +13,11 @@ import { toast } from "sonner"
 import defaultData from "./defaultData.jsx";
 import { cl } from './SupabaseClient.jsx';
 import { UserContext, UserDispatchContext } from "./UserContext.jsx";
+import { resolveSeriesPrefix } from "../lib/seriesLink.js";
+import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink } from "../lib/answerKeyCase.js";
+import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
+import { getLeaderboardEnabled } from "../lib/userPreferences.js";
+import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
@@ -38,6 +44,12 @@ initialData.userData = null;
 
 initialData.sharingUser = null;
 initialData.sessionMeta = { mode: "TEAM", owner: "" }
+// Session-wide leaderboard visibility, controlled by the session author and
+// broadcast to every participant. Defaults on until the owner says otherwise.
+initialData.leaderboardEnabled = true;
+// Case identifiers shared by the author so participants can load questions even
+// when they can't resolve the case themselves (RLS / stale URL after transfer).
+initialData.sessionCaseLink = null;
 initialData.activeUsers = [];
 initialData.toolSelected = "scroll";
 
@@ -50,7 +62,26 @@ initialData.chatHistory = [
 
 // Bounding-box annotation submissions from viewers
 initialData.submittedAnnotations = {};
+initialData.submittedQuestionAnswers = {};
+initialData.participantAnswerContentAvailable = false;
 initialData.heatmapVisible = false;
+
+// Resolved case link for the answer-key feature (studies and/or dicom_series).
+initialData.studyId = null;
+initialData.studyName = null;
+initialData.dicomSeriesId = null;
+initialData.dicomSeriesOwner = null;
+initialData.dicomSeriesName = null;
+initialData.pacsbinStudyName = null;
+initialData.caseUrlParams = queryParams.toString() || null;
+initialData.caseUrlKey = resolveCaseUrlKey({
+  search: window.location.search,
+  caseUrlParams: queryParams.toString() || null,
+}) || null;
+// Toggled on while the user is authoring an answer key so the Annotate tool
+// stays available outside of a share session.
+initialData.answerKeyAuthoring = false;
+initialData.persistedAnswerBoxes = [];
 
 // Added for Broadcast-based ownership arbitration
 initialData.shareClock = 0;  // last share change timestamp (ms since epoch)
@@ -66,6 +97,85 @@ export const DataProvider = ({ children }) => {
     const { userData, supabaseClient } = useContext(UserContext).data;
 
     const [updateSession, setUpdateSession] = useState(null);
+
+    // Always reflects this user's own leaderboard preference so the session
+    // effect can broadcast the latest value to late-joining participants
+    // without re-subscribing the realtime channels.
+    const leaderboardPrefRef = useRef(getLeaderboardEnabled(userData));
+    useEffect(() => {
+        leaderboardPrefRef.current = getLeaderboardEnabled(userData);
+    }, [userData, userData?.user_metadata?.show_leaderboard]);
+
+    // Tracks whether this user authors the active session. Kept in a ref so
+    // realtime channel callbacks always see the latest value (ownership is
+    // resolved asynchronously after the channels subscribe).
+    const isSessionOwnerRef = useRef(false);
+    useEffect(() => {
+        isSessionOwnerRef.current = !!userData?.id && data.sessionMeta?.owner === userData.id;
+    }, [userData?.id, data.sessionMeta?.owner]);
+
+    // The author's resolved case identifiers, broadcast to participants. RLS
+    // stops participants from reading the studies/dicom_series tables, so they
+    // can't resolve a (private) study to its id on their own — especially after
+    // a transfer. Sharing the author's ids lets participants fetch questions
+    // directly (the series_annotations "select questions" policy is world-read).
+    const caseLinkRef = useRef({ studyId: null, dicomSeriesId: null, caseUrlKey: null });
+    useEffect(() => {
+        caseLinkRef.current = {
+            studyId: data.studyId || null,
+            dicomSeriesId: data.dicomSeriesId || null,
+            caseUrlKey: data.caseUrlKey || null,
+        };
+    }, [data.studyId, data.dicomSeriesId, data.caseUrlKey]);
+
+    // Whenever we own a live session, publish the current leaderboard setting so
+    // everyone (and our own state) stays in sync — fires when the share channel
+    // comes up, when ownership is established, and when the author flips the
+    // preference. This is what makes the setting persist across transfers.
+    useEffect(() => {
+        if (!data.shareController) return;
+        const iAmOwner = !!userData?.id && data.sessionMeta?.owner === userData.id;
+        if (!iAmOwner) return;
+        data.shareController.send({
+            type: 'broadcast', event: 'leaderboard-changed',
+            payload: { enabled: getLeaderboardEnabled(userData) }
+        });
+    }, [data.shareController, data.sessionMeta?.owner, userData?.id, userData?.user_metadata?.show_leaderboard]);
+
+    // As author, publish the resolved case identifiers so participants can load
+    // the right questions even when they can't resolve the case themselves
+    // (RLS on studies, or a stale URL after a transfer).
+    useEffect(() => {
+        if (!data.shareController) return;
+        const iAmOwner = !!userData?.id && data.sessionMeta?.owner === userData.id;
+        if (!iAmOwner) return;
+        const cl = caseLinkRef.current;
+        if (!cl.studyId && !cl.dicomSeriesId && !cl.caseUrlKey) return;
+        data.shareController.send({ type: 'broadcast', event: 'case-link', payload: cl });
+    }, [data.shareController, data.sessionMeta?.owner, userData?.id, data.studyId, data.dicomSeriesId, data.caseUrlKey]);
+
+    // Load persisted submissions for this session+case so the leaderboard is
+    // authoritative and survives transfers/refreshes (which reload every client)
+    // and is available to clients that join after others have submitted. Scoping
+    // by case means a transfer to a new case starts everyone fresh.
+    const effectiveCaseLink = data.sessionCaseLink && (
+        data.sessionCaseLink.studyId || data.sessionCaseLink.dicomSeriesId || data.sessionCaseLink.caseUrlKey
+    )
+        ? data.sessionCaseLink
+        : { studyId: data.studyId, dicomSeriesId: data.dicomSeriesId, caseUrlKey: data.caseUrlKey };
+    const effectiveCaseKey = caseKeyFromLink(effectiveCaseLink);
+    useEffect(() => {
+        if (!data.sessionId || !supabaseClient || !effectiveCaseKey) return;
+        let cancelled = false;
+        fetchSessionSubmissions(supabaseClient, data.sessionId, effectiveCaseKey)
+            .then((stored) => {
+                if (!cancelled && stored) {
+                    dispatch({ type: 'restore_submissions', payload: stored });
+                }
+            })
+            .catch((e) => console.error("Failed to load session submissions:", e));
+        return () => { cancelled = true; };
+    }, [data.sessionId, supabaseClient, effectiveCaseKey]);
 
     useEffect(() => {
 
@@ -257,7 +367,16 @@ export const DataProvider = ({ children }) => {
                         })
                     }
                     // Explicitly pass owner here to ensure it is set even if not previously in state
-                    dispatch({ type: "update_viewport_data", payload: { ...newData, mode: data[0].mode, owner: data[0].user, chatHistory: data[0].chat_history } })
+                    dispatch({
+                        type: "update_viewport_data",
+                        payload: {
+                            ...newData,
+                            mode: data[0].mode,
+                            owner: data[0].user,
+                            chatHistory: data[0].chat_history,
+                            caseUrlParams: data[0].url_params,
+                        },
+                    })
                 }
             }
 
@@ -328,6 +447,155 @@ export const DataProvider = ({ children }) => {
     }, [userData?.id, data.sessionId]);
 
 
+    // Keep caseUrlKey in sync with the loaded viewer URL (works for direct/PACSbin links).
+    useEffect(() => {
+        const caseUrlKey = resolveCaseUrlKey({
+            search: window.location.search,
+            caseUrlParams: data.caseUrlParams,
+        });
+        if (caseUrlKey !== data.caseUrlKey) {
+            dispatch({ type: "set_case_link", payload: { caseUrlKey } });
+        }
+    }, [data.caseUrlParams]);
+
+    // Resolve studies / dicom_series / pacsbin display name when possible.
+    useEffect(() => {
+        if (!supabaseClient) return;
+        let cancelled = false;
+
+        const resolveCase = async () => {
+            try {
+                if (!data.studyId) {
+                    const study = await findStudyForViewer(supabaseClient, {
+                        search: window.location.search,
+                        caseUrlParams: data.caseUrlParams,
+                        userId: userData?.id,
+                    });
+
+                    if (!cancelled && study) {
+                        dispatch({
+                            type: "set_case_link",
+                            payload: {
+                                studyId: study.id,
+                                studyName: study.name,
+                            },
+                        });
+                        return;
+                    }
+                }
+
+                if (!data.dicomSeriesId) {
+                    const prefix = resolveSeriesPrefix({
+                        search: window.location.search,
+                        vd: data.vd,
+                    });
+
+                    if (prefix) {
+                        const { data: rows, error } = await supabaseClient
+                            .from("dicom_series")
+                            .select("id, user_id, name")
+                            .eq("prefix", prefix)
+                            .limit(1);
+
+                        if (!error && !cancelled && rows?.length) {
+                            dispatch({
+                                type: "set_case_link",
+                                payload: {
+                                    dicomSeriesId: rows[0].id,
+                                    dicomSeriesOwner: rows[0].user_id,
+                                    dicomSeriesName: rows[0].name,
+                                },
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                if (!data.pacsbinStudyName) {
+                    const pacsbinStudy = await findPacsbinStudyForViewer(supabaseClient, {
+                        search: window.location.search,
+                        caseUrlParams: data.caseUrlParams,
+                        vd: data.vd,
+                    });
+                    if (!cancelled && pacsbinStudy) {
+                        dispatch({
+                            type: "set_case_link",
+                            payload: { pacsbinStudyName: pacsbinStudy.name },
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to resolve answer-key case link:", e);
+            }
+        };
+
+        resolveCase();
+        return () => {
+            cancelled = true;
+        };
+    }, [supabaseClient, data.vd, data.studyId, data.dicomSeriesId, data.caseUrlParams, data.pacsbinStudyName, userData?.id]);
+
+    // While authoring an answer key, persist each bounding box to the
+    // series_annotations table as soon as the author finishes drawing it. This
+    // runs from DataContext (always mounted) because the author closes the
+    // Answer Key dialog to draw, which unmounts the tab component.
+    useEffect(() => {
+        if (!supabaseClient || !data.answerKeyAuthoring || !userData?.id) return;
+        if (!data.studyId && !data.dicomSeriesId && !data.caseUrlKey) return;
+
+        const handler = async (evt) => {
+            try {
+                const annotation = evt.detail?.annotation;
+                if (!annotation || annotation.metadata?.toolName !== "RectangleROI") return;
+                if (annotation.answerKeySaved) return;
+
+                const imageId = annotation.metadata?.referencedImageId || "";
+                const box = {
+                    imageId,
+                    points: annotation.data?.handles?.points || [],
+                    viewPlaneNormal: annotation.metadata?.viewPlaneNormal,
+                    viewUp: annotation.metadata?.viewUp,
+                    FrameOfReferenceUID: annotation.metadata?.FrameOfReferenceUID,
+                    viewportIndex: data.renderingEngine
+                        ? resolveViewportIndex(data.renderingEngine, imageId)
+                        : 0,
+                };
+
+                annotation.answerKeySaved = true;
+
+                const { data: inserted, error } = await supabaseClient.from("series_annotations").insert({
+                    user_id: userData.id,
+                    study_id: data.studyId || null,
+                    dicom_series_id: data.dicomSeriesId || null,
+                    case_url_params:
+                        !data.studyId && !data.dicomSeriesId ? data.caseUrlKey : null,
+                    kind: "box",
+                    boxes: [box],
+                }).select("id").single();
+
+                if (error) {
+                    annotation.answerKeySaved = false;
+                    throw error;
+                }
+
+                annotation.answerKeyRowId = inserted.id;
+
+                dispatch({
+                    type: "append_persisted_answer_box",
+                    payload: { rowId: inserted.id, ...box },
+                });
+            } catch (e) {
+                console.error("Failed to auto-save answer-key box:", e);
+                toast.error("Failed to save box");
+            }
+        };
+
+        eventTarget.addEventListener(cornerstoneTools.Enums.Events.ANNOTATION_COMPLETED, handler);
+        return () => {
+            eventTarget.removeEventListener(cornerstoneTools.Enums.Events.ANNOTATION_COMPLETED, handler);
+        };
+    }, [supabaseClient, data.answerKeyAuthoring, data.studyId, data.dicomSeriesId, data.caseUrlKey, data.renderingEngine, userData?.id, dispatch]);
+
     useEffect(() => {
         // This useEffect is to handle changes to sessionId and create the consequent
         // Supabase realtime rooms as necessary. It relies on supabaseClient to not
@@ -368,11 +636,23 @@ export const DataProvider = ({ children }) => {
                 dispatch({ type: 'apply_share_change', payload });
             })
 
+            share_controller.on('broadcast', { event: 'leaderboard-changed' }, ({ payload }) => {
+                dispatch({ type: 'set_session_leaderboard', payload: payload.enabled });
+            })
+
+            share_controller.on('broadcast', { event: 'case-link' }, ({ payload }) => {
+                dispatch({ type: 'set_session_case_link', payload });
+            })
+
             // Roster channel — Presence + broadcast for initial state sync
             // Workaround for Supabase bug #43561: presence_state never fires,
             // so we use broadcast to let existing users announce themselves to newcomers.
             const rosterState = {};
             const myName = userData?.user_metadata?.full_name || userData.email;
+            // Always include ourselves so our own avatar shows even before
+            // presence/broadcast round-trips complete (e.g. right after a refresh,
+            // or when we're the only person in the session).
+            rosterState[userData.id] = myName;
             const roster_channel = supabaseClient.channel(`${data.sessionId}-roster`, {
                 config: {
                     presence: { key: userData.id },
@@ -402,6 +682,8 @@ export const DataProvider = ({ children }) => {
                     }
                     if (event.leaves) {
                         Object.entries(event.leaves).forEach(([key]) => {
+                            // Never drop ourselves from our own roster.
+                            if (key === userData.id) return;
                             delete rosterState[key];
                         });
                     }
@@ -412,6 +694,18 @@ export const DataProvider = ({ children }) => {
                             type: 'broadcast', event: 'roster-announce',
                             payload: { userId: userData.id, name: myName }
                         });
+                        // As author, re-push the leaderboard setting and case
+                        // identifiers so the newcomer matches everyone else.
+                        if (isSessionOwnerRef.current) {
+                            share_controller.send({
+                                type: 'broadcast', event: 'leaderboard-changed',
+                                payload: { enabled: leaderboardPrefRef.current }
+                            });
+                            const cl = caseLinkRef.current;
+                            if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
+                                share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
+                            }
+                        }
                     }
                 })
                 .on('broadcast', { event: 'roster-announce' }, ({ payload }) => {
@@ -423,11 +717,26 @@ export const DataProvider = ({ children }) => {
                             type: 'broadcast', event: 'roster-announce',
                             payload: { userId: userData.id, name: myName }
                         });
+                        // As author, make sure the newcomer gets the current
+                        // leaderboard setting and case identifiers too.
+                        if (isSessionOwnerRef.current) {
+                            share_controller.send({
+                                type: 'broadcast', event: 'leaderboard-changed',
+                                payload: { enabled: leaderboardPrefRef.current }
+                            });
+                            const cl = caseLinkRef.current;
+                            if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
+                                share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
+                            }
+                        }
                     }
                 })
                 .subscribe(async (status) => {
                     if (status === 'SUBSCRIBED') {
                         await roster_channel.track({ name: myName });
+                        // Render our own avatar immediately; peers get added as
+                        // their presence/announce messages arrive.
+                        dispatchRoster();
                         // Announce ourselves so existing users reply with their info
                         roster_channel.send({
                             type: 'broadcast', event: 'roster-announce',
@@ -506,6 +815,14 @@ export const DataProvider = ({ children }) => {
                 { event: 'annotations-submitted' },
                 (payload) => {
                     dispatch({ type: 'annotation_received', payload: payload.payload })
+                }
+            )
+
+            interaction_channel.on(
+                'broadcast',
+                { event: 'question-answers-submitted' },
+                (payload) => {
+                    dispatch({ type: 'question_answer_received', payload: payload.payload })
                 }
             )
 
@@ -727,6 +1044,9 @@ export function dataReducer(data, action) {
             if (action.payload.chatHistory) {
                 new_data.chatHistory = action.payload.chatHistory;
             }
+            if (action.payload.caseUrlParams) {
+                new_data.caseUrlParams = action.payload.caseUrlParams;
+            }
             break;
         case 'sharing_controller_initialized':
             new_data = { ...data, ...action.payload }
@@ -737,7 +1057,17 @@ export function dataReducer(data, action) {
                 owner: action.payload.owner ?? data.sessionMeta?.owner,
                 mode: action.payload.mode ?? data.sessionMeta?.mode
             }
-            new_data = { ...data, sessionId: sessionId, sessionMeta: sessionMeta2, isRequestLoading: false }
+            new_data = {
+                ...data,
+                sessionId: sessionId,
+                sessionMeta: sessionMeta2,
+                isRequestLoading: false,
+                toolSelected: 'scroll',
+                answerKeyAuthoring: false,
+                heatmapVisible: false,
+                submittedQuestionAnswers: {},
+                participantAnswerContentAvailable: false,
+            };
             break;
         case 'update_chat_history':
             new_data = { ...data, chatHistory: action.payload };
@@ -771,6 +1101,27 @@ export function dataReducer(data, action) {
             break;
         }
 
+        case 'set_session_leaderboard': {
+            new_data = { ...data, leaderboardEnabled: action.payload !== false };
+            break;
+        }
+        case 'set_session_case_link': {
+            new_data = { ...data, sessionCaseLink: action.payload || null };
+            break;
+        }
+        case 'broadcast_leaderboard': {
+            // Author toggled the leaderboard: push to everyone in the session
+            // (share controller is self:true, so our own state updates too).
+            const enabled = action.payload !== false;
+            if (data.shareController) {
+                data.shareController.send({
+                    type: 'broadcast', event: 'leaderboard-changed',
+                    payload: { enabled }
+                });
+            }
+            new_data = { ...data, leaderboardEnabled: enabled };
+            break;
+        }
         case 'roster_updated': {
             const list = (action.payload || []).map(u => ({
                 ...u,
@@ -866,6 +1217,7 @@ export function dataReducer(data, action) {
             break;
         case 'annotation_received': {
             const { userId, userName, boxes } = action.payload;
+            if (data.submittedAnnotations?.[userId]) return data;
             new_data = {
                 ...data,
                 submittedAnnotations: {
@@ -875,11 +1227,71 @@ export function dataReducer(data, action) {
             };
             break;
         }
+        case 'question_answer_received': {
+            const { userId, userName, answers } = action.payload;
+            if (data.submittedQuestionAnswers?.[userId]) return data;
+            new_data = {
+                ...data,
+                submittedQuestionAnswers: {
+                    ...data.submittedQuestionAnswers,
+                    [userId]: { userName, answers }
+                }
+            };
+            break;
+        }
+        case 'restore_submissions': {
+            // Merge persisted submissions under any already in memory (live data
+            // wins) so a restore never clobbers freshly received answers.
+            const restoredQ = action.payload?.submittedQuestionAnswers || {};
+            const restoredA = action.payload?.submittedAnnotations || {};
+            new_data = {
+                ...data,
+                submittedQuestionAnswers: { ...restoredQ, ...data.submittedQuestionAnswers },
+                submittedAnnotations: { ...restoredA, ...data.submittedAnnotations },
+            };
+            break;
+        }
         case 'clear_all_annotations':
-            new_data = { ...data, submittedAnnotations: {} };
+            new_data = { ...data, submittedAnnotations: {}, submittedQuestionAnswers: {} };
+            break;
+        case 'set_case_link':
+            new_data = {
+                ...data,
+                studyId: action.payload.studyId ?? data.studyId,
+                studyName: action.payload.studyName ?? data.studyName,
+                dicomSeriesId: action.payload.dicomSeriesId ?? data.dicomSeriesId,
+                dicomSeriesOwner: action.payload.dicomSeriesOwner ?? data.dicomSeriesOwner,
+                dicomSeriesName: action.payload.dicomSeriesName ?? data.dicomSeriesName,
+                pacsbinStudyName: action.payload.pacsbinStudyName ?? data.pacsbinStudyName,
+                caseUrlParams: action.payload.caseUrlParams ?? data.caseUrlParams,
+                caseUrlKey: action.payload.caseUrlKey ?? data.caseUrlKey,
+            };
+            break;
+        case 'set_answer_key_authoring':
+            new_data = { ...data, answerKeyAuthoring: action.payload };
+            break;
+        case 'set_persisted_answer_boxes':
+            new_data = { ...data, persistedAnswerBoxes: action.payload || [] };
+            break;
+        case 'append_persisted_answer_box':
+            new_data = {
+                ...data,
+                persistedAnswerBoxes: [...(data.persistedAnswerBoxes || []), action.payload],
+            };
+            break;
+        case 'remove_persisted_answer_box':
+            new_data = {
+                ...data,
+                persistedAnswerBoxes: (data.persistedAnswerBoxes || []).filter(
+                    (b) => b.rowId !== action.payload
+                ),
+            };
             break;
         case 'toggle_heatmap':
             new_data = { ...data, heatmapVisible: !data.heatmapVisible };
+            break;
+        case 'set_participant_answer_content':
+            new_data = { ...data, participantAnswerContentAvailable: !!action.payload };
             break;
         default:
             throw Error('Unknown action: ' + action.type);

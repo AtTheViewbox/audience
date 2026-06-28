@@ -14,7 +14,7 @@ import {
 
 function Tools() {
     const { dispatch } = useContext(DataDispatchContext);
-    const { sharingUser, toolSelected, sessionId, sessionMeta, heatmapVisible } = useContext(DataContext).data;
+    const { sharingUser, toolSelected, sessionId, sessionMeta, heatmapVisible, answerKeyAuthoring } = useContext(DataContext).data;
     const { userData } = useContext(UserContext).data;
 
     const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
@@ -37,10 +37,10 @@ function Tools() {
         if (!sharingUser && toolSelected === "pointer") {
             selectTool("scroll");
         }
-        if (!sessionId && toolSelected === "annotate") {
+        if (!sessionId && !answerKeyAuthoring && toolSelected === "annotate") {
             selectTool("scroll");
         }
-    }, [sharingUser, sessionId, toolSelected]);
+    }, [sharingUser, sessionId, toolSelected, answerKeyAuthoring]);
 
     const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
@@ -86,7 +86,7 @@ function Tools() {
                         </DropdownMenuRadioItem>
                     )}
 
-                    {sessionId && !isSessionOwner && (
+                    {answerKeyAuthoring && (
                         <DropdownMenuRadioItem value="annotate">
                             <SquareDashedMousePointer strokeWidth={0.75} className="mr-2 h-4 w-4" />
                             <span>&nbsp;Annotate</span>
@@ -96,7 +96,7 @@ function Tools() {
                     {isSessionOwner && (
                         <DropdownMenuRadioItem value="heatmap" onClick={(e) => { e.preventDefault(); dispatch({ type: 'toggle_heatmap' }); }}>
                             <Flame strokeWidth={0.75} className="mr-2 h-4 w-4" />
-                            <span>&nbsp;{heatmapVisible ? "Hide" : "Show"} Heatmap</span>
+                            <span>&nbsp;{heatmapVisible ? "Hide" : "Show"} Answer</span>
                         </DropdownMenuRadioItem>
                     )}
                 </DropdownMenuRadioGroup>
