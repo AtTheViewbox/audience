@@ -406,6 +406,18 @@ function AnnotationPanel() {
     dispatch({ type: "select_tool", payload: "annotate" });
   };
 
+  const handleParticipantClearAll = () => {
+    try {
+      const mgr = cornerstoneTools.annotation.state;
+      getRects()
+        .filter((a) => !a.isLocked)
+        .forEach((a) => mgr.removeAnnotation(a.annotationUID));
+      renderAll();
+    } catch (e) {
+      console.error("Error clearing participant boxes:", e);
+    }
+  };
+
   if (!showAuthorControls && !showParticipantControls && !showHeatmapOwnerBar) {
     return null;
   }
@@ -559,6 +571,20 @@ function AnnotationPanel() {
       >
         <Plus className="h-3 w-3" />
         Add box
+      </button>
+
+      <button
+        onClick={handleParticipantClearAll}
+        disabled={annotationCount === 0}
+        className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+          annotationCount > 0
+            ? "bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700"
+            : "bg-slate-900 border-slate-800 text-slate-500 cursor-not-allowed"
+        }`}
+        title="Clear all boxes"
+      >
+        <Trash2 className="h-3 w-3" />
+        Clear
       </button>
     </div>
   );
