@@ -4,6 +4,7 @@ import * as cornerstoneTools from "@cornerstonejs/tools";
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
 import { recreateUriStringList, initalValues } from "./builderUtils";
+import { rewriteImageUrl } from "../../../lib/inputParser.ts";
 import { Loader2 } from "lucide-react";
 
 // Helper for concurrency limiting
@@ -55,7 +56,7 @@ const ViewportComp = ({
             currentMetadata.end_slice,
             currentMetadata.pad,
             currentMetadata.step
-        );
+        ).map(rewriteImageUrl);
     }, [
         currentMetadata.prefix,
         currentMetadata.suffix,

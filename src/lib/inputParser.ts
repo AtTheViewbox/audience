@@ -82,6 +82,11 @@ function recreateListFromList(strs) {
 
 const DICOM_CDN = 'https://dicom.attheviewbox.dev';
 const S3_BUCKET_PREFIX = 'https://s3.amazonaws.com/elasticbeanstalk-us-east-1-843279806438/';
+// Cloudflare R2 public dev domains (e.g. pub-<hash>.r2.dev). These do NOT send
+// CORS headers, so browser image loaders (Cornerstone wadouri/XHR) are blocked
+// cross-origin. The CDN custom domain mirrors the same bucket (identical object
+// keys) and returns Access-Control-Allow-Origin, so route R2 traffic through it.
+const R2_PUBLIC_HOST_RE = /^https:\/\/pub-[a-z0-9]+\.r2\.dev\//i;
 
 export function rewriteImageUrl(url: string): string {
     const schemeMatch = url.match(/^(dicomweb:|wadouri:)/);
@@ -92,6 +97,12 @@ export function rewriteImageUrl(url: string): string {
 
     if (rawUrl.startsWith(S3_BUCKET_PREFIX)) {
         const key = rawUrl.slice(S3_BUCKET_PREFIX.length);
+        return scheme + DICOM_CDN + '/' + key;
+    }
+
+    const r2Match = rawUrl.match(R2_PUBLIC_HOST_RE);
+    if (r2Match) {
+        const key = rawUrl.slice(r2Match[0].length);
         return scheme + DICOM_CDN + '/' + key;
     }
 
