@@ -145,7 +145,6 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                 </Button>
                                 */}
 
-                                {/*
                                 <Button
                                     onClick={() => setFilter(Filter.BUILDER)}
                                     variant="ghost"
@@ -157,7 +156,6 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                     <Hammer className="mr-2.5 h-4 w-4" />
                                     Builder
                                 </Button>
-                                */}
 
                             </div>
                         }
