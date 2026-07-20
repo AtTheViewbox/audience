@@ -10,7 +10,7 @@ const DragComp = ({
     setMetaDataList,
     setMetaDataSelected,
     setDrawerState,
-    imageToggle,
+    propertyEditTick = 0,
     variant = "grid" // "grid" | "list"
 }) => {
     const [{ isDragging }, drag, preview] = useDrag(() => ({
@@ -59,6 +59,11 @@ const DragComp = ({
                     <div className="text-sm font-medium truncate" title={metadata.label}>
                         {metadata.label || "Untitled"}
                     </div>
+                    {metadata.isDraft && (
+                        <div className="text-[10px] uppercase tracking-wide text-amber-500 font-semibold mt-0.5">
+                            Local draft
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
@@ -71,26 +76,15 @@ const DragComp = ({
         );
     }
 
-    // Conditional ref assignment:
-    // In Preview Mode: Attach 'drag' to the handle only.
-    // In Normal Mode: Attach 'drag' to the main container.
-    const containerRef = (node) => {
-        if (!imageToggle) drag(node);
-    };
-    
-    const handleRef = (node) => {
-        if (imageToggle) drag(node);
-    };
+    const dragHandleRef = drag;
 
-    // Default GRID Layout (Square)
+    // Grid cells always show the live viewport so edits use the full canvas area.
     return (
-        <div 
-            className={`flex w-full h-full items-center justify-center rounded-md relative shadow-sm overflow-hidden group ${imageToggle ? '' : 'border p-2 bg-background cursor-grab active:cursor-grabbing'}`} 
-            ref={containerRef}
+        <div
+            className="flex w-full h-full items-center justify-center rounded-md relative shadow-sm overflow-hidden group"
             style={{ opacity: isDragging ? 0.3 : 1 }}
         >
-            {/* Controls overlay on hover */}
-            <div className={`absolute top-1 right-1 flex gap-1 z-20 transition-opacity ${imageToggle ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            <div className={`absolute top-1 right-1 flex gap-1 z-20 transition-opacity opacity-0 group-hover:opacity-100`}>
                 {metadata.cord.toString() !== "-1,-1" && (
                      <div className="bg-background/80 rounded-sm p-1 hover:bg-accent cursor-pointer border" onClick={resetPosition}>
                         <X size={14} className="text-muted-foreground"/>
@@ -101,34 +95,28 @@ const DragComp = ({
                  </div>
             </div>
 
-            {imageToggle ? (
-                <div className="w-full h-full bg-background overflow-hidden relative flex flex-col">
-                    <div className="flex-1 relative overflow-hidden">
-                        <ViewportComp 
-                            viewportIndex={`preview-${metadata.id}`}
-                            currentMetadata={metadata}
-                            onUpdate={(updates) => {
-                                 setMetaDataList(prev => prev.map(item => {
-                                     if (item.id === metadata.id) {
-                                         return { ...item, ...updates };
-                                     }
-                                     return item;
-                                 }));
-                            }}
-                        />
-                         {/* Invisible Drag Handle (Top-Left Corner) */}
-                        <div 
-                            ref={handleRef}
-                            className="absolute top-0 left-0 w-8 h-8 z-50 cursor-grab active:cursor-grabbing hover:bg-white/10 rounded-br-md transition-colors"
-                            title="Drag to move"
-                        />
-                    </div>
-                </div> 
-            ) : (
-                <div className="text-sm font-medium text-center break-words w-full px-1 line-clamp-3">
-                    {metadata.label || "Untitled"}
+            <div className="w-full h-full bg-black overflow-hidden relative flex flex-col">
+                <div className="flex-1 relative overflow-hidden">
+                    <ViewportComp
+                        metadata={metadata}
+                        propertyEditTick={propertyEditTick}
+                        onUpdate={(updates) => {
+                            setMetaDataList(prev => prev.map(item => {
+                                if (item.id === metadata.id) {
+                                    return { ...item, ...updates };
+                                }
+                                return item;
+                            }));
+                        }}
+                        key={metadata.id}
+                    />
+                    <div
+                        ref={dragHandleRef}
+                        className="absolute top-0 left-0 w-8 h-8 z-50 cursor-grab active:cursor-grabbing hover:bg-white/10 rounded-br-md transition-colors"
+                        title="Drag to move"
+                    />
                 </div>
-            )}
+            </div>
         </div>
     );
 };

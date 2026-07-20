@@ -43,7 +43,6 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   const [copyClicked, setCopyClicked] = useState(false);
-  const [uploadedUrl, setUploadedUrl] = useState("");
   const minRightWidth = 240
   const maxRightWidth = 500
 
@@ -87,13 +86,6 @@ export default function HomePage() {
       setIsSaving(false);
     }
   };
-
-  const handleUploadComplete = (url) => {
-    console.log("HomePage: handleUploadComplete triggered with URL:", url);
-    setUploadedUrl(url);
-    setSelectedSeries(null);
-  };
-
 
   // Handle mouse events for resizing
   useEffect(() => {
@@ -281,15 +273,13 @@ export default function HomePage() {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden w-full">
-          <HomeHeaderComp setSearch={setSearch} onUploadComplete={handleUploadComplete} setMobileMenuOpen={setMobileMenuOpen} />
+          <HomeHeaderComp setSearch={setSearch} setMobileMenuOpen={setMobileMenuOpen} />
 
           <div className="flex-1 flex overflow-hidden relative">
             {filter === Filter.BUILDER ? (
               <BuilderPage
                 allSeries={seriesList}
                 filteredSeries={displaySeriesList}
-                uploadedUrl={uploadedUrl}
-                onClearUpload={() => setUploadedUrl("")}
                 onStudySaved={getSeries}
               />
             ) : (
@@ -404,16 +394,13 @@ export default function HomePage() {
                 {/* Preview Panel - Desktop: Side, Mobile/Tablet: Full Overlay */}
                 <div
                   className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
-                ${(selectedSeries || uploadedUrl) ? 'fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'}
+                ${selectedSeries ? 'fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'}
             `}
                   style={{ width: isDesktop ? `${rightPanelWidth}px` : '100%' }}
                 >
                   {/* Mobile/Tablet Back Button */}
                   <div className="lg:hidden p-4 border-b flex items-center">
-                    <Button variant="ghost" onClick={() => {
-                      setSelectedSeries(null);
-                      setUploadedUrl("");
-                    }}>
+                    <Button variant="ghost" onClick={() => setSelectedSeries(null)}>
                       <ChevronRight className="h-4 w-4 rotate-180 mr-2" />
                       Back to List
                     </Button>

@@ -67,6 +67,7 @@ export function generateGridURL(
     URL_genereated.searchParams.append("ld.c", col.toString());
 
     metaDataList.map((data) => {
+        if (data.isDraft || !data.prefix) return;
         if (data.cord[0] != -1 && data.cord[1] != -1) {
             let value = (data.cord[0] + 1 + col * data.cord[1] - 1).toString();
             URL_genereated.searchParams.append(
@@ -154,6 +155,42 @@ export function recreateUriStringList(
         step
     );
     return variableStringList.map((str) => "wadouri:" + prefix + str + suffix);
+}
+
+export function buildLocalStack(metadata) {
+    const urls = metadata?.localBlobUrls || [];
+    if (!urls.length) return [];
+
+    const start = metadata.start_slice ?? 0;
+    const end = metadata.end_slice ?? urls.length - 1;
+    const step = metadata.step ?? 1;
+    const stack = [];
+
+    for (let i = start; i <= end; i += step) {
+        if (urls[i]) stack.push(`wadouri:${urls[i]}`);
+    }
+
+    return stack;
+}
+
+export function isPlacedOnGrid(metadata) {
+    return metadata?.cord?.[0] !== -1 && metadata?.cord?.[1] !== -1;
+}
+
+export function findFirstEmptyCell(metaDataList, cols, rows) {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const occupied = metaDataList.some(
+                (item) => item.cord?.[0] === c && item.cord?.[1] === r
+            );
+            if (!occupied) return [c, r];
+        }
+    }
+    return null;
+}
+
+export function hasDraftPlacedOnGrid(metaDataList) {
+    return metaDataList.some((item) => item.isDraft && isPlacedOnGrid(item));
 }
 
 export function checkUrlQuery(object, search) {

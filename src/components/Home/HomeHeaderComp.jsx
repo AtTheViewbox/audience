@@ -1,7 +1,6 @@
 import { ChevronRight, Search, X, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { UploaderComp } from "./UploaderComp"
 import { useContext, useState } from "react"
 import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
@@ -13,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import DialogPage from "../DialogPage.jsx";
 
-function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
+function HomeHeaderComp({ setSearch, setMobileMenuOpen }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
     const [isOpen, setIsOpen] = useState(false)
     let [dialogIsOpen, setDialogIsOpen] = useState(false);
@@ -81,7 +80,6 @@ function HomeHeaderComp({ setSearch, onUploadComplete, setMobileMenuOpen }) {
 
             {!userData?.is_anonymous ?
                 <div className="flex items-center gap-3">
-                    <UploaderComp onUploadComplete={onUploadComplete} />
                     <Button variant="ghost" className="text-xs font-medium text-slate-400 hover:text-slate-100 border border-slate-800" onClick={logOut}>Log Out</Button>
                 </div> :
                 <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>

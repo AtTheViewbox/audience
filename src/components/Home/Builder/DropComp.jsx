@@ -10,7 +10,8 @@ const DropComp = ({
   setMetaDataList,
   setMetaDataSelected,
   setDrawerState,
-  imageToggle
+  metaDataSelected,
+  propertyEditTick,
 }) => {
   const [{ isOver }, drop] = useDrop({
     accept: "card",
@@ -44,7 +45,7 @@ const DropComp = ({
 
   return (
     <div 
-        className={`flex w-full h-full min-h-[100px] items-center justify-center rounded-md border border-dashed transition-colors p-2 ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`} 
+        className={`flex w-full h-full min-h-[100px] items-center justify-center rounded-md border border-dashed transition-colors ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`} 
         ref={drop}
     >
       {metaDataList.map((data) => {
@@ -57,7 +58,7 @@ const DropComp = ({
               setMetaDataList={setMetaDataList}
               setMetaDataSelected={setMetaDataSelected}
               setDrawerState={setDrawerState}
-              imageToggle={imageToggle}
+              propertyEditTick={metaDataSelected === data.id ? propertyEditTick : 0}
               variant="grid"
             />
           );

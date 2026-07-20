@@ -3,7 +3,7 @@ import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
-import { recreateUriStringList, initalValues } from "./builderUtils";
+import { recreateUriStringList, initalValues, buildLocalStack } from "./builderUtils";
 import { rewriteImageUrl } from "../../../lib/inputParser.ts";
 import { Loader2 } from "lucide-react";
 
@@ -32,9 +32,11 @@ const pLimit = (limit) => {
 
 const ViewportComp = ({
     metadata,
+    currentMetadata: currentMetadataProp,
     stateFlag,
     setStateFlag,
-    onUpdate // wrapper ensuring we update the parent list
+    onUpdate,
+    propertyEditTick = 0,
 }) => {
     const elementRef = useRef(null);
     const renderingEngineRef = useRef(null);
@@ -42,12 +44,15 @@ const ViewportComp = ({
     const [loadError, setLoadError] = useState(null);
 
 
-    // Unpack metadata safely
-    const currentMetadata = metadata || initalValues;
+    // Unpack metadata safely (DragComp passes currentMetadata; PropertyPanel passes metadata)
+    const currentMetadata = metadata || currentMetadataProp || initalValues;
 
 
 
     const stack = useMemo(() => {
+        if (currentMetadata.localBlobUrls?.length) {
+            return buildLocalStack(currentMetadata);
+        }
         if (!currentMetadata.prefix) return [];
         return recreateUriStringList(
             currentMetadata.prefix,
@@ -58,6 +63,7 @@ const ViewportComp = ({
             currentMetadata.step
         ).map(rewriteImageUrl);
     }, [
+        currentMetadata.localBlobUrls,
         currentMetadata.prefix,
         currentMetadata.suffix,
         currentMetadata.start_slice,
@@ -311,59 +317,52 @@ const ViewportComp = ({
         };
     }, []); // Mount only once
 
-    // React to external State Changes (INPUTS)
+    const lastPropertyEditRef = useRef(0);
+
+    // React to property-panel edits for the grid viewport
     useEffect(() => {
         const update = async () => {
             const renderingEngine = renderingEngineRef.current;
             if (!renderingEngine) return;
             const viewport = renderingEngine.getViewport(viewportId);
+            if (!viewport) return;
 
-            // process only if stateFlag is TRUE (meaning the change came from inputs, not internal interaction)
-            if (viewport && stateFlag) {
-                const relativeSliceIndex = Math.max(0, (currentMetadata.ci || currentMetadata.start_slice) - currentMetadata.start_slice);
+            const shouldSyncFromPanel = stateFlag || propertyEditTick > lastPropertyEditRef.current;
+            if (!shouldSyncFromPanel) return;
+            lastPropertyEditRef.current = propertyEditTick;
 
-                // We mostly need to update stack if slice range changed, but setStack is cheap if ids are cached
-                // Use setStack to ensure we are looking at the right subset if start/end changed
-                // But be careful not to reset position if only WW/WC changed? 
-                // setStack resets camera?
+            const relativeSliceIndex = Math.max(0, (currentMetadata.ci || currentMetadata.start_slice) - currentMetadata.start_slice);
 
-                // If stack URLs changed (start/end slice changed), we MUST call setStack
-                // If only properties, we can skip setStack
+            await viewport.setStack(stack, relativeSliceIndex);
 
-                // Check if stack definition matches? 
-                // For simplicity, we re-set stack to ensure consistency with inputs
-                await viewport.setStack(stack, relativeSliceIndex);
-
-                // Sync Rescale Slope/Intercept if missing or default
-                if (stack.length > 0) {
-                    const image = cornerstone.cache.getImage(stack[0]);
-                    if (image) {
-                        const { intercept, slope } = image;
-                        if (intercept !== undefined && slope !== undefined) {
-                            if (currentMetadata.rescaleIntercept !== intercept || currentMetadata.rescaleSlope !== slope) {
-                                onUpdate({
-                                    rescaleIntercept: intercept,
-                                    rescaleSlope: slope
-                                });
-                            }
+            if (stack.length > 0) {
+                const image = cornerstone.cache.getImage(stack[0]);
+                if (image) {
+                    const { intercept, slope } = image;
+                    if (intercept !== undefined && slope !== undefined) {
+                        if (currentMetadata.rescaleIntercept !== intercept || currentMetadata.rescaleSlope !== slope) {
+                            onUpdate({
+                                rescaleIntercept: intercept,
+                                rescaleSlope: slope
+                            });
                         }
                     }
                 }
-
-                viewport.setZoom(currentMetadata.z || 1);
-                viewport.setPan([Number(currentMetadata.px || 0), Number(currentMetadata.py || 0)]);
-
-                viewport.setProperties({
-                    voiRange: cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc),
-                    isComputedVOI: true
-                });
-
-                viewport.render();
-                setStateFlag(false); // Reset flag
             }
+
+            viewport.setZoom(currentMetadata.z || 1);
+            viewport.setPan([Number(currentMetadata.px || 0), Number(currentMetadata.py || 0)]);
+
+            viewport.setProperties({
+                voiRange: cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc),
+                isComputedVOI: true
+            });
+
+            viewport.render();
+            if (stateFlag && setStateFlag) setStateFlag(false);
         };
         update();
-    }, [currentMetadata, stateFlag, stack]); // Depend on metadata and flag
+    }, [currentMetadata, stateFlag, stack, propertyEditTick]);
 
     if (loadError) {
         return (
@@ -378,7 +377,11 @@ const ViewportComp = ({
         return (
             <div className="w-full h-full bg-black text-white flex items-center justify-center flex-col gap-2">
                 <div className="text-muted-foreground text-sm">No Image Data</div>
-                <div className="text-xs text-muted-foreground/50">Prefix: {currentMetadata.prefix || "missing"}</div>
+                <div className="text-xs text-muted-foreground/50">
+                    {currentMetadata.isDraft
+                        ? "Local draft — adjust slices or save to upload"
+                        : `Prefix: ${currentMetadata.prefix || "missing"}`}
+                </div>
             </div>
         );
     }

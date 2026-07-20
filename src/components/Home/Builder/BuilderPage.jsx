@@ -6,15 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Minus, Copy, Check, Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Minus, Copy, Check, Loader2, X } from "lucide-react";
 
 import DragComp from "./DragComp";
 import DropComp from "./DropComp";
 import PropertyPanel from "./PropertyPanel";
 import CustomDragLayer from "./CustomDragLayer";
-import { generateGridURL, initalValues } from "./builderUtils";
+import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, findFirstEmptyCell } from "./builderUtils";
 
 import { UserContext } from "../../../context/UserContext"
+import { UploaderComp } from "../UploaderComp"
+import { uploadDraftSeries } from "../../../lib/dicomUploadUtils"
 import { toast } from "sonner";
 
 // We need to export this or move map logic to ensure it's available if needed, but for now we keep it here.
@@ -51,7 +54,7 @@ const mapSeriesToMetaData = (seriesList) => {
 };
 
 
-const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, onStudySaved }) => {
+const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     // metaDataList Tracks ALL items available in the system + their grid state
     const [metaDataList, setMetaDataList] = useState([]);
     const [metaDataSelected, setMetaDataSelected] = useState(null);
@@ -63,7 +66,6 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
     const [rows, setRows] = useState(1);
     const [cols, setCols] = useState(1);
 
-    const [imageToggle, setImageToggle] = useState(false);
     const [url, setURL] = useState("Click Generate URL");
     const [copyClicked, setCopyClicked] = useState(false);
 
@@ -74,59 +76,102 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
         visibility: "PUBLIC"
     });
 
-    // Reset form when uploadedUrl changes
-    useEffect(() => {
-        if (uploadedUrl) {
-            setSaveForm(prev => ({ ...prev, name: "New Uploaded Study", description: "" }));
-        }
-    }, [uploadedUrl]);
-
     const [isSaving, setIsSaving] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(null);
+    const [propertyEditTick, setPropertyEditTick] = useState(0);
+
+    const handleLocalSeriesReady = (draftSeries) => {
+        const slot = findFirstEmptyCell(metaDataList, cols, rows) ?? [0, 0];
+        const placedDraft = { ...draftSeries, cord: slot };
+
+        setMetaDataList((prev) => [...prev, placedDraft]);
+        setMetaDataSelected(placedDraft.id);
+        setDrawerState(true);
+
+        if (!saveForm.name) {
+            setSaveForm((prev) => ({
+                ...prev,
+                name: placedDraft.label || "New Uploaded Study",
+            }));
+        }
+
+        toast.info("Edit window, slices, and layout in the grid. Save when ready.");
+    };
 
     const handleSaveCase = async () => {
-        if (!url || !userData?.id) {
-            toast.error("Missing data or user session");
+        if (!userData?.id) {
+            toast.error("Missing user session");
             return;
         }
 
-        if (isSaving) return; // Debounce / prevent spam
+        if (!saveForm.name.trim()) {
+            toast.error("Enter a name for this case");
+            return;
+        }
+
+        const placedItems = metaDataList.filter(isPlacedOnGrid);
+        if (placedItems.length === 0) {
+            toast.error("Drag at least one series onto the grid before saving");
+            return;
+        }
+
+        if (isSaving) return;
         setIsSaving(true);
+        setUploadProgress(null);
 
         try {
-            const caseItem = {
-                owner: userData.id,
-                name: saveForm.name,
-                description: saveForm.description,
-                url_params: url,
-                visibility: saveForm.visibility,
-            };
+            let workingList = [...metaDataList];
+            const draftsToUpload = placedItems.filter((item) => item.isDraft);
+
+            for (const draft of draftsToUpload) {
+                setUploadProgress(0);
+                const uploaded = await uploadDraftSeries(
+                    workingList.find((item) => item.id === draft.id) || draft,
+                    supabaseClient,
+                    userData.id,
+                    saveForm.name.trim(),
+                    setUploadProgress
+                );
+                workingList = workingList.map((item) =>
+                    item.id === draft.id ? uploaded : item
+                );
+            }
+
+            setMetaDataList(workingList);
+            const finalUrl = generateGridURL(workingList, rows, cols);
+            setURL(finalUrl);
+
+            const parsedUrl = new URL(finalUrl);
+            const searchParams = parsedUrl.search.substring(1);
 
             const { error } = await supabaseClient
                 .from("studies")
-                .upsert(caseItem)
-                .select();
+                .insert({
+                    owner: userData.id,
+                    name: saveForm.name.trim(),
+                    description: saveForm.description,
+                    url_params: searchParams,
+                    visibility: saveForm.visibility,
+                });
 
             if (error) throw error;
 
-            toast.success("Study saved successfully!");
+            toast.success("Study saved and uploaded successfully!");
             if (onStudySaved) onStudySaved();
-            if (onClearUpload) onClearUpload(); // Clear the upload state
 
-            // Clear form
             setSaveForm({
                 name: "",
                 description: "",
-                visibility: "PUBLIC"
+                visibility: "PUBLIC",
             });
 
-            // Reset Drag and Drop (Clear Grid)
-            setMetaDataList(prev => prev.map(item => ({ ...item, cord: [-1, -1] })));
-
+            setMetaDataList((prev) => prev.map((item) => ({ ...item, cord: [-1, -1] })));
         } catch (error) {
             console.error("Error saving case:", error);
             toast.error("Failed to save study");
         } finally {
             setIsSaving(false);
+            setUploadProgress(null);
         }
     };
 
@@ -198,7 +243,11 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
     const minusRow = () => { if (rows > 1) setRows(rows - 1); };
 
     useEffect(() => {
-        setURL(generateGridURL(metaDataList, rows, cols));
+        if (hasDraftPlacedOnGrid(metaDataList)) {
+            setURL("Save to cloud to generate shareable URL");
+        } else {
+            setURL(generateGridURL(metaDataList, rows, cols));
+        }
         setCopyClicked(false);
     }, [metaDataList, rows, cols]);
 
@@ -214,7 +263,12 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                     style={{ width: leftPanelWidth }}
                 >
                     {/* ... Same Left Sidebar Content ... */}
-                    <div className="p-4 border-b font-semibold">Available Studies</div>
+                    <div className="p-4 border-b font-semibold flex items-center justify-between gap-2">
+                        <span>Available Studies</span>
+                        {!userData?.is_anonymous && (
+                            <UploaderComp onLocalSeriesReady={handleLocalSeriesReady} />
+                        )}
+                    </div>
                     <ScrollArea className="flex-1 p-4">
                         <div className="grid grid-cols-1 gap-2">
                             {metaDataList.map((data) => {
@@ -229,7 +283,6 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                                             setMetaDataList={setMetaDataList}
                                             setMetaDataSelected={setMetaDataSelected}
                                             setDrawerState={setDrawerState}
-                                            imageToggle={imageToggle}
                                             variant="list"
                                         />
                                     );
@@ -268,17 +321,10 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                                 </div>
                             </div>
                         </div>
-
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-2">
-                                <Switch id="img-toggle" checked={imageToggle} onCheckedChange={setImageToggle} />
-                                <Label htmlFor="img-toggle" className="text-sm cursor-pointer text-muted-foreground">Preview</Label>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Canvas Area */}
-                    <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative w-full h-full">
+                    <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative w-full h-full">
                         <div className="absolute inset-0 opacity-[0.4]" style={{ backgroundImage: 'radial-gradient(circle, #a1a1aa 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
                         <div
                             className="bg-background rounded-xl border shadow-xl overflow-hidden transition-all duration-300 ease-in-out"
@@ -294,7 +340,8 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                                             setMetaDataList={setMetaDataList}
                                             setMetaDataSelected={setMetaDataSelected}
                                             setDrawerState={setDrawerState}
-                                            imageToggle={imageToggle}
+                                            metaDataSelected={metaDataSelected}
+                                            propertyEditTick={propertyEditTick}
                                         />
                                     </div>
                                 ))
@@ -309,7 +356,7 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                                 <Input value={url} readOnly className="pr-20 font-mono text-xs text-muted-foreground bg-muted/50" />
                                 <div className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground px-2">Generated URL</div>
                             </div>
-                            <Button size="icon" variant="secondary" onClick={() => {
+                            <Button size="icon" variant="secondary" disabled={url.startsWith("Save to cloud")} onClick={() => {
                                 navigator.clipboard.writeText(url);
                                 setCopyClicked(true);
                                 setTimeout(() => setCopyClicked(false), 2000);
@@ -320,7 +367,7 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                     </div>
                 </div>
 
-                {/* RIGHT SIDEBAR: Properties OR Save Case */}
+                {/* RIGHT SIDEBAR: unified edit + save panel */}
                 <div
                     className={`flex flex-col border-l bg-background shrink-0 relative`}
                     style={{ width: rightPanelWidth }}
@@ -334,26 +381,47 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                         }}
                     />
 
-                    {metaDataSelected ? (
-                        <PropertyPanel
-                            metadataId={metaDataSelected}
-                            metaDataList={metaDataList}
-                            setMetaDataList={setMetaDataList}
-                            setDrawerState={(state) => {
-                                setDrawerState(state);
-                                if (!state) setMetaDataSelected(null);
-                            }}
-                        />
-                    ) : (
-                        <div className="flex flex-col h-full">
-                            <div className="p-4 border-b font-semibold">Save Case</div>
-                            <ScrollArea className="flex-1 p-4">
-                                <div className="space-y-4">
-                                    {uploadedUrl && (
-                                        <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground mb-2">
-                                            Currently viewing a newly uploaded case.
+                    <div className="flex flex-col h-full min-h-0">
+                        <div className="p-4 border-b font-semibold shrink-0">Case Builder</div>
+                        <ScrollArea className="flex-1">
+                            <div className="p-4 space-y-6">
+                                {metaDataSelected ? (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h4 className="text-sm font-semibold">Edit Properties</h4>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() => {
+                                                    setDrawerState(false);
+                                                    setMetaDataSelected(null);
+                                                }}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
                                         </div>
-                                    )}
+                                        <PropertyPanel
+                                            embedded
+                                            metadataId={metaDataSelected}
+                                            metaDataList={metaDataList}
+                                            setMetaDataList={setMetaDataList}
+                                            onPropertyEdit={() => setPropertyEditTick((n) => n + 1)}
+                                            setDrawerState={(state) => {
+                                                setDrawerState(state);
+                                                if (!state) setMetaDataSelected(null);
+                                            }}
+                                        />
+                                        <Separator />
+                                    </div>
+                                ) : (
+                                    <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground">
+                                        Upload DICOM, drag series onto the grid, then click the pencil icon to edit properties.
+                                    </div>
+                                )}
+
+                                <div className="space-y-4">
+                                    <h4 className="text-sm font-semibold">Save Case</h4>
 
                                     <div className="grid gap-2">
                                         <Label htmlFor="upload-name">Name</Label>
@@ -387,14 +455,18 @@ const BuilderPage = ({ allSeries, filteredSeries, uploadedUrl, onClearUpload, on
                                         </div>
                                     </div>
 
-                                    <Button className="w-full mt-4" onClick={handleSaveCase} disabled={isSaving}>
+                                    <Button className="w-full" onClick={handleSaveCase} disabled={isSaving}>
                                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        {isSaving ? "Saving..." : "Save to Studies"}
+                                        {isSaving
+                                            ? uploadProgress != null
+                                                ? `Uploading... ${uploadProgress}%`
+                                                : "Saving..."
+                                            : "Save & Upload to Cloud"}
                                     </Button>
                                 </div>
-                            </ScrollArea>
-                        </div>
-                    )}
+                            </div>
+                        </ScrollArea>
+                    </div>
                 </div>
             </div>
         </DndProvider>
