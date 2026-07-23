@@ -13,7 +13,7 @@ export default function Viewport(props) {
   const searchParams = new URLSearchParams(location.search);
   const elementRef = useRef(null);
 
-  const { vd, toolSelected, coordData, sharingUser, compareNormal } = useContext(DataContext).data;
+  const { vd, toolSelected, coordData, sharingUser, compareNormal, ld, fullscreenViewport } = useContext(DataContext).data;
   const { userData } = useContext(UserContext).data;
   const { viewport_idx, rendering_engine } = props;
   const [viewportReady, setViewportReady] = useState(false);
@@ -23,6 +23,9 @@ export default function Viewport(props) {
 
   const queueRef = useRef(null);
   const lastTapTimeRef = useRef(0);
+  const longPressTimerRef = useRef(null);
+  const longPressOriginRef = useRef(null);
+  const longPressFiredRef = useRef(false);
   const voiRef = useRef(null);
   const invertRef = useRef(false);
   const voiCorrectionActiveRef = useRef(false);
@@ -394,57 +397,220 @@ export default function Viewport(props) {
 
 
 
-  // Double-tap detection for pointer tool selection (only when sharing is active)
+  // Long-press activates the pointer tool (when sharing); double-tap toggles fullscreen
   useEffect(() => {
-    if (!elementRef.current || !viewportReady || !sharingUser) return;
+    if (!elementRef.current || !viewportReady) return;
 
-    const DOUBLE_TAP_DELAY = 300; // milliseconds
+    const DOUBLE_TAP_DELAY = 300; // ms
+    const LONG_PRESS_DELAY = 500; // ms
+    const MOVE_CANCEL_PX = 12;
     let lastToastTime = 0;
+    // Ignore the click synthesized after a touch sequence
+    let suppressNextClick = false;
+    // True while a finger/button is down and hasn't moved enough to cancel
+    let tapCandidate = false;
+    const el = elementRef.current;
 
-    const handleDoubleTap = (event) => {
-      const currentTime = new Date().getTime();
-      const tapInterval = currentTime - lastTapTimeRef.current;
-      const isMultiTouch = event.type === 'touchstart' && event.touches.length > 1;
+    const clearLongPress = () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      longPressOriginRef.current = null;
+    };
 
-      if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0 && !isMultiTouch && sharingUser === userData?.id) {
-        // Double-tap detected - toggle between pointer and scroll
-        const newTool = toolSelected === 'pointer' ? 'scroll' : 'pointer';
-        dispatch({ type: 'select_tool', payload: newTool });
+    const canTogglePointer = () =>
+      sharingUser && userData && sharingUser === userData.id;
 
-        // Show toast notification for tool changes
-        // Use fixed ID to prevent duplicates from multiple viewports
-        if (currentTime - lastToastTime > 500) {
-          lastToastTime = currentTime;
-          if (newTool === 'pointer') {
-            toast.success('Pointer tool selected', {
-              id: 'pointer-tool-toggle',
-              duration: 1500,
-              position: 'bottom-center'
-            });
-          } else {
-            toast.info('Scroll tool selected', {
-              id: 'pointer-tool-toggle',
-              duration: 1500,
-              position: 'bottom-center'
-            });
-          }
+    const togglePointer = () => {
+      if (!canTogglePointer()) return;
+      const newTool = toolSelected === 'pointer' ? 'scroll' : 'pointer';
+      dispatch({ type: 'select_tool', payload: newTool });
+
+      const now = Date.now();
+      if (now - lastToastTime > 500) {
+        lastToastTime = now;
+        if (newTool === 'pointer') {
+          toast.success('Pointer tool selected', {
+            id: 'pointer-tool-toggle',
+            duration: 1500,
+            position: 'bottom-center',
+          });
+        } else {
+          toast.info('Scroll tool selected', {
+            id: 'pointer-tool-toggle',
+            duration: 1500,
+            position: 'bottom-center',
+          });
         }
+      }
+    };
+
+    const toggleFullscreen = () => {
+      const viewportCount = (ld?.r ?? 1) * (ld?.c ?? 1);
+      if (viewportCount <= 1) return;
+
+      const exiting = fullscreenViewport === viewport_idx;
+      dispatch({ type: 'toggle_fullscreen_viewport', payload: viewport_idx });
+
+      const now = Date.now();
+      if (now - lastToastTime > 500) {
+        lastToastTime = now;
+        toast.info(exiting ? 'Exited fullscreen' : 'Viewport fullscreen', {
+          id: 'viewport-fullscreen-toggle',
+          duration: 1200,
+          position: 'bottom-center',
+        });
+      }
+    };
+
+    const getTouchPoint = (event) => {
+      const t = event.changedTouches?.[0] || event.touches?.[0];
+      if (!t) return null;
+      return { x: t.clientX, y: t.clientY };
+    };
+
+    const beginPress = (x, y) => {
+      clearLongPress();
+      tapCandidate = true;
+      longPressFiredRef.current = false;
+      longPressOriginRef.current = { x, y };
+      if (!canTogglePointer()) return;
+      longPressTimerRef.current = setTimeout(() => {
+        longPressFiredRef.current = true;
+        longPressTimerRef.current = null;
+        tapCandidate = false;
+        togglePointer();
+      }, LONG_PRESS_DELAY);
+    };
+
+    const moveFromOrigin = (x, y) => {
+      if (!longPressOriginRef.current) return;
+      const dx = x - longPressOriginRef.current.x;
+      const dy = y - longPressOriginRef.current.y;
+      if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
+        clearLongPress();
+        tapCandidate = false;
+      }
+    };
+
+    const registerTap = () => {
+      if (longPressFiredRef.current) {
+        longPressFiredRef.current = false;
+        lastTapTimeRef.current = 0;
+        return;
+      }
+
+      const currentTime = Date.now();
+      const tapInterval = currentTime - lastTapTimeRef.current;
+
+      if (tapInterval < DOUBLE_TAP_DELAY && tapInterval > 0) {
+        clearLongPress();
+        toggleFullscreen();
+        lastTapTimeRef.current = 0;
+        return;
       }
 
       lastTapTimeRef.current = currentTime;
     };
 
-    // Add listeners for both touch and mouse events
-    elementRef.current.addEventListener('touchstart', handleDoubleTap);
-    elementRef.current.addEventListener('click', handleDoubleTap);
+    const endPress = () => {
+      const wasLongPress = longPressFiredRef.current;
+      const wasTap = tapCandidate && !wasLongPress;
+      clearLongPress();
+      tapCandidate = false;
 
-    return () => {
-      if (elementRef.current) {
-        elementRef.current.removeEventListener('touchstart', handleDoubleTap);
-        elementRef.current.removeEventListener('click', handleDoubleTap);
+      if (wasLongPress) {
+        longPressFiredRef.current = false;
+        lastTapTimeRef.current = 0;
+        return;
+      }
+      if (wasTap) registerTap();
+    };
+
+    const onTouchStart = (event) => {
+      suppressNextClick = true;
+      if (event.touches.length > 1) {
+        clearLongPress();
+        tapCandidate = false;
+        lastTapTimeRef.current = 0;
+        return;
+      }
+      const point = getTouchPoint(event);
+      if (point) beginPress(point.x, point.y);
+    };
+
+    const onTouchMove = (event) => {
+      const point = getTouchPoint(event);
+      if (point) moveFromOrigin(point.x, point.y);
+    };
+
+    const onTouchEnd = (event) => {
+      if (event.touches.length > 0) {
+        clearLongPress();
+        tapCandidate = false;
+        return;
+      }
+      endPress();
+    };
+
+    const onTouchCancel = () => {
+      clearLongPress();
+      tapCandidate = false;
+      lastTapTimeRef.current = 0;
+    };
+
+    const onMouseDown = (event) => {
+      if (event.button !== 0) return;
+      // Skip mouse path when this follows a touch (mobile browsers)
+      if (suppressNextClick) return;
+      beginPress(event.clientX, event.clientY);
+    };
+
+    const onMouseMove = (event) => {
+      moveFromOrigin(event.clientX, event.clientY);
+    };
+
+    const onMouseUp = () => {
+      if (suppressNextClick) return;
+      endPress();
+    };
+
+    const onClick = () => {
+      // Touch devices: ignore the synthetic click after touchend
+      if (suppressNextClick) {
+        suppressNextClick = false;
       }
     };
-  }, [viewportReady, dispatch, toolSelected, sharingUser]);
+
+    const onMouseLeave = () => {
+      clearLongPress();
+      tapCandidate = false;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchCancel);
+    el.addEventListener('mousedown', onMouseDown);
+    el.addEventListener('mousemove', onMouseMove);
+    el.addEventListener('mouseup', onMouseUp);
+    el.addEventListener('mouseleave', onMouseLeave);
+    el.addEventListener('click', onClick);
+
+    return () => {
+      clearLongPress();
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchCancel);
+      el.removeEventListener('mousedown', onMouseDown);
+      el.removeEventListener('mousemove', onMouseMove);
+      el.removeEventListener('mouseup', onMouseUp);
+      el.removeEventListener('mouseleave', onMouseLeave);
+      el.removeEventListener('click', onClick);
+    };
+  }, [viewportReady, dispatch, toolSelected, sharingUser, userData, ld, fullscreenViewport, viewport_idx]);
 
 
   // Ref to track previous data to prevent unnecessary reloads

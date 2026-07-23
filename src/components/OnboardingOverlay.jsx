@@ -54,7 +54,7 @@ const VIEWER_STEPS = [
     {
         icon: <Pointer className="h-6 w-6" />,
         title: "Activate Pointer",
-        description: "In an active session, double-tap the viewport to activate the pointer for live annotation.",
+        description: "In an active session, long-press the viewport to activate the pointer for live annotation. Double-tap a viewport to fullscreen it when multiple are open.",
         arrow: null,
     },
 ];

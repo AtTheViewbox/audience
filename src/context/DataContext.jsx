@@ -52,6 +52,8 @@ initialData.leaderboardEnabled = true;
 initialData.sessionCaseLink = null;
 initialData.activeUsers = [];
 initialData.toolSelected = "scroll";
+// Which viewport is maximized to fill the layout (null = normal multi-viewport grid)
+initialData.fullscreenViewport = null;
 
 // Compare with Normal state
 initialData.lastSegmentation = null;   // { structures, results, orientation, maskTransform }
@@ -110,6 +112,10 @@ export const DataProvider = ({ children }) => {
     // realtime channel callbacks always see the latest value (ownership is
     // resolved asynchronously after the channels subscribe).
     const isSessionOwnerRef = useRef(false);
+    const lastSendPointerRef = useRef(0);
+    const lastSendCameraRef = useRef(0);
+    const lastSendVOIRef = useRef(0);
+    const cameraDebounceTimeoutRef = useRef(null);
     useEffect(() => {
         isSessionOwnerRef.current = !!userData?.id && data.sessionMeta?.owner === userData.id;
     }, [userData?.id, data.sessionMeta?.owner]);
@@ -797,7 +803,11 @@ export const DataProvider = ({ children }) => {
                     'broadcast',
                     { event: 'pointer-changed' },
                     (payload) => {
-                        dispatch({ type: 'set_pointer', payload: { coordX: payload.payload.coordX, coordY: payload.payload.coordY, coordZ: payload.payload.coordZ, viewport: payload.payload.viewport } })
+                        const { coordX, coordY, coordZ, viewport } = payload.payload;
+                        dispatch({
+                            type: 'set_pointer',
+                            payload: { coordX, coordY, coordZ, viewport },
+                        });
                     }
                 )
             }
@@ -836,12 +846,11 @@ export const DataProvider = ({ children }) => {
         }
     }, [data.sessionId, supabaseClient]);
 
-    let lastSendPointer = 0;
     const sendPointer = (payload) => {
         if (!data.interactionChannel) return;
         const now = performance.now();
-        if (now - lastSendPointer < 50) return; // ~20 Hz
-        lastSendPointer = now;
+        if (now - lastSendPointerRef.current < 50) return; // ~20 Hz
+        lastSendPointerRef.current = now;
         data.interactionChannel.send({
             type: 'broadcast',
             event: 'pointer-changed',
@@ -849,20 +858,18 @@ export const DataProvider = ({ children }) => {
         });
     };
 
-    let lastSendCamera = 0;
-    let cameraDebounceTimeout = null;
     const sendCamera = (payload) => {
         if (!data.interactionChannel) return;
         const now = performance.now();
-        if (now - lastSendCamera < 50) return; // ~20 Hz throttle
+        if (now - lastSendCameraRef.current < 50) return; // ~20 Hz throttle
 
         // Debounce to prevent sending transient states during scroll
-        if (cameraDebounceTimeout) {
-            clearTimeout(cameraDebounceTimeout);
+        if (cameraDebounceTimeoutRef.current) {
+            clearTimeout(cameraDebounceTimeoutRef.current);
         }
 
-        cameraDebounceTimeout = setTimeout(() => {
-            lastSendCamera = now;
+        cameraDebounceTimeoutRef.current = setTimeout(() => {
+            lastSendCameraRef.current = now;
             if (data.interactionChannel) {
                 data.interactionChannel.send({
                     type: 'broadcast',
@@ -873,12 +880,11 @@ export const DataProvider = ({ children }) => {
         }, 150); // 150ms debounce
     };
 
-    let lastSendVOI = 0;
     const sendVOI = (payload) => {
         if (!data.interactionChannel) return;
         const now = performance.now();
-        if (now - lastSendVOI < 100) return; // ~10 Hz
-        lastSendVOI = now;
+        if (now - lastSendVOIRef.current < 100) return; // ~10 Hz
+        lastSendVOIRef.current = now;
         data.interactionChannel.send({
             type: 'broadcast',
             event: 'voi-changed',
@@ -887,79 +893,91 @@ export const DataProvider = ({ children }) => {
     };
 
     useEffect(() => {
-        //data.renderingEngine.getViewports()
-        if (data.sessionMeta.mode == "TEAM" || userData.id != data.sessionMeta.owner) {
-            if (data.shareController && data.renderingEngine && data.sharingUser === userData?.id && data.sessionId) {
+        const canBroadcast =
+            (data.sessionMeta.mode == "TEAM" || userData.id != data.sessionMeta.owner) &&
+            data.shareController &&
+            data.renderingEngine &&
+            data.sharingUser === userData?.id &&
+            data.sessionId;
 
-                data.renderingEngine.getViewports().sort((a, b) => {
-                    const idA = Number(a.id.split("-")[0])
-                    const idB = Number(b.id.split("-")[0])
-                    if (idA < idB) { return -1; }
-                    if (idA > idB) { return 1; }
-                    return 0
-                }).forEach((vp, viewport_idx) => {
+        if (!canBroadcast) return;
 
-                    data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', (event) => {
-                        if (data.interactionChannel) {
-                            // Send actual imageId instead of sparse array index
-                            const currentImageId = vp.getCurrentImageId();
-                            data.interactionChannel.send({
-                                type: 'broadcast',
-                                event: 'frame-changed',
-                                payload: { imageId: currentImageId, viewport: `${viewport_idx}-vp` },
-                            })
-                        }
-                    })
+        const manager = data.eventListenerManager;
+        if (!manager) return;
 
-                    data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_VOI_MODIFIED', (event) => {
-                        const window = cornerstone.utilities.windowLevel.toWindowLevel(event.detail.range.lower, event.detail.range.upper)
-                        sendVOI({ ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` })
-                    })
+        // Drop previous bindings before re-attaching so tool toggles
+        // (e.g. long-press pointer) cannot stack duplicate listeners.
+        manager.reset();
 
-                    data.eventListenerManager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', (event) => {
-                        const camera = vp.getCamera();
-                        // sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
-                    })
+        const viewports = data.renderingEngine.getViewports().sort((a, b) => {
+            const idA = Number(a.id.split("-")[0]);
+            const idB = Number(b.id.split("-")[0]);
+            if (idA < idB) return -1;
+            if (idA > idB) return 1;
+            return 0;
+        });
 
-                    if (data.toolSelected == "pointer") {
-                        if (mobile) {
-                            data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.TOUCH_DRAG, (event) => {
+        viewports.forEach((vp, viewport_idx) => {
+            manager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', () => {
+                if (!data.interactionChannel) return;
+                const currentImageId = vp.getCurrentImageId();
+                data.interactionChannel.send({
+                    type: 'broadcast',
+                    event: 'frame-changed',
+                    payload: { imageId: currentImageId, viewport: `${viewport_idx}-vp` },
+                });
+            });
 
-                                const eventData = event.detail;
-                                const { currentPoints } = eventData;
-                                if (currentPoints && currentPoints.world) {
-                                    sendPointer({ coordX: currentPoints.world[0], coordY: currentPoints.world[1], coordZ: currentPoints.world[2], viewport: `${viewport_idx}-vp` },)
-                                }
-                            })
-                        } else {
-                            data.eventListenerManager.addEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE, (event) => {
-                                const eventData = event.detail;
-                                const { currentPoints } = eventData;
-                                if (currentPoints && currentPoints.world) {
-                                    sendPointer({ coordX: currentPoints.world[0], coordY: currentPoints.world[1], coordZ: currentPoints.world[2], viewport: `${viewport_idx}-vp` },)
+            manager.addEventListener(vp.element, 'CORNERSTONE_VOI_MODIFIED', (event) => {
+                const window = cornerstone.utilities.windowLevel.toWindowLevel(
+                    event.detail.range.lower,
+                    event.detail.range.upper
+                );
+                sendVOI({ ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` });
+            });
 
-                                }
+            manager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', () => {
+                // Camera sync intentionally disabled — kept as a no-op hook.
+                // const camera = vp.getCamera();
+                // sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
+            });
 
-                            })
-                        }
+            if (data.toolSelected == "pointer") {
+                const pointerEvent = mobile
+                    ? cornerstoneTools.Enums.Events.TOUCH_DRAG
+                    : cornerstoneTools.Enums.Events.MOUSE_MOVE;
+
+                manager.addEventListener(vp.element, pointerEvent, (event) => {
+                    const { currentPoints } = event.detail || {};
+                    if (currentPoints?.world) {
+                        sendPointer({
+                            coordX: currentPoints.world[0],
+                            coordY: currentPoints.world[1],
+                            coordZ: currentPoints.world[2],
+                            viewport: `${viewport_idx}-vp`,
+                        });
                     }
-                    else {
-                        if (data.interactionChannel) {
-                            data.interactionChannel.send({
-                                type: 'broadcast',
-                                event: 'pointer-changed',
-                                payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
-                            })
-                        }
-                        data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.MOUSE_MOVE);
-                        data.eventListenerManager.removeEventListener(vp.element, cornerstoneTools.Enums.Events.TOUCH_DRAG);
-                    }
-
-                })
-
+                });
             }
+        });
+
+        // Hide remote pointer once when leaving pointer tool (not once per viewport)
+        if (data.toolSelected != "pointer" && data.interactionChannel) {
+            data.interactionChannel.send({
+                type: 'broadcast',
+                event: 'pointer-changed',
+                payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
+            });
         }
-    }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected]);
+
+        return () => {
+            manager.reset();
+            if (cameraDebounceTimeoutRef.current) {
+                clearTimeout(cameraDebounceTimeoutRef.current);
+                cameraDebounceTimeoutRef.current = null;
+            }
+        };
+    }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected, data.sessionId, data.sessionMeta.mode, data.sessionMeta.owner]);
 
 
     useEffect(() => {
@@ -1152,15 +1170,37 @@ export function dataReducer(data, action) {
         case 'select_tool':
             new_data = { ...data, toolSelected: action.payload }
             break;
-        case 'set_pointer':
-            new_data = {
-                ...data, coordData:
-                {
-                    coord: [action.payload.coordX, action.payload.coordY, action.payload.coordZ],
-                    viewport: action.payload.viewport
-                }
-            }
+        case 'toggle_fullscreen_viewport': {
+            const idx = action.payload;
+            const next = data.fullscreenViewport === idx ? null : idx;
+            new_data = { ...data, fullscreenViewport: next };
             break;
+        }
+        case 'set_fullscreen_viewport':
+            new_data = { ...data, fullscreenViewport: action.payload };
+            break;
+        case 'set_pointer': {
+            const nextCoord = [action.payload.coordX, action.payload.coordY, action.payload.coordZ];
+            const prev = data.coordData;
+            // Skip no-op updates (e.g. repeated hide-pointer parks) to avoid extra renders
+            if (
+                prev &&
+                prev.viewport === action.payload.viewport &&
+                prev.coord?.[0] === nextCoord[0] &&
+                prev.coord?.[1] === nextCoord[1] &&
+                prev.coord?.[2] === nextCoord[2]
+            ) {
+                return data;
+            }
+            new_data = {
+                ...data,
+                coordData: {
+                    coord: nextCoord,
+                    viewport: action.payload.viewport,
+                },
+            };
+            break;
+        }
         case 'viewport_ready':
 
 
@@ -1184,6 +1224,7 @@ export function dataReducer(data, action) {
             const { normalVd, scrollOffset, normalCentroidSlice, patientCentroidSlice, normalMaskDataList, structure } = action.payload;
             new_data = {
                 ...data,
+                fullscreenViewport: null,
                 compareNormal: {
                     active: true,
                     structure,
@@ -1203,6 +1244,7 @@ export function dataReducer(data, action) {
             if (!data.compareNormal) { new_data = data; break; }
             new_data = {
                 ...data,
+                fullscreenViewport: null,
                 ld: data.compareNormal.originalLd,
                 vd: data.compareNormal.originalVd,
                 compareNormal: null,

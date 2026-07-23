@@ -2,16 +2,13 @@ import "./layout.css";
 import { useContext, useEffect } from "react";
 import {
   DataContext,
-  DataDispatchContext,
-  dataReducer,
 } from "../context/DataContext.jsx";
 import Viewport from "../viewport/viewport.jsx";
 import { toast } from "sonner";
 import LoadingPage from "../components/LoadingPage.jsx";
 
 export default function Layout() {
-  const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal } = useContext(DataContext).data;
-  const { dispatch } = useContext(DataDispatchContext);
+  const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport } = useContext(DataContext).data;
 
   useEffect(() => {
     var urlData = Object.fromEntries(new URLSearchParams(window.location.search));
@@ -26,12 +23,12 @@ export default function Layout() {
     return () => { window.removeEventListener("resize", handleResize); };
   }, [renderingEngine]);
 
-  // Trigger resize when layout dimensions change (e.g. Compare with Normal toggle)
+  // Trigger resize when layout dimensions or fullscreen mode change
   useEffect(() => {
     if (renderingEngine && ld) {
       requestAnimationFrame(() => renderingEngine.resize(true));
     }
-  }, [renderingEngine, ld?.r, ld?.c]);
+  }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport]);
 
   // Guard: ld is undefined while session data is being fetched — return early before destructuring
   if (isRequestLoading || !ld) {
@@ -39,10 +36,15 @@ export default function Layout() {
   }
 
   const { r, c } = ld;
+  const isFullscreen = fullscreenViewport != null && r * c > 1;
 
   const isComparing = compareNormal?.active;
   const items = Array.from({ length: r * c }).map((_, idx) => (
-    <div key={idx} className="grid-item" style={{ position: 'relative' }}>
+    <div
+      key={idx}
+      className={`grid-item${isFullscreen && fullscreenViewport === idx ? ' grid-item--fullscreen' : ''}${isFullscreen && fullscreenViewport !== idx ? ' grid-item--hidden' : ''}`}
+      style={{ position: 'relative' }}
+    >
       <Viewport viewport_idx={idx} rendering_engine={renderingEngine} />
       {isComparing && (
         <div style={{
@@ -67,8 +69,8 @@ export default function Layout() {
 
   return renderingEngine ? (
     <div
-      className="grid-container"
-      style={{
+      className={`grid-container${isFullscreen ? ' grid-container--fullscreen' : ''}`}
+      style={isFullscreen ? undefined : {
         gridTemplateColumns: `repeat(${c}, 1fr)`,
         gridTemplateRows: `repeat(${r}, 1fr)`,
       }}
