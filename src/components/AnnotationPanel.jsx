@@ -14,6 +14,7 @@ import { UserContext } from "../context/UserContext.jsx";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import { eventTarget } from "@cornerstonejs/core";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
+import { buildAnnotationInsert } from "../lib/answerKeyCase.js";
 import {
   participantHasSubmitted,
 } from "../lib/participantSubmit.js";
@@ -207,15 +208,18 @@ function AnnotationPanel() {
 
       const { data, error } = await supabaseClient
         .from("series_annotations")
-        .insert({
-          user_id: userData.id,
-          study_id: studyId || null,
-          dicom_series_id: dicomSeriesId || null,
-          case_url_params:
-            !studyId && !dicomSeriesId ? caseUrlKey : null,
-          kind: "box",
-          boxes: [box],
-        })
+        .insert(
+          buildAnnotationInsert({
+            studyId,
+            dicomSeriesId,
+            caseUrlKey,
+            userId: userData.id,
+            fields: {
+              kind: "box",
+              boxes: [box],
+            },
+          })
+        )
         .select("id")
         .single();
 

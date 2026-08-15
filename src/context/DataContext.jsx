@@ -14,7 +14,7 @@ import defaultData from "./defaultData.jsx";
 import { cl } from './SupabaseClient.jsx';
 import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 import { resolveSeriesPrefix } from "../lib/seriesLink.js";
-import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink } from "../lib/answerKeyCase.js";
+import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert } from "../lib/answerKeyCase.js";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
@@ -569,15 +569,18 @@ export const DataProvider = ({ children }) => {
 
                 annotation.answerKeySaved = true;
 
-                const { data: inserted, error } = await supabaseClient.from("series_annotations").insert({
-                    user_id: userData.id,
-                    study_id: data.studyId || null,
-                    dicom_series_id: data.dicomSeriesId || null,
-                    case_url_params:
-                        !data.studyId && !data.dicomSeriesId ? data.caseUrlKey : null,
-                    kind: "box",
-                    boxes: [box],
-                }).select("id").single();
+                const { data: inserted, error } = await supabaseClient.from("series_annotations").insert(
+                    buildAnnotationInsert({
+                        studyId: data.studyId,
+                        dicomSeriesId: data.dicomSeriesId,
+                        caseUrlKey: data.caseUrlKey,
+                        userId: userData.id,
+                        fields: {
+                            kind: "box",
+                            boxes: [box],
+                        },
+                    })
+                ).select("id").single();
 
                 if (error) {
                     annotation.answerKeySaved = false;

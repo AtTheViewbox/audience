@@ -134,12 +134,17 @@ export function caseDisplayName({ studyName, dicomSeriesName, pacsbinStudyName }
 }
 
 export function buildAnnotationInsert({ studyId, dicomSeriesId, caseUrlKey, userId, fields }) {
+  // series_annotations_case_check requires exactly one of these three.
+  const study_id = studyId || null;
+  const dicom_series_id = study_id ? null : dicomSeriesId || null;
+  const case_url_params =
+    !study_id && !dicom_series_id && caseUrlKey ? caseUrlKey : null;
+
   return {
     user_id: userId,
-    study_id: studyId || null,
-    dicom_series_id: dicomSeriesId || null,
-    case_url_params:
-      !studyId && !dicomSeriesId && caseUrlKey ? caseUrlKey : null,
+    study_id,
+    dicom_series_id,
+    case_url_params,
     ...fields,
   };
 }
