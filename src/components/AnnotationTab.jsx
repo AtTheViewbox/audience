@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
+import { isJoinParticipant } from "../lib/demoCase.js";
 import {
   isCaseLinked,
   buildAnnotationInsert,
@@ -174,8 +175,11 @@ function AnnotationTab() {
 
   const caseLink = { studyId, dicomSeriesId, caseUrlKey };
   const linked = isCaseLinked(caseLink);
-  const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
-  const isParticipant = sessionId && !isSessionOwner;
+  const isParticipant = isJoinParticipant({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
 
   const [boxAnswers, setBoxAnswers] = useState([]);
   const [questions, setQuestions] = useState([]);

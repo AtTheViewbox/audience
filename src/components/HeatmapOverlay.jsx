@@ -12,7 +12,7 @@ import {
   snapToBoxAtIndex,
 } from "../lib/heatmapNavigation.js";
 import { setPersistedBoxAnnotationsVisible } from "../lib/answerKeyBoxes.js";
-import { isDemoPresenter } from "../lib/demoCase.js";
+import { isPresenter } from "../lib/demoCase.js";
 
 function HeatmapOverlay() {
   const {
@@ -29,8 +29,11 @@ function HeatmapOverlay() {
   renderingRef.current = renderingEngine;
   const prevHeatmapVisible = useRef(false);
 
-  const isSessionOwner =
-    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
+  const isSessionOwner = isPresenter({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
 
   const submissionBoxes = useCallback(
     () => collectSubmissionHeatmapBoxes(submittedAnnotations),

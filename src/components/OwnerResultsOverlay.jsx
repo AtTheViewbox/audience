@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { DataContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked, applyQuestionCaseFilter } from "../lib/answerKeyCase.js";
-import { isDemoMode, isDemoPresenter, getDemoQuestions } from "../lib/demoCase.js";
+import { isDemoMode, isDemoPresenter, isPresenter, getDemoQuestions } from "../lib/demoCase.js";
 import { fetchDemoStats } from "../lib/demoVisits.js";
 import { isMcqQuestion, normalizeMcqOptions } from "../lib/questionTypes.js";
 import { computeMcqLeaderboard } from "../lib/leaderboard.js";
@@ -51,8 +51,11 @@ function OwnerResultsOverlay() {
   void prefTick;
   const showLeaderboard = getLeaderboardEnabled(userData);
 
-  const isSessionOwner =
-    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
+  const isSessionOwner = isPresenter({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
   const caseLink = { studyId, dicomSeriesId, caseUrlKey };
   const linked = isCaseLinked(caseLink);
   const authorId = userData?.id;

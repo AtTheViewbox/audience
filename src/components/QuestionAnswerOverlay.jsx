@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { fetchHostAnswerContent } from "../lib/fetchHostAnswerContent.js";
-import { isDemoPresenter } from "../lib/demoCase.js";
+import { isJoinParticipant } from "../lib/demoCase.js";
 import QuestionAnswerPanel from "./QuestionAnswerPanel.jsx";
 
 const PANEL_SHELL =
@@ -31,9 +31,11 @@ function ParticipantAnswerOverlay() {
   const [questions, setQuestions] = useState([]);
   const [hasContent, setHasContent] = useState(false);
 
-  const isSessionOwner =
-    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
-  const isParticipant = sessionId && !isSessionOwner;
+  const isParticipant = isJoinParticipant({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
   // Prefer the author-broadcast case identifiers: participants often can't
   // resolve the case locally (RLS on studies, or a stale URL after a transfer).
   const hasSessionCaseLink =
@@ -45,7 +47,7 @@ function ParticipantAnswerOverlay() {
   const authorId = sessionMeta?.owner;
 
   const loadContent = useCallback(async () => {
-    if (!isParticipant || !authorId) {
+    if (!isParticipant) {
       setQuestions([]);
       setHasContent(false);
       dispatch({ type: "set_participant_answer_content", payload: false });

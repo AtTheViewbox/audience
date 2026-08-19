@@ -15,6 +15,7 @@ import {
   getLeaderboardEnabled,
   setLeaderboardEnabledLocal,
 } from "../lib/userPreferences"
+import { isPresenter } from "../lib/demoCase.js"
 
 import {
   Card,
@@ -30,7 +31,11 @@ function SettingTab() {
   const navigate = useNavigate();
 
   const inSession = !!sessionId;
-  const isSessionOwner = !!userData && sessionMeta?.owner === userData.id;
+  const isSessionOwner = isPresenter({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
   // The leaderboard is a session-wide setting: only the author may change it,
   // and participants don't get an individual toggle.
   const canControlLeaderboard = !inSession || isSessionOwner;

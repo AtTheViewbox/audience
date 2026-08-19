@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
-import { isDemoPresenter } from "../lib/demoCase.js";
+import { isPresenter } from "../lib/demoCase.js";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import { eventTarget } from "@cornerstonejs/core";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
@@ -75,8 +75,11 @@ function AnnotationPanel() {
   const redoStackRef = useRef([]);
   const boxSnapIndexRef = useRef(0);
 
-  const isSessionOwner =
-    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
+  const isSessionOwner = isPresenter({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+  });
   const submitterCount = new Set([
     ...Object.keys(submittedAnnotations || {}),
     ...Object.keys(submittedQuestionAnswers || {}),

@@ -56,9 +56,32 @@ export function isDemoMode(search = typeof window !== "undefined" ? window.locat
   return value === "1" || value === "true";
 }
 
-/** Desktop Launch Demo tab (no `s=`). Phone QR joiners are not presenters. */
+/** Clicked Launch Demo (URL has demo=1 and no session id). */
 export function isDemoPresenter(search = typeof window !== "undefined" ? window.location.search : "") {
   return isDemoMode(search) && !isSessionJoin(search);
+}
+
+/** Joined via QR or copied link (`s=` in the URL). */
+export function isDemoJoinParticipant(search = typeof window !== "undefined" ? window.location.search : "") {
+  return isDemoMode(search) && isSessionJoin(search);
+}
+
+/**
+ * Host / review UI: Launch Demo is always presenter. QR/copy-link joiners are
+ * always participants, even if they own the underlying share row.
+ */
+export function isPresenter({ sessionId, userId, ownerId, search } = {}) {
+  if (isDemoJoinParticipant(search)) return false;
+  if (isDemoPresenter(search)) return true;
+  return !!(sessionId && userId && ownerId && ownerId === userId);
+}
+
+/** Participant UI: QR/copy-link in demo, or non-owner in a normal session. */
+export function isJoinParticipant({ sessionId, userId, ownerId, search } = {}) {
+  if (isDemoJoinParticipant(search)) return true;
+  if (!sessionId) return false;
+  if (isDemoPresenter(search)) return false;
+  return !!(userId && ownerId && ownerId !== userId);
 }
 
 /** True when this tab joined via a session link (`?s=`). */

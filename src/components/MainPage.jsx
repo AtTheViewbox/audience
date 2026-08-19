@@ -7,7 +7,7 @@ import CompareNormal from './MedGemma/CompareNormal'
 import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
 import DemoOnboardingOverlay from './DemoOnboardingOverlay'
-import { isDemoMode, isDemoPresenter } from '../lib/demoCase.js';
+import { isDemoMode, isPresenter } from '../lib/demoCase.js';
 import AnnotationPanel from './AnnotationPanel'
 import AnswerKeyBoxLoader from './AnswerKeyBoxLoader'
 import HeatmapOverlay from './HeatmapOverlay'
@@ -31,8 +31,12 @@ function MainPage() {
   const { dispatch } = useContext(DataDispatchContext);
   const [prefTick, setPrefTick] = useState(0);
 
-  const isSessionOwner =
-    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
+  const isSessionOwner = isPresenter({
+    sessionId,
+    userId: userData?.id,
+    ownerId: sessionMeta?.owner,
+    search: location.search,
+  });
 
   // Skip auto-transfer work in preview mode; narrow hook deps avoid extra DB reads
   useAutoTransferSession({ enabled: !isPreview && !demoMode });

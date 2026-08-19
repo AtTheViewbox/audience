@@ -19,7 +19,7 @@ import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { sameViewerStudy, resolvePersistentDemoSession } from "../lib/shareSession.js";
-import { isDemoMode, isDemoPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
+import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
 
@@ -121,9 +121,12 @@ export const DataProvider = ({ children }) => {
     const lastSendVOIRef = useRef(0);
     const cameraDebounceTimeoutRef = useRef(null);
     useEffect(() => {
-        isSessionOwnerRef.current =
-            (!!userData?.id && data.sessionMeta?.owner === userData.id) || isDemoPresenter();
-    }, [userData?.id, data.sessionMeta?.owner]);
+        isSessionOwnerRef.current = isPresenter({
+            sessionId: data.sessionId,
+            userId: userData?.id,
+            ownerId: data.sessionMeta?.owner,
+        });
+    }, [userData?.id, data.sessionId, data.sessionMeta?.owner]);
 
     // The author's resolved case identifiers, broadcast to participants. RLS
     // stops participants from reading the studies/dicom_series tables, so they
@@ -145,25 +148,33 @@ export const DataProvider = ({ children }) => {
     // preference. This is what makes the setting persist across transfers.
     useEffect(() => {
         if (!data.shareController) return;
-        const iAmOwner = !!userData?.id && data.sessionMeta?.owner === userData.id;
-        if (!iAmOwner) return;
+        const presenter = isPresenter({
+            sessionId: data.sessionId,
+            userId: userData?.id,
+            ownerId: data.sessionMeta?.owner,
+        });
+        if (!presenter) return;
         data.shareController.send({
             type: 'broadcast', event: 'leaderboard-changed',
             payload: { enabled: getLeaderboardEnabled(userData) }
         });
-    }, [data.shareController, data.sessionMeta?.owner, userData?.id, userData?.user_metadata?.show_leaderboard]);
+    }, [data.shareController, data.sessionId, data.sessionMeta?.owner, userData?.id, userData?.user_metadata?.show_leaderboard]);
 
     // As author, publish the resolved case identifiers so participants can load
     // the right questions even when they can't resolve the case themselves
     // (RLS on studies, or a stale URL after a transfer).
     useEffect(() => {
         if (!data.shareController) return;
-        const iAmOwner = !!userData?.id && data.sessionMeta?.owner === userData.id;
-        if (!iAmOwner && !isDemoPresenter()) return;
+        const presenter = isPresenter({
+            sessionId: data.sessionId,
+            userId: userData?.id,
+            ownerId: data.sessionMeta?.owner,
+        });
+        if (!presenter) return;
         const cl = caseLinkRef.current;
         if (!cl.studyId && !cl.dicomSeriesId && !cl.caseUrlKey) return;
         data.shareController.send({ type: 'broadcast', event: 'case-link', payload: cl });
-    }, [data.shareController, data.sessionMeta?.owner, userData?.id, data.studyId, data.dicomSeriesId, data.caseUrlKey]);
+    }, [data.shareController, data.sessionId, data.sessionMeta?.owner, userData?.id, data.studyId, data.dicomSeriesId, data.caseUrlKey]);
 
     // Load persisted submissions for this session+case so the leaderboard is
     // authoritative and survives transfers/refreshes (which reload every client)
@@ -401,9 +412,13 @@ export const DataProvider = ({ children }) => {
                 }
             }
 
+            // QR / copied join links must stay in that session as participants.
+            // Do not swap them into a session they already host on the same case.
+            const joiningViaLink = !!queryParams.get("s");
+
             // Only look for existing sessions for real (non-anonymous) logged-in users
             // Anonymous users cannot create sessions, so this query would never return results
-            if (userData && !userData.is_anonymous) {
+            if (!joiningViaLink && userData && !userData.is_anonymous) {
                 var { data, errorCurrentSession } = await cl
                     .from("viewbox")
                     .select("user, url_params, session_id,mode,chat_history")
@@ -419,7 +434,6 @@ export const DataProvider = ({ children }) => {
 
             // Demo launch: join the shared persistent session so answers and
             // visitor counts accumulate. Homepage (no s=) still gets host UI.
-            const joiningViaLink = !!queryParams.get("s");
             if (!joiningViaLink && isDemoMode(queryParams.toString()) && userData) {
                 try {
                     const row = await resolvePersistentDemoSession(cl, userData.id);
@@ -450,6 +464,7 @@ export const DataProvider = ({ children }) => {
 
     // Update session owner when user logs in
     useEffect(() => {
+        if (isDemoJoinParticipant()) return;
         if (userData && data.sessionId && supabaseClient) {
             // Check if this user owns the current session
             supabaseClient

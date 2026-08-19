@@ -14,12 +14,13 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Smartphone,
+  Eye,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { DataContext } from "../context/DataContext.jsx";
 import { buildJoinLink } from "../lib/shareSession.js";
-import { isDemoMode, isSessionJoin } from "../lib/demoCase.js";
+import { isDemoMode, isDemoJoinParticipant } from "../lib/demoCase.js";
 import { fetchDemoStats } from "../lib/demoVisits.js";
 import { UserContext } from "../context/UserContext.jsx";
 
@@ -226,13 +227,25 @@ const STEPS = [
       "On your phone, tap the white button to broadcast — it turns red while sharing. Look at the presenter screen: it mirrors your scroll, window, and pointer. Long-hold the image to display the pointer.",
     arrow: "bottom-left",
   },
+  {
+    id: "reveal",
+    icon: <Eye className="h-6 w-6" />,
+    title: "Show the answer",
+    description:
+      "On this presenter screen, press Space to reveal the answer box and results. Press Space again to hide them.",
+    arrow: "top-right",
+    presenterOnly: true,
+  },
 ];
 
 export default function DemoOnboardingOverlay() {
   const { sessionId } = useContext(DataContext).data;
-  const joining = isSessionJoin();
+  const joining = isDemoJoinParticipant();
   const phone = useIsPhone();
-  const steps = joining ? STEPS.filter((s) => s.id !== "join") : STEPS;
+  const steps = STEPS.filter((s) => {
+    if (joining && (s.id === "join" || s.presenterOnly)) return false;
+    return true;
+  });
   const [visible, setVisible] = useState(() => isDemoMode());
   const [step, setStep] = useState(0);
 
