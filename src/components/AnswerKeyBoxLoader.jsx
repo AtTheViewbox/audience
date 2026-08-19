@@ -12,14 +12,6 @@ import {
   setPersistedBoxAnnotationsVisible,
 } from "../lib/answerKeyBoxes.js";
 
-function mergeBoxRows(fetched, extras) {
-  const byId = new Map();
-  for (const row of [...(fetched || []), ...(extras || [])]) {
-    if (row?.id) byId.set(row.id, row);
-  }
-  return [...byId.values()];
-}
-
 /** Load persisted answer-key boxes from Supabase and restore them on the correct viewport/slice. */
 function AnswerKeyBoxLoader() {
   const {
@@ -54,17 +46,20 @@ function AnswerKeyBoxLoader() {
     let timer = null;
 
     const syncFromTable = async () => {
-      const fetched = userData?.id && supabaseClient
-        ? await fetchBoxAnnotationRows(supabaseClient, caseLink, userData.id)
-        : [];
-      const rows = mergeBoxRows(fetched, demoMode ? getDemoBoxRows() : []);
+      const rows = demoMode
+        ? getDemoBoxRows()
+        : (userData?.id && supabaseClient
+            ? await fetchBoxAnnotationRows(supabaseClient, caseLink, userData.id)
+            : []);
       if (cancelled) return false;
 
       dispatch({ type: "set_persisted_answer_boxes", payload: flattenBoxRows(rows) });
 
       if (!viewportsHaveStacks(renderingEngine)) return false;
 
-      if (!boxesArePlaced(renderingEngine, rows)) {
+      if (demoMode) {
+        restoreBoxRows(renderingEngine, rows, { replaceExisting: true });
+      } else if (!boxesArePlaced(renderingEngine, rows)) {
         restoreBoxRows(renderingEngine, rows);
       }
 
