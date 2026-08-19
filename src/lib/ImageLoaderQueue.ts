@@ -152,8 +152,20 @@ export class ImageLoaderQueue {
             });
         }
 
-        // Sort once: Highest priority first
-        this.queue.sort((a, b) => b.priority - a.priority);
+        if (this.isScrolling) {
+            const windowStart = this.currentFocusIndex - this.PREFETCH_WINDOW;
+            const windowEnd = this.currentFocusIndex + this.PREFETCH_WINDOW;
+            const near: QueueItem[] = [];
+            const far: QueueItem[] = [];
+            for (const item of this.queue) {
+                if (item.idx >= windowStart && item.idx <= windowEnd) near.push(item);
+                else far.push(item);
+            }
+            near.sort((a, b) => b.priority - a.priority);
+            this.queue = near.concat(far);
+        } else {
+            this.queue.sort((a, b) => b.priority - a.priority);
+        }
 
         this.processNext();
     }

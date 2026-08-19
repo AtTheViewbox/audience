@@ -1,4 +1,4 @@
-import React, { useRef, useContext, useEffect, useState } from 'react';
+import React, { useRef, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { DataContext, DataDispatchContext } from '../context/DataContext.jsx';
 import { UserContext } from "../context/UserContext"
 import * as cornerstone from '@cornerstonejs/core';
@@ -6,6 +6,7 @@ import * as cornerstoneTools from '@cornerstonejs/tools';
 
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
 import { rewriteImageUrl } from '../lib/inputParser.ts';
+import { getRemotePointer, subscribeRemotePointer } from '../lib/pointerStore.js';
 import { toast } from "sonner";
 
 
@@ -13,7 +14,7 @@ export default function Viewport(props) {
   const searchParams = new URLSearchParams(location.search);
   const elementRef = useRef(null);
 
-  const { vd, toolSelected, coordData, sharingUser, compareNormal, ld, fullscreenViewport } = useContext(DataContext).data;
+  const { vd, toolSelected, sharingUser, compareNormal, ld, fullscreenViewport } = useContext(DataContext).data;
   const { userData } = useContext(UserContext).data;
   const { viewport_idx, rendering_engine } = props;
   const [viewportReady, setViewportReady] = useState(false);
@@ -31,19 +32,65 @@ export default function Viewport(props) {
   const voiCorrectionActiveRef = useRef(false);
   const prevImageIndexRef = useRef(0);
   const loadedSetRef = useRef(new Set());
-  const progressThrottleRef = useRef(null);
+  const progressBarRef = useRef(null);
+  const progressRafRef = useRef(null);
 
   const { dispatch } = useContext(DataDispatchContext);
 
-  // New state from remote for Progress Bar
-  const [loadedImages, setLoadedImages] = useState(new Set());
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [allImagesLoaded, setAllImagesLoaded] = useState(false);
 
+  const paintProgress = () => {
+    const bar = progressBarRef.current;
+    if (!bar) return;
+    const total = Number(bar.dataset.total) || 0;
+    if (!total) return;
+    const segmentCount = bar.children.length;
+    const imagesPerSegment = Math.ceil(total / segmentCount);
+    const current = prevImageIndexRef.current;
+    const loaded = loadedSetRef.current;
+    for (let i = 0; i < segmentCount; i++) {
+      const startIdx = i * imagesPerSegment;
+      const endIdx = Math.min(startIdx + imagesPerSegment, total);
+      const isCurrent = current >= startIdx && current < endIdx;
+      let hasLoaded = false;
+      for (let j = startIdx; j < endIdx; j++) {
+        if (loaded.has(j)) { hasLoaded = true; break; }
+      }
+      bar.children[i].style.backgroundColor = isCurrent
+        ? '#F87171'
+        : hasLoaded
+          ? '#4CAF50'
+          : 'rgba(255, 255, 255, 0.2)';
+    }
+  };
+
+  const scheduleProgressPaint = () => {
+    if (progressRafRef.current != null) return;
+    progressRafRef.current = requestAnimationFrame(() => {
+      progressRafRef.current = null;
+      paintProgress();
+    });
+  };
+
+  useLayoutEffect(() => {
+    paintProgress();
+  }, [viewport_data, allImagesLoaded, viewportReady]);
+
   useEffect(() => {
-    // Imperative update for cursor position to avoid re-renders
-    if (viewport_data && viewportReady && pointerRef.current) {
-      // Logic to determine visibility
+    return () => {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current);
+        progressRafRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!viewport_data || !viewportReady) return;
+
+    const applyPointer = (coordData) => {
+      if (!pointerRef.current) return;
+
       const shouldShow = coordData &&
         coordData.viewport == `${viewport_idx}-vp` &&
         sharingUser &&
@@ -51,25 +98,21 @@ export default function Viewport(props) {
         userData.id != sharingUser;
 
       if (shouldShow && coordData?.coord) {
-        const viewportId = `${viewport_idx}-vp`;
-        const viewport = rendering_engine.getViewport(viewportId);
-
+        const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
         if (viewport) {
           const canvasCoord = viewport.worldToCanvas([coordData.coord[0], coordData.coord[1], coordData.coord[2]]);
-
-          // Use transform for performant updates
-          // existing transform was translate(-8px, -2px)
-          pointerRef.current.style.transform = `translate(${canvasCoord[0] - 8}px, ${canvasCoord[1] - 2}px)`;
+          pointerRef.current.style.transform = `translate3d(${canvasCoord[0] - 8}px, ${canvasCoord[1] - 2}px, 0)`;
           pointerRef.current.style.display = 'block';
           return;
         }
       }
 
-      // Hide if conditions not met
       pointerRef.current.style.display = 'none';
+    };
 
-    }
-  }, [coordData, viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData]);
+    applyPointer(getRemotePointer());
+    return subscribeRemotePointer(applyPointer);
+  }, [viewportReady, viewport_data, rendering_engine, viewport_idx, sharingUser, userData]);
 
   useEffect(() => {
     if (!viewportReady) return;
@@ -224,12 +267,12 @@ export default function Viewport(props) {
 
     loadedSetRef.current = new Set([initialIndex]);
     prevImageIndexRef.current = initialIndex;
-    setLoadedImages(new Set([initialIndex]));
     setAllImagesLoaded(false);
+    scheduleProgressPaint();
 
     try {
       await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100 });
-      setLoadedImages(new Set([initialIndex]));
+      scheduleProgressPaint();
 
       // Initial Stack: Use ALL image IDs to allow navigation/scrolling immediately
       // Cornerstone handles lazy-loading pixels as needed.
@@ -288,7 +331,7 @@ export default function Viewport(props) {
           }
 
           prevImageIndexRef.current = target;
-          setCurrentImageIndex(target);
+          scheduleProgressPaint();
           if (queueRef.current) queueRef.current.updateFocus(target);
 
           return result;
@@ -341,9 +384,9 @@ export default function Viewport(props) {
         el?.removeEventListener('mouseup', captureUserVoi);
         el?.removeEventListener('touchend', captureUserVoi);
 
-        if (progressThrottleRef.current) {
-          clearTimeout(progressThrottleRef.current);
-          progressThrottleRef.current = null;
+        if (progressRafRef.current != null) {
+          cancelAnimationFrame(progressRafRef.current);
+          progressRafRef.current = null;
         }
 
         if (queueRef.current) {
@@ -370,16 +413,8 @@ export default function Viewport(props) {
 
         if (loadedSetRef.current.size === allImageIds.length) {
           setAllImagesLoaded(true);
-          setLoadedImages(new Set(loadedSetRef.current));
-          if (progressThrottleRef.current) {
-            clearTimeout(progressThrottleRef.current);
-            progressThrottleRef.current = null;
-          }
-        } else if (!progressThrottleRef.current) {
-          progressThrottleRef.current = setTimeout(() => {
-            setLoadedImages(new Set(loadedSetRef.current));
-            progressThrottleRef.current = null;
-          }, 250);
+        } else {
+          scheduleProgressPaint();
         }
       },
       () => { },
@@ -692,7 +727,10 @@ export default function Viewport(props) {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Segmented Progress Bar (from Remote Staging) */}
       {viewport_data && !allImagesLoaded && viewport_data.s.length > 1 && (
-        <div style={{
+        <div
+          ref={progressBarRef}
+          data-total={viewport_data.s.length}
+          style={{
           position: 'absolute',
           top: 0,
           left: 0,
@@ -706,52 +744,23 @@ export default function Viewport(props) {
           transition: 'opacity 0.5s ease-out'
         }}>
           {(() => {
-            // Calculate optimal segment count to prevent clutter on small screens
             const MAX_SEGMENTS = 100;
-            const totalImages = viewport_data.s.length;
-            const segmentCount = Math.min(totalImages, MAX_SEGMENTS);
-            const imagesPerSegment = Math.ceil(totalImages / segmentCount);
-
-            return Array.from({ length: segmentCount }).map((_, segmentIdx) => {
-              const startIdx = segmentIdx * imagesPerSegment;
-              const endIdx = Math.min(startIdx + imagesPerSegment, totalImages);
-
-              // Check if current image is in this segment
-              const isCurrent = currentImageIndex >= startIdx && currentImageIndex < endIdx;
-
-              // Check if any image in this segment is loaded
-              let hasLoaded = false;
-              for (let i = startIdx; i < endIdx; i++) {
-                if (loadedImages.has(i)) {
-                  hasLoaded = true;
-                  break;
-                }
-              }
-
-              // Two states: Current (red) or Loaded (green) or Unloaded (gray)
-              const backgroundColor = isCurrent
-                ? '#F87171'  // Current segment - red
-                : hasLoaded
-                  ? '#4CAF50'  // At least one loaded - green
-                  : 'rgba(255, 255, 255, 0.2)';  // None loaded - transparent white
-
-              return (
-                <div
-                  key={segmentIdx}
-                  style={{
-                    flex: 1,
-                    height: '100%',
-                    backgroundColor,
-                    transition: 'background-color 0.3s ease'
-                  }}
-                />
-              );
-            });
+            const segmentCount = Math.min(viewport_data.s.length, MAX_SEGMENTS);
+            return Array.from({ length: segmentCount }).map((_, segmentIdx) => (
+              <div
+                key={segmentIdx}
+                style={{
+                  flex: 1,
+                  height: '100%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                }}
+              />
+            ));
           })()}
         </div>
       )}
 
-      <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%' }} >
+      <div ref={elementRef} id={viewport_idx} style={{ width: '100%', height: '100%', touchAction: 'none' }} >
 
         {/* Shared Pointer - Always rendered but toggled via ref for performance */}
         <svg
@@ -760,14 +769,13 @@ export default function Viewport(props) {
             position: 'absolute',
             left: 0,
             top: 0,
-            // Initial state hidden
             display: 'none',
             width: 24,
             height: 24,
             zIndex: 1000,
             pointerEvents: 'none',
+            willChange: 'transform',
             filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
-            transition: 'display 0.1s' // smooth toggle
           }}
           viewBox="0 0 24 24"
           fill="none"

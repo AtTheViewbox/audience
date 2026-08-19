@@ -18,9 +18,20 @@ export default function Layout() {
   }, [sessionId]);
 
   useEffect(() => {
-    const handleResize = () => { renderingEngine.resize(true); };
-    if (renderingEngine) window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); };
+    if (!renderingEngine) return;
+    let rafId = 0;
+    const handleResize = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        renderingEngine.resize(true);
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [renderingEngine]);
 
   // Trigger resize when layout dimensions or fullscreen mode change

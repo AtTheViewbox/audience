@@ -20,6 +20,7 @@ import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { isDemoMode } from "../lib/demoCase.js";
 import { createShareSession, sameViewerStudy } from "../lib/shareSession.js";
+import { setRemotePointer } from "../lib/pointerStore.js";
 
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
@@ -841,9 +842,9 @@ export const DataProvider = ({ children }) => {
                     { event: 'pointer-changed' },
                     (payload) => {
                         const { coordX, coordY, coordZ, viewport } = payload.payload;
-                        dispatch({
-                            type: 'set_pointer',
-                            payload: { coordX, coordY, coordZ, viewport },
+                        setRemotePointer({
+                            coord: [coordX, coordY, coordZ],
+                            viewport,
                         });
                     }
                 )
@@ -1217,26 +1218,12 @@ export function dataReducer(data, action) {
             new_data = { ...data, fullscreenViewport: action.payload };
             break;
         case 'set_pointer': {
-            const nextCoord = [action.payload.coordX, action.payload.coordY, action.payload.coordZ];
-            const prev = data.coordData;
-            // Skip no-op updates (e.g. repeated hide-pointer parks) to avoid extra renders
-            if (
-                prev &&
-                prev.viewport === action.payload.viewport &&
-                prev.coord?.[0] === nextCoord[0] &&
-                prev.coord?.[1] === nextCoord[1] &&
-                prev.coord?.[2] === nextCoord[2]
-            ) {
-                return data;
-            }
-            new_data = {
-                ...data,
-                coordData: {
-                    coord: nextCoord,
-                    viewport: action.payload.viewport,
-                },
-            };
-            break;
+            // Pointer is applied outside React so sharing does not re-render the viewer.
+            setRemotePointer({
+                coord: [action.payload.coordX, action.payload.coordY, action.payload.coordZ],
+                viewport: action.payload.viewport,
+            });
+            return data;
         }
         case 'viewport_ready':
 

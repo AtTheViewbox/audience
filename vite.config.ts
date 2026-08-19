@@ -8,6 +8,17 @@ export default defineConfig({
   base: process.env.BUILD_ENV === 'production' ? '/' : process.env.BUILD_ENV === 'staging' ? '/audience/staging/' : (process.env.BUILD_ENV === 'medgemma' ? '/audience/medgemma/' : '/audience/'),
   plugins: [react(), wasm(), topLevelAwait()],
   envDir: '../',
+  build: {
+    target: 'es2022',
+    cssMinify: true,
+  },
+  optimizeDeps: {
+    include: [
+      '@cornerstonejs/core',
+      '@cornerstonejs/tools',
+      '@cornerstonejs/dicom-image-loader',
+    ],
+  },
   server: {
     proxy: {
       '/api': {
