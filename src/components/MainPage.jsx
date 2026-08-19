@@ -76,8 +76,10 @@ function MainPage() {
             <AtlasOverlayMenu />
             {import.meta.env.BUILD_ENV !== 'main' && showMedGemma ? <MedGemmaButton /> : null}
             <OwnerResultsOverlay />
-            <QuestionAnswerOverlay />
-            {demoMode ? <DemoOnboardingOverlay /> : null}
+            <div className="flex flex-row-reverse items-center gap-2 md:contents">
+              <QuestionAnswerOverlay />
+              {demoMode ? <DemoOnboardingOverlay /> : null}
+            </div>
           </div>
         </div>
         <CompareNormal />
