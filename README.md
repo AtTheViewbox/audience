@@ -43,17 +43,23 @@ git subtree push --prefix dist origin gh-pages
 
 ## Deploy on Cloudflare Pages (attheviewbox.dev)
 
-Production builds use `BUILD_ENV=production` so asset URLs use `/` (not `/audience/`). One-time setup: log in to Cloudflare and create the Pages project if it does not exist yet.
+Production deploys are **automatic**: push to the `prod` branch and GitHub Actions (`.github/workflows/deploy.yml`) builds with `BUILD_ENV=production` and deploys to Cloudflare Pages.
 
 ```bash
-npx wrangler login
-npx wrangler pages project create attheviewbox --production-branch medgemma   # only once
+git checkout prod
+# ... commit your changes ...
+git push origin prod
 ```
 
-Deploy the current `dist` after building:
+Watch the run under [Actions](https://github.com/AtTheViewbox/audience/actions). The Cloudflare Pages production branch must be **`prod`**.
+
+### Manual deploy (optional)
+
+If you need to deploy without pushing:
 
 ```bash
-npm run build:production && npx wrangler pages deploy dist --project-name=attheviewbox --branch=medgemma --commit-dirty=true
+npx wrangler login   # once, if not already authenticated
+npm run build:production && npx wrangler pages deploy dist --project-name=attheviewbox --branch=prod --commit-dirty=true
 ```
 
 - **`--commit-dirty=true`** silences the warning when you have uncommitted git changes.

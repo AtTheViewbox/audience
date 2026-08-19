@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, ChevronRight, ChevronLeft, Mouse, Contrast, ZoomIn, Sparkles, Radio, Pointer, MousePointerClick, ArrowDownLeft, ArrowUpLeft, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Mouse, Contrast, ZoomIn, Radio, Pointer, MousePointerClick, ArrowDownLeft, ArrowUpLeft, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "attheviewbox_onboarding_seen";
@@ -34,21 +34,15 @@ const VIEWER_STEPS = [
         arrow: "top-left",
     },
     {
-        icon: <Sparkles className="h-6 w-6" />,
-        title: "MedGemma AI",
-        description: "Logged-in users can use the MedGemma assistant to analyze findings and segment structures.",
-        arrow: "top-right",
-    },
-    {
         icon: <MousePointerClick className="h-6 w-6" />,
         title: "Generate a Session",
-        description: "Click the white button in the lower-left corner or ask MedGemma to generate a shareable session.",
+        description: "Click the white button in the lower-left corner to open login and share settings.",
         arrow: "top-right",
     },
     {
         icon: <Radio className="h-6 w-6" />,
         title: "Share Your Session",
-        description: "HOLD the white button (bottom-left) to start sharing your viewport in real time.",
+        description: "Hosts: HOLD the white button (bottom-left) to share. If you joined as a participant, TAP it instead. It turns red while you are broadcasting.",
         arrow: "bottom-left",
     },
     {

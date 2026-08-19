@@ -1,3 +1,5 @@
+import { currentViewerUrlParams } from "./shareSession.js";
+
 /**
  * Updates the signed-in user's viewbox row to the current URL (study) and reloads.
  * Same behavior as "Transfer Session" in ShareTab.
@@ -8,12 +10,11 @@ export async function transferSessionToCurrentUrl({
   chatHistory,
   dispatch,
 }) {
-  const queryParams = new URLSearchParams(window.location.search);
   const { data, error } = await supabaseClient
     .from('viewbox')
     .upsert({
       user: userId,
-      url_params: queryParams.toString(),
+      url_params: currentViewerUrlParams(),
       chat_history: chatHistory || [],
     })
     .select();

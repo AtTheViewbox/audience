@@ -15,21 +15,31 @@ import {
 
 function Fab() {
   let [dialogIsOpen, setDialogIsOpen] = useState(false);
-  const { sharingUser, sharingPending } = useContext(DataContext).data;
+  const { sharingUser, sharingPending, sessionId, sessionMeta } = useContext(DataContext).data;
   const { userData } = useContext(UserContext).data;
   const { dispatch } = useContext(DataDispatchContext);
 
+  const isParticipant = !!sessionId && !!userData && sessionMeta?.owner !== userData.id;
+
+  const openDialog = () => setDialogIsOpen(true);
+  const toggleSharing = () => {
+    dispatch({ type: "toggle_sharing", payload: { userData } });
+  };
+
   let { longPressProps } = useLongPress({
-    accessibilityDescription: "Long press to toggle sharing interactions",
-    onLongPress: (e) => {
-      //switch long and short press
-      dispatch({ type: "toggle_sharing", payload: { userData: userData } });
+    accessibilityDescription: isParticipant
+      ? "Hold to open login and share settings"
+      : "Hold to toggle sharing",
+    onLongPress: () => {
+      if (isParticipant) openDialog();
+      else toggleSharing();
     },
   });
 
   let { pressProps } = usePress({
-    onPress: (e) => {
-      setDialogIsOpen(true);
+    onPress: () => {
+      if (isParticipant) toggleSharing();
+      else openDialog();
     },
   });
 

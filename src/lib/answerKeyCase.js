@@ -13,6 +13,7 @@ export function normalizeUrlParams(input) {
   const params = new URLSearchParams(raw);
   params.delete("s");
   params.delete("preview");
+  params.delete("demo");
 
   return [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

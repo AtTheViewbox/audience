@@ -40,6 +40,10 @@ function OwnerResultsOverlay() {
     return () => window.removeEventListener(PREF_EVENT, onPrefs);
   }, []);
 
+  useEffect(() => {
+    if (heatmapVisible) setOpen(true);
+  }, [heatmapVisible]);
+
   void prefTick;
   const showLeaderboard = getLeaderboardEnabled(userData);
 

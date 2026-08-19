@@ -6,6 +6,8 @@ import MedGemmaButton from './MedGemma/MedGemmaButton'
 import CompareNormal from './MedGemma/CompareNormal'
 import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
+import DemoOnboardingOverlay from './DemoOnboardingOverlay'
+import { isDemoMode } from '../lib/demoCase.js';
 import AnnotationPanel from './AnnotationPanel'
 import AnswerKeyBoxLoader from './AnswerKeyBoxLoader'
 import HeatmapOverlay from './HeatmapOverlay'
@@ -23,6 +25,7 @@ function MainPage() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isPreview = searchParams.get("preview") === "true";
+  const demoMode = isDemoMode(location.search);
   const { userData } = useContext(UserContext).data;
   const { sessionId, sessionMeta } = useContext(DataContext).data;
   const { dispatch } = useContext(DataDispatchContext);
@@ -31,7 +34,7 @@ function MainPage() {
   const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
 
   // Skip auto-transfer work in preview mode; narrow hook deps avoid extra DB reads
-  useAutoTransferSession({ enabled: !isPreview });
+  useAutoTransferSession({ enabled: !isPreview && !demoMode });
 
   useEffect(() => {
     const onPrefs = () => setPrefTick((t) => t + 1);
@@ -80,7 +83,7 @@ function MainPage() {
         <AnswerKeyBoxLoader />
         <AnnotationPanel />
         <HeatmapOverlay />
-        <OnboardingOverlay page="viewer" />
+        {demoMode ? <DemoOnboardingOverlay /> : <OnboardingOverlay page="viewer" />}
         <Toaster position="top-right" />
       </>
   )

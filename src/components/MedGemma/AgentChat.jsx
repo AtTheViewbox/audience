@@ -18,8 +18,8 @@ import {
     clearMaskOverlay,
 } from '../../lib/medgemma-utils';
 
-const Visibility = { PUBLIC: 'PUBLIC' };
-const Mode = { TEAM: 'TEAM' };
+import { isDemoMode } from '../../lib/demoCase';
+import { createShareSession, buildJoinLink, ShareMode } from '../../lib/shareSession';
 
 // Default mask transform for RLE overlay rendering
 const DEFAULT_MASK_XFORM = {
@@ -542,33 +542,23 @@ export default function AgentChat({
             toast.error('You need to be logged in to share sessions.');
             return null;
         }
-        if (userData.is_anonymous) {
+        if (userData.is_anonymous && !isDemoMode()) {
             toast.error('Please sign in to create a shared session.');
             return null;
         }
         try {
-            const queryParams = new URLSearchParams(window.location.search);
-            await supabaseClient.from('viewbox').delete().eq('user', userData.id);
-            const { data, error } = await supabaseClient
-                .from('viewbox')
-                .upsert([{
-                    user: userData.id,
-                    url_params: queryParams.toString(),
-                    visibility: Visibility.PUBLIC,
-                    mode: Mode.TEAM,
-                    chat_history: messages,
-                }])
-                .select();
-            if (error) throw error;
-            if (data?.length > 0) {
-                const sessionId = data[0].session_id;
-                const p = new URLSearchParams();
-                p.set('s', sessionId);
-                const shareLink = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+            const data = await createShareSession({
+                supabaseClient,
+                userId: userData.id,
+                mode: ShareMode.TEAM,
+                chatHistory: messages,
+            });
+            if (data?.session_id) {
+                const sessionId = data.session_id;
+                const shareLink = buildJoinLink(sessionId);
                 try {
                     await navigator.clipboard.writeText(shareLink);
                 } catch (_) { }
-                // Join the session reactively — no page reload needed
                 dispatch?.({
                     type: 'connect_to_sharing_session',
                     payload: { sessionId, mode: 'TEAM', owner: userData.id },

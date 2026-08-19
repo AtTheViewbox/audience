@@ -18,6 +18,8 @@ import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseK
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
+import { isDemoMode } from "../lib/demoCase.js";
+import { createShareSession, sameViewerStudy } from "../lib/shareSession.js";
 
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
@@ -395,10 +397,42 @@ export const DataProvider = ({ children }) => {
                     .eq("user", userData.id);
                 if (errorCurrentSession) throw errorCurrentSession;
 
-                if (data?.length != 0 && data[0].url_params == queryParams.toString()) {
+                if (data?.length != 0 && sameViewerStudy(data[0].url_params, queryParams.toString())) {
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode = data[0].mode
                     initialData.sessionMeta.owner = data[0].user
+                }
+            }
+
+            // Demo launch: this visitor is the host. Create (or reuse) a session
+            // so the QR in the demo overlay is immediately joinable.
+            const joiningViaLink = !!queryParams.get("s");
+            if (!joiningViaLink && isDemoMode(queryParams.toString()) && userData) {
+                try {
+                    const { data: existingDemo } = await cl
+                        .from("viewbox")
+                        .select("user, url_params, session_id, mode, chat_history")
+                        .eq("user", userData.id);
+
+                    if (
+                        existingDemo?.length &&
+                        sameViewerStudy(existingDemo[0].url_params, queryParams.toString())
+                    ) {
+                        initialData.s = existingDemo[0].session_id;
+                        initialData.sessionMeta.mode = existingDemo[0].mode;
+                        initialData.sessionMeta.owner = userData.id;
+                    } else {
+                        const row = await createShareSession({
+                            supabaseClient: cl,
+                            userId: userData.id,
+                            chatHistory: [],
+                        });
+                        initialData.s = row.session_id;
+                        initialData.sessionMeta.mode = row.mode;
+                        initialData.sessionMeta.owner = userData.id;
+                    }
+                } catch (demoErr) {
+                    console.error("Demo session create failed:", demoErr);
                 }
             }
         }

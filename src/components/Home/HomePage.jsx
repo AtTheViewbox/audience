@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Filter } from "../../lib/constants"
 import { unflatten, flatten } from "flat";
 import BuilderPage from "./Builder/BuilderPage";
-import OnboardingOverlay from "../OnboardingOverlay";
+import DemoHero from "./DemoHero";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -285,6 +285,7 @@ export default function HomePage() {
             ) : (
               <>
                 <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
+                  <DemoHero />
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
                     <div className="flex items-center gap-4">
@@ -547,7 +548,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-      <OnboardingOverlay page="home" />
     </>
   );
 }

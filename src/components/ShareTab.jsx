@@ -28,6 +28,13 @@ import { Separator } from "@/components/ui/separator";
 import { UserContext, UserDispatchContext } from "../context/UserContext"
 import { Visibility } from "../lib/constants.js";
 import { transferSessionToCurrentUrl } from "../lib/transferSharedSession.js";
+import { isDemoMode } from "../lib/demoCase.js";
+import {
+  createShareSession,
+  sameViewerStudy,
+  buildJoinLink,
+  ShareMode,
+} from "../lib/shareSession.js";
 
 const ShareSessionState = {
   AUTHENTICATION_ERROR: "authentication error",
@@ -37,10 +44,7 @@ const ShareSessionState = {
   LOADING: "loading",
 };
 
-const Mode = {
-  PRESENTATION: "PRESENTATION",
-  TEAM: "TEAM",
-};
+const Mode = ShareMode;
 function ShareTab() {
   const { data: viewboxData } = useContext(DataContext);
   const { dispatch } = useContext(DataDispatchContext);
@@ -53,6 +57,8 @@ function ShareTab() {
   const [presentationModeSwitch, setPresentationModeSwitch] = useState(false);
 
   const queryParams = new URLSearchParams(window.location.search);
+  const demoMode = isDemoMode(queryParams.toString());
+  const canCreateSession = !!userData && (!userData.is_anonymous || demoMode);
 
   const [shareSessionState, setShareSessionState] = useState(
     ShareSessionState.LOADING
@@ -75,31 +81,28 @@ function ShareTab() {
 
         if (data.length == 0) {
           setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
-        } else if (data[0].url_params == queryParams.toString()) {
+        } else if (sameViewerStudy(data[0].url_params, queryParams.toString())) {
           setVisibility(data[0].visibility);
           setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
-          const newQueryParams = new URLSearchParams("");
-          newQueryParams.set("s", data[0].session_id);
-          setShareLink(
-            `${window.location.origin + window.location.pathname
-            }?${newQueryParams.toString()}`
-          );
-          setQRCodeValue(
-            `${window.location.origin + window.location.pathname
-            }?${newQueryParams.toString()}`
-          );
+          const shareLink = buildJoinLink(data[0].session_id);
+          setShareLink(shareLink);
+          setQRCodeValue(shareLink);
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
       } catch (error) {
         console.log(error)
+        if (demoMode) {
+          setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+          return;
+        }
         userDispatch({ type: "auth_update", payload: { session: null } });
       }
     };
 
-    if (userData && !userData.is_anonymous) checkWhetherUserIsSharing();
+    if (canCreateSession) checkWhetherUserIsSharing();
   }, [userData]);
 
   async function stopSharedSession() {
@@ -119,7 +122,7 @@ function ShareTab() {
   }
 
   async function transferSharedSession() {
-    if (!userData || userData.is_anonymous) {
+    if (!canCreateSession) {
       toast.error('Please sign in to create a shared session.');
       return;
     }
@@ -137,48 +140,28 @@ function ShareTab() {
   }
 
   async function generateSharedSession() {
-    if (!userData || userData.is_anonymous) {
+    if (!canCreateSession) {
       toast.error('Please sign in to create a shared session.');
       return;
     }
     try {
-      const { _, delete_error } = await supabaseClient
-        .from("viewbox")
-        .delete()
-        .eq("user", userData.id);
+      const data = await createShareSession({
+        supabaseClient,
+        userId: userData.id,
+        visibility,
+        mode: presentationModeSwitch ? Mode.PRESENTATION : Mode.TEAM,
+        chatHistory: viewboxData.chatHistory || [],
+      });
 
-      if (delete_error) throw delete_error;
-
-      console.log("---- DEBUG GENERATE SHARED SESSION ----");
-      console.log("viewboxData.chatHistory BEFORE upsert:", viewboxData.chatHistory);
-      console.log("---------------------------------------");
-
-      const { data, insert_error } = await supabaseClient
-        .from("viewbox")
-        .upsert([
-          {
-            user: userData.id,
-            url_params: queryParams.toString(),
-            visibility: visibility,
-            mode: presentationModeSwitch ? Mode.PRESENTATION : Mode.TEAM,
-            chat_history: viewboxData.chatHistory || [],
-          },
-        ])
-        .select();
-      if (insert_error) throw insert_error;
-
-      // once a shared session is created, need to now create a room
       dispatch({
         type: "connect_to_sharing_session",
         payload: {
-          sessionId: data[0].session_id,
-          mode: data[0].mode,
+          sessionId: data.session_id,
+          mode: data.mode,
           owner: userData.id,
         },
       });
-      const newQueryParams = new URLSearchParams();
-      newQueryParams.set("s", data[0].session_id);
-      const shareLink = `${window.location.origin + window.location.pathname}?${newQueryParams.toString()}`;
+      const shareLink = buildJoinLink(data.session_id);
       setShareLink(shareLink);
       setQRCodeValue(shareLink);
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
@@ -363,8 +346,7 @@ function ShareTab() {
 
 
 
-  // Anonymous users cannot create sessions
-  if (!userData || userData.is_anonymous) {
+  if (!canCreateSession) {
     return (
       <Card>
         <CardHeader>
