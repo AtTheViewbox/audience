@@ -77,13 +77,14 @@ function MainPage() {
             {import.meta.env.BUILD_ENV !== 'main' && showMedGemma ? <MedGemmaButton /> : null}
             <OwnerResultsOverlay />
             <QuestionAnswerOverlay />
+            {demoMode ? <DemoOnboardingOverlay /> : null}
           </div>
         </div>
         <CompareNormal />
         <AnswerKeyBoxLoader />
         <AnnotationPanel />
         <HeatmapOverlay />
-        {demoMode ? <DemoOnboardingOverlay /> : <OnboardingOverlay page="viewer" />}
+        {demoMode ? null : <OnboardingOverlay page="viewer" />}
         <Toaster position="top-right" />
       </>
   )

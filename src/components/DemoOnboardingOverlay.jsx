@@ -1,4 +1,5 @@
 import { useState, useContext, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   ChevronRight,
@@ -12,9 +13,7 @@ import {
   PlayCircle,
   ArrowDownLeft,
   ArrowUpRight,
-  ArrowUpLeft,
   Smartphone,
-  Keyboard,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
@@ -37,21 +36,50 @@ function StepDots({ count, current }) {
   );
 }
 
-function ArrowIndicator({ direction }) {
+function useIsPhone() {
+  const [phone, setPhone] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      ) || window.innerWidth < 768
+    );
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => {
+      setPhone(
+        mq.matches ||
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent
+          )
+      );
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  return phone;
+}
+
+function ArrowIndicator({ direction, phone }) {
   if (!direction) return null;
 
-  const positionStyle = {
-    "bottom-left": { bottom: "56px", left: "56px" },
-    "top-right": { top: "80px", right: "180px" },
-    "top-left": { top: "80px", left: "180px" },
-    "show-answer": { top: "188px", left: "236px" },
-  };
+  const positionStyle = phone
+    ? {
+        "bottom-left": { bottom: "48px", left: "44px" },
+        "top-right": { top: "48px", right: "44px" },
+      }
+    : {
+        "bottom-left": { bottom: "56px", left: "56px" },
+        "top-right": { top: "80px", right: "180px" },
+      };
 
   const arrowIcon = {
     "bottom-left": <ArrowDownLeft className="h-7 w-7" />,
     "top-right": <ArrowUpRight className="h-7 w-7" />,
-    "top-left": <ArrowUpLeft className="h-7 w-7" />,
-    "show-answer": <ArrowUpLeft className="h-7 w-7" />,
   };
 
   return (
@@ -172,22 +200,15 @@ const STEPS = [
     icon: <Radio className="h-6 w-6" />,
     title: "Share your viewport live",
     description:
-      "On your phone, tap the white button to broadcast — it turns red while sharing. Long-hold the image to display the pointer.",
+      "On your phone, tap the white button to broadcast — it turns red while sharing. Look at the presenter screen: it mirrors your scroll, window, and pointer. Long-hold the image to display the pointer.",
     arrow: "bottom-left",
-  },
-  {
-    id: "answer",
-    icon: <Keyboard className="h-6 w-6" />,
-    title: "Reveal the answer",
-    description:
-      "Press Space, or click Show Answer, to display the distribution of answers.",
-    arrow: "show-answer",
   },
 ];
 
 export default function DemoOnboardingOverlay() {
   const { sessionId } = useContext(DataContext).data;
   const joining = isSessionJoin();
+  const phone = useIsPhone();
   const steps = joining ? STEPS.filter((s) => s.id !== "join") : STEPS;
   const [visible, setVisible] = useState(() => isDemoMode());
   const [step, setStep] = useState(0);
@@ -217,21 +238,25 @@ export default function DemoOnboardingOverlay() {
 
   return (
     <>
-      {!visible && (
-        <button
+      <button
           type="button"
-          onClick={reopen}
-          className="fixed bottom-4 right-4 z-[90] flex items-center gap-2 rounded-full border border-blue-400/40 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-blue-200 shadow-lg backdrop-blur-md hover:bg-slate-900"
+          onClick={() => (visible ? dismiss() : reopen())}
+          title="Demo guide"
+          className={`shrink-0 flex h-10 items-center gap-1.5 rounded-[10px] border px-2.5 text-xs font-semibold transition-colors ${
+            visible
+              ? "bg-blue-600/20 border-blue-500/60 text-blue-300"
+              : "bg-slate-950 border-blue-400/40 text-blue-200 hover:bg-slate-900"
+          }`}
         >
           <PlayCircle className="h-4 w-4" />
           Demo guide
         </button>
-      )}
 
-      {visible && (
+      {visible &&
+        createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60" onClick={dismiss} />
-          <ArrowIndicator direction={current?.arrow} />
+          <ArrowIndicator direction={current?.arrow} phone={phone} />
 
           <div className="relative z-10 w-[400px] max-w-[90vw] bg-slate-950/90 border border-white/10 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-6 backdrop-blur-xl">
             <button
@@ -312,8 +337,9 @@ export default function DemoOnboardingOverlay() {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </>
   );
 }
