@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { DataContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked, applyQuestionCaseFilter } from "../lib/answerKeyCase.js";
+import { isDemoMode, isDemoPresenter, getDemoQuestions } from "../lib/demoCase.js";
+import { fetchDemoStats } from "../lib/demoVisits.js";
 import { isMcqQuestion, normalizeMcqOptions } from "../lib/questionTypes.js";
 import { computeMcqLeaderboard } from "../lib/leaderboard.js";
 import { getLeaderboardEnabled, PREF_EVENT } from "../lib/userPreferences.js";
@@ -33,6 +35,7 @@ function OwnerResultsOverlay() {
   const [open, setOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [prefTick, setPrefTick] = useState(0);
+  const [demoStats, setDemoStats] = useState({ visitors: 0, answers: 0 });
 
   useEffect(() => {
     const onPrefs = () => setPrefTick((t) => t + 1);
@@ -47,14 +50,41 @@ function OwnerResultsOverlay() {
   void prefTick;
   const showLeaderboard = getLeaderboardEnabled(userData);
 
-  const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
+  const isSessionOwner =
+    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
   const caseLink = { studyId, dicomSeriesId, caseUrlKey };
   const linked = isCaseLinked(caseLink);
   const authorId = userData?.id;
   const revealed = heatmapVisible;
 
+  useEffect(() => {
+    if (!isDemoPresenter() || !supabaseClient || !sessionId) return;
+    let cancelled = false;
+    const load = () => {
+      fetchDemoStats(supabaseClient, sessionId)
+        .then((stats) => {
+          if (!cancelled) setDemoStats(stats);
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [supabaseClient, sessionId, submittedQuestionAnswers]);
+
   const fetchQuestions = useCallback(async () => {
-    if (!supabaseClient || !linked || !authorId || !isSessionOwner) {
+    if (!isSessionOwner) {
+      setQuestions([]);
+      return;
+    }
+    if (isDemoMode()) {
+      setQuestions(getDemoQuestions());
+      return;
+    }
+    if (!supabaseClient || !linked || !authorId) {
       setQuestions([]);
       return;
     }
@@ -162,7 +192,9 @@ function OwnerResultsOverlay() {
                 </span>
               </span>
               <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                {responderLabel}
+                {isDemoPresenter()
+                  ? `${demoStats.visitors} visitor${demoStats.visitors !== 1 ? "s" : ""} · ${responders.length} answered`
+                  : responderLabel}
                 {!revealed && (
                   <span className="text-slate-500"> · Press Space to reveal</span>
                 )}

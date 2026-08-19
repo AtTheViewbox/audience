@@ -1,7 +1,13 @@
 import { isCaseLinked, applyQuestionCaseFilter } from "./answerKeyCase.js";
+import { isDemoMode, getDemoQuestions } from "./demoCase.js";
 
 /** Load host answer-key content visible to participants in a share session. */
 export async function fetchHostAnswerContent(supabaseClient, caseLink, authorId) {
+  if (isDemoMode()) {
+    const questions = getDemoQuestions();
+    return { questions, hasBoxAnswers: true, hasContent: true };
+  }
+
   if (!supabaseClient || !authorId || !isCaseLinked(caseLink)) {
     return { questions: [], hasBoxAnswers: false, hasContent: false };
   }

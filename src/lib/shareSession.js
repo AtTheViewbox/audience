@@ -1,6 +1,6 @@
 import { Visibility } from "./constants.js";
 import { normalizeUrlParams } from "./answerKeyCase.js";
-import { isDemoMode, DEMO_QUERY_PARAM } from "./demoCase.js";
+import { isDemoMode, DEMO_QUERY_PARAM, DEMO_SESSION_ID, DEMO_CASE_SEARCH } from "./demoCase.js";
 
 export const ShareMode = {
   PRESENTATION: "PRESENTATION",
@@ -56,4 +56,33 @@ export async function createShareSession({
   if (error) throw error;
   if (!data?.[0]) throw new Error("createShareSession: no row returned");
   return data[0];
+}
+
+/**
+ * Join the canonical public demo session so answers and visitor counts persist.
+ * Falls back to any public session on the demo case, then creates one.
+ */
+export async function resolvePersistentDemoSession(supabaseClient, userId) {
+  const { data: pinned, error: pinnedError } = await supabaseClient
+    .from("viewbox")
+    .select("user, url_params, session_id, mode, chat_history")
+    .eq("session_id", DEMO_SESSION_ID)
+    .limit(1);
+  if (!pinnedError && pinned?.[0]) return pinned[0];
+
+  const { data: publics } = await supabaseClient
+    .from("viewbox")
+    .select("user, url_params, session_id, mode, chat_history")
+    .eq("visibility", Visibility.PUBLIC);
+
+  const match = (publics || []).find((row) =>
+    sameViewerStudy(row.url_params, DEMO_CASE_SEARCH)
+  );
+  if (match) return match;
+
+  return createShareSession({
+    supabaseClient,
+    userId,
+    chatHistory: [],
+  });
 }

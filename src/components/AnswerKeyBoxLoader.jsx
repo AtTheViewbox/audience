@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked } from "../lib/answerKeyCase.js";
+import { isDemoMode, getDemoBoxRows } from "../lib/demoCase.js";
 import {
   fetchBoxAnnotationRows,
   flattenBoxRows,
@@ -10,6 +11,14 @@ import {
   viewportsHaveStacks,
   setPersistedBoxAnnotationsVisible,
 } from "../lib/answerKeyBoxes.js";
+
+function mergeBoxRows(fetched, extras) {
+  const byId = new Map();
+  for (const row of [...(fetched || []), ...(extras || [])]) {
+    if (row?.id) byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
 
 /** Load persisted answer-key boxes from Supabase and restore them on the correct viewport/slice. */
 function AnswerKeyBoxLoader() {
@@ -30,12 +39,13 @@ function AnswerKeyBoxLoader() {
   const linked = isCaseLinked(caseLink);
   const loadKeyRef = useRef(null);
 
-  useEffect(() => {
-    if (!linked || !supabaseClient || !userData?.id || !renderingEngine || isRequestLoading) {
-      return;
-    }
+  const demoMode = isDemoMode();
 
-    const loadKey = [studyId, dicomSeriesId, caseUrlKey, ld?.r, ld?.c].join("|");
+  useEffect(() => {
+    if (!renderingEngine || isRequestLoading) return;
+    if (!demoMode && (!linked || !supabaseClient || !userData?.id)) return;
+
+    const loadKey = [studyId, dicomSeriesId, caseUrlKey, ld?.r, ld?.c, demoMode].join("|");
     if (loadKeyRef.current !== loadKey) {
       loadKeyRef.current = null;
     }
@@ -44,7 +54,10 @@ function AnswerKeyBoxLoader() {
     let timer = null;
 
     const syncFromTable = async () => {
-      const rows = await fetchBoxAnnotationRows(supabaseClient, caseLink, userData.id);
+      const fetched = userData?.id && supabaseClient
+        ? await fetchBoxAnnotationRows(supabaseClient, caseLink, userData.id)
+        : [];
+      const rows = mergeBoxRows(fetched, demoMode ? getDemoBoxRows() : []);
       if (cancelled) return false;
 
       dispatch({ type: "set_persisted_answer_boxes", payload: flattenBoxRows(rows) });
@@ -94,6 +107,7 @@ function AnswerKeyBoxLoader() {
     heatmapVisible,
     userData?.id,
     supabaseClient,
+    demoMode,
     dispatch,
   ]);
 

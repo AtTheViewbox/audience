@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { fetchHostAnswerContent } from "../lib/fetchHostAnswerContent.js";
+import { isDemoPresenter } from "../lib/demoCase.js";
 import QuestionAnswerPanel from "./QuestionAnswerPanel.jsx";
 
 const PANEL_SHELL =
@@ -30,7 +31,8 @@ function ParticipantAnswerOverlay() {
   const [questions, setQuestions] = useState([]);
   const [hasContent, setHasContent] = useState(false);
 
-  const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
+  const isSessionOwner =
+    (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
   const isParticipant = sessionId && !isSessionOwner;
   // Prefer the author-broadcast case identifiers: participants often can't
   // resolve the case locally (RLS on studies, or a stale URL after a transfer).

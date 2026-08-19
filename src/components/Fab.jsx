@@ -4,6 +4,7 @@ import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { LocateFixed, LocateOff, LogIn } from "lucide-react";
 import { UserContext } from "../context/UserContext"
+import { isDemoPresenter } from "../lib/demoCase.js";
 
 import DialogPage from "./DialogPage.jsx";
 import {
@@ -19,7 +20,11 @@ function Fab() {
   const { userData } = useContext(UserContext).data;
   const { dispatch } = useContext(DataDispatchContext);
 
-  const isParticipant = !!sessionId && !!userData && sessionMeta?.owner !== userData.id;
+  const isParticipant =
+    !!sessionId &&
+    !!userData &&
+    sessionMeta?.owner !== userData.id &&
+    !isDemoPresenter();
 
   const openDialog = () => setDialogIsOpen(true);
   const toggleSharing = () => {

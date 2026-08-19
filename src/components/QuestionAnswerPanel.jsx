@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked, applyQuestionCaseFilter, caseKeyFromLink } from "../lib/answerKeyCase.js";
+import { isDemoMode, getDemoQuestions, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { isMcqQuestion, normalizeMcqOptions, QUESTION_TYPES } from "../lib/questionTypes.js";
 import {
   participantHasSubmitted,
@@ -190,10 +191,17 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
   const hasSessionCaseLink =
     sessionCaseLink &&
     (sessionCaseLink.studyId || sessionCaseLink.dicomSeriesId || sessionCaseLink.caseUrlKey);
-  const submissionCaseKey = caseKeyFromLink(hasSessionCaseLink ? sessionCaseLink : caseLink);
+  const submissionCaseKey = isDemoMode()
+    ? DEMO_SUBMISSION_CASE_KEY
+    : caseKeyFromLink(hasSessionCaseLink ? sessionCaseLink : caseLink);
 
   const fetchQuestions = useCallback(async () => {
-    if (questionsProp?.length || !supabaseClient || !isCaseLinked(caseLink) || !authorId) return;
+    if (questionsProp?.length) return;
+    if (isDemoMode()) {
+      setLoadedQuestions(getDemoQuestions());
+      return;
+    }
+    if (!supabaseClient || !isCaseLinked(caseLink) || !authorId) return;
     setLoading(true);
     try {
       let query = supabaseClient

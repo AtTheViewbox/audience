@@ -4,6 +4,7 @@ import { DotFilledIcon } from "@radix-ui/react-icons";
 import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
 import { UserContext } from '../context/UserContext.jsx';
+import { isDemoPresenter } from "../lib/demoCase.js";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,7 +32,8 @@ function Tools() {
     } = useContext(DataContext).data;
     const { userData } = useContext(UserContext).data;
 
-    const isSessionOwner = sessionId && userData && sessionMeta?.owner === userData.id;
+    const isSessionOwner =
+        (sessionId && userData && sessionMeta?.owner === userData.id) || isDemoPresenter();
 
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)

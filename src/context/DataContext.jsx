@@ -18,8 +18,9 @@ import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseK
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
-import { isDemoMode } from "../lib/demoCase.js";
-import { createShareSession, sameViewerStudy } from "../lib/shareSession.js";
+import { sameViewerStudy, resolvePersistentDemoSession } from "../lib/shareSession.js";
+import { isDemoMode, isDemoPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
+import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
 
 export const DataContext = createContext({});
@@ -120,7 +121,8 @@ export const DataProvider = ({ children }) => {
     const lastSendVOIRef = useRef(0);
     const cameraDebounceTimeoutRef = useRef(null);
     useEffect(() => {
-        isSessionOwnerRef.current = !!userData?.id && data.sessionMeta?.owner === userData.id;
+        isSessionOwnerRef.current =
+            (!!userData?.id && data.sessionMeta?.owner === userData.id) || isDemoPresenter();
     }, [userData?.id, data.sessionMeta?.owner]);
 
     // The author's resolved case identifiers, broadcast to participants. RLS
@@ -157,7 +159,7 @@ export const DataProvider = ({ children }) => {
     useEffect(() => {
         if (!data.shareController) return;
         const iAmOwner = !!userData?.id && data.sessionMeta?.owner === userData.id;
-        if (!iAmOwner) return;
+        if (!iAmOwner && !isDemoPresenter()) return;
         const cl = caseLinkRef.current;
         if (!cl.studyId && !cl.dicomSeriesId && !cl.caseUrlKey) return;
         data.shareController.send({ type: 'broadcast', event: 'case-link', payload: cl });
@@ -172,7 +174,9 @@ export const DataProvider = ({ children }) => {
     )
         ? data.sessionCaseLink
         : { studyId: data.studyId, dicomSeriesId: data.dicomSeriesId, caseUrlKey: data.caseUrlKey };
-    const effectiveCaseKey = caseKeyFromLink(effectiveCaseLink);
+    const effectiveCaseKey = isDemoMode()
+        ? DEMO_SUBMISSION_CASE_KEY
+        : caseKeyFromLink(effectiveCaseLink);
     useEffect(() => {
         if (!data.sessionId || !supabaseClient || !effectiveCaseKey) return;
         let cancelled = false;
@@ -185,6 +189,14 @@ export const DataProvider = ({ children }) => {
             .catch((e) => console.error("Failed to load session submissions:", e));
         return () => { cancelled = true; };
     }, [data.sessionId, supabaseClient, effectiveCaseKey]);
+
+    useEffect(() => {
+        if (!isDemoPresenter() || !data.sessionId || !supabaseClient || !userData?.id) return;
+        recordDemoVisit(supabaseClient, {
+            userId: userData.id,
+            sessionId: data.sessionId,
+        }).catch((e) => console.error("Failed to record demo visit:", e));
+    }, [data.sessionId, supabaseClient, userData?.id]);
 
     useEffect(() => {
 
@@ -405,35 +417,17 @@ export const DataProvider = ({ children }) => {
                 }
             }
 
-            // Demo launch: this visitor is the host. Create (or reuse) a session
-            // so the QR in the demo overlay is immediately joinable.
+            // Demo launch: join the shared persistent session so answers and
+            // visitor counts accumulate. Homepage (no s=) still gets host UI.
             const joiningViaLink = !!queryParams.get("s");
             if (!joiningViaLink && isDemoMode(queryParams.toString()) && userData) {
                 try {
-                    const { data: existingDemo } = await cl
-                        .from("viewbox")
-                        .select("user, url_params, session_id, mode, chat_history")
-                        .eq("user", userData.id);
-
-                    if (
-                        existingDemo?.length &&
-                        sameViewerStudy(existingDemo[0].url_params, queryParams.toString())
-                    ) {
-                        initialData.s = existingDemo[0].session_id;
-                        initialData.sessionMeta.mode = existingDemo[0].mode;
-                        initialData.sessionMeta.owner = userData.id;
-                    } else {
-                        const row = await createShareSession({
-                            supabaseClient: cl,
-                            userId: userData.id,
-                            chatHistory: [],
-                        });
-                        initialData.s = row.session_id;
-                        initialData.sessionMeta.mode = row.mode;
-                        initialData.sessionMeta.owner = userData.id;
-                    }
+                    const row = await resolvePersistentDemoSession(cl, userData.id);
+                    initialData.s = row.session_id;
+                    initialData.sessionMeta.mode = row.mode;
+                    initialData.sessionMeta.owner = row.user;
                 } catch (demoErr) {
-                    console.error("Demo session create failed:", demoErr);
+                    console.error("Demo session join failed:", demoErr);
                 }
             }
         }

@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { DataContext } from "../context/DataContext.jsx";
 import { buildJoinLink } from "../lib/shareSession.js";
 import { isDemoMode, isSessionJoin } from "../lib/demoCase.js";
+import { fetchDemoStats } from "../lib/demoVisits.js";
+import { UserContext } from "../context/UserContext.jsx";
 
 function StepDots({ count, current }) {
   return (
@@ -95,6 +97,8 @@ function ArrowIndicator({ direction, phone }) {
 function JoinQrStep({ sessionId }) {
   const [copied, setCopied] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [stats, setStats] = useState(null);
+  const { supabaseClient } = useContext(UserContext).data;
   const joinLink = buildJoinLink(sessionId);
 
   useEffect(() => {
@@ -102,6 +106,19 @@ function JoinQrStep({ sessionId }) {
     const t = window.setTimeout(() => setTimedOut(true), 8000);
     return () => window.clearTimeout(t);
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!supabaseClient || !sessionId) return;
+    let cancelled = false;
+    fetchDemoStats(supabaseClient, sessionId)
+      .then((next) => {
+        if (!cancelled) setStats(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseClient, sessionId]);
 
   const copyLink = async () => {
     if (!joinLink) return;
@@ -148,6 +165,12 @@ function JoinQrStep({ sessionId }) {
         Open the camera on your phone and scan this QR to join from your device.
         You will stay host on this screen; your phone joins as a participant.
       </p>
+      {stats && (
+        <p className="text-[11px] text-white/50">
+          {stats.visitors} {stats.visitors === 1 ? "person has" : "people have"} tried this demo
+          {stats.answers > 0 ? ` · ${stats.answers} answered` : ""}
+        </p>
+      )}
       <Button
         size="sm"
         variant="ghost"
