@@ -1,37 +1,7 @@
 import * as dcmjs from "dcmjs";
+import { anonymizeDicomFile, createAnonymizerSession } from "./dicomAnonymizer.js";
 
-export async function anonymizeDicomFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const arrayBuffer = e.target.result;
-        const dicomData = dcmjs.data.DicomMessage.readFile(arrayBuffer);
-        const dataset = dicomData.dict;
-
-        delete dataset["00100010"];
-        delete dataset["00100020"];
-        delete dataset["00100030"];
-        delete dataset["00100040"];
-        delete dataset["00101010"];
-        delete dataset["00101020"];
-        delete dataset["00101030"];
-        delete dataset["00102160"];
-        delete dataset["001021B0"];
-        delete dataset["00104000"];
-
-        const outputBuffer = dicomData.write();
-        const blob = new Blob([outputBuffer], { type: "application/dicom" });
-        resolve(new File([blob], file.name, { type: file.type || "application/dicom" }));
-      } catch (error) {
-        console.error("Error anonymizing DICOM:", error);
-        resolve(file);
-      }
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsArrayBuffer(file);
-  });
-}
+export { anonymizeDicomFile, createAnonymizerSession };
 
 export async function extractDicomWindowSettings(file) {
   let windowWidth = 1400;
@@ -163,9 +133,10 @@ export function revokeDraftBlobUrls(draft) {
 }
 
 export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
+  const session = createAnonymizerSession();
   const anonymizedFiles = [];
   for (let i = 0; i < files.length; i++) {
-    anonymizedFiles.push(await anonymizeDicomFile(files[i]));
+    anonymizedFiles.push(await anonymizeDicomFile(files[i], session, `${i}.dcm`));
     onProgress?.(Math.round(((i + 1) / files.length) * 100));
   }
 

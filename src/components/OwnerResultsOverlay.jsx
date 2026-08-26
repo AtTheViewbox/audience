@@ -198,7 +198,7 @@ function OwnerResultsOverlay() {
               </span>
               <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                 {isDemoPresenter()
-                  ? `${demoStats.visitors} visitor${demoStats.visitors !== 1 ? "s" : ""} · ${responders.length} answered`
+                  ? `${demoStats.visitors} visitor${demoStats.visitors !== 1 ? "s" : ""} \u00b7 ${Math.max(demoStats.answers, responders.length)} answered`
                   : responderLabel}
                 {!revealed && (
                   <span className="text-slate-500"> · Press Space to reveal</span>

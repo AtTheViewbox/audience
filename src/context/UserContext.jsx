@@ -1,64 +1,115 @@
-import { createContext, useState,useReducer,useEffect } from 'react';
+import { createContext, useState, useReducer, useEffect, useCallback } from 'react';
 import LoadingPage from '../components/LoadingPage.jsx';
+import NetworkBlockedNotice from '../components/NetworkBlockedNotice.jsx';
 import { cl } from './SupabaseClient.jsx';
 import { generateRandomName } from '../lib/constants.js';
 import { toast } from "sonner";
+import {
+  probeSupabase,
+  shouldSimulateSupabaseError,
+} from '../lib/supabaseConnectivity.js';
 
 
 // Create the context
-export const UserContext = createContext({});    
+export const UserContext = createContext({});
 export const UserDispatchContext = createContext({});
 
 // Create a provider component
 export const UserProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(null);
+  const [retrying, setRetrying] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [data, userDispatch] = useReducer(dataReducer, []);
 
 
   useEffect(() => {
-   
-    const setupSupabase = async () => {
+    let cancelled = false;
 
-        // if there is a user logged in, store that as user
-        let { data: { user }, error } = await cl.auth.getUser();
-        if (!user) {
-            // otherwise, use anonymous login
-            ({ data: { user }, error } = await cl.auth.signInAnonymously());
+    const setupSupabase = async () => {
+        setLoading(true);
+        setNetworkError(null);
+
+        if (shouldSimulateSupabaseError()) {
+            const simulated = new Error("Simulated Supabase error (?supabase_error=1)");
+            setNetworkError(simulated);
+            setLoading(false);
+            setRetrying(false);
+            return;
         }
 
-          let decoratedUser = null;
-          if (user) {
-             if (user.is_anonymous) {
-                 const randomName = generateRandomName();
-                 decoratedUser = { ...user, email: randomName };
-                 toast(`You are playing as guest: ${randomName}`);
-             } else {
-                 decoratedUser = user;
-             }
-          }
-        // TODO: error handling for auth
-        const ss = cl.auth.onAuthStateChange(
-            (event, session) => {
-                    if (event === 'SIGNED_IN') {
-                        userDispatch({type: 'auth_update', payload: {session}})
-                  } else if (event === 'SIGNED_OUT') {
-                    userDispatch({type: 'log_out', payload: {session}})
-                  }
-            }
-        )
+        const probe = await probeSupabase();
+        if (cancelled) return;
+        if (!probe.ok) {
+            setNetworkError(probe.error);
+            setLoading(false);
+            setRetrying(false);
+            return;
+        }
 
-        userDispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: decoratedUser}})
-        setLoading(false);
+        try {
+            // if there is a user logged in, store that as user
+            let { data: { user }, error } = await cl.auth.getUser();
+            if (error) throw error;
+            if (!user) {
+                // otherwise, use anonymous login
+                ({ data: { user }, error } = await cl.auth.signInAnonymously());
+                if (error) throw error;
+            }
+
+            if (cancelled) return;
+
+            let decoratedUser = null;
+            if (user) {
+               if (user.is_anonymous) {
+                   const randomName = generateRandomName();
+                   decoratedUser = { ...user, email: randomName };
+                   toast(`You are playing as guest: ${randomName}`);
+               } else {
+                   decoratedUser = user;
+               }
+            }
+            const ss = cl.auth.onAuthStateChange(
+                (event, session) => {
+                        if (event === 'SIGNED_IN') {
+                            userDispatch({type: 'auth_update', payload: {session}})
+                      } else if (event === 'SIGNED_OUT') {
+                        userDispatch({type: 'log_out', payload: {session}})
+                      }
+                }
+            )
+
+            userDispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: decoratedUser}})
+            setLoading(false);
+            setRetrying(false);
+        } catch (error) {
+            if (cancelled) return;
+            console.error("Supabase setup failed:", error);
+            setNetworkError(error);
+            setLoading(false);
+            setRetrying(false);
+        }
     }
     setupSupabase()
     return () => {
-        userDispatch({ type: 'clean_up_supabase' })    
+        cancelled = true;
+        userDispatch({ type: 'clean_up_supabase' })
     }
 
-}, []);
+}, [attempt]);
 
+  const retry = useCallback(() => {
+    setRetrying(true);
+    setNetworkError(null);
+    setLoading(true);
+    setAttempt((n) => n + 1);
+  }, []);
 
-if (loading) return <LoadingPage />;
+  if (networkError) {
+    return <NetworkBlockedNotice error={networkError} onRetry={retry} retrying={retrying} />;
+  }
+
+  if (loading) return <LoadingPage />;
 
   return (
     <UserContext.Provider value={{ data }}>
@@ -70,9 +121,9 @@ if (loading) return <LoadingPage />;
 };
 
 export function dataReducer(data, action) {
-   
+
     let new_data = {...data};
-   
+
     switch (action.type) {
 
         case 'supabase_initialized':
@@ -80,8 +131,8 @@ export function dataReducer(data, action) {
             break;
         case 'clean_up_supabase':
             new_data = {...data}
-            data.supabaseAuthSubscription.data.subscription.unsubscribe();
-            data.supabaseClient.removeAllChannels();
+            data?.supabaseAuthSubscription?.data?.subscription?.unsubscribe?.();
+            data?.supabaseClient?.removeAllChannels?.();
             break;
         case 'auth_update':
             new_data = { ...data, userData: action.payload.session.user };

@@ -1122,6 +1122,7 @@ export function dataReducer(data, action) {
                 owner: action.payload.owner ?? data.sessionMeta?.owner,
                 mode: action.payload.mode ?? data.sessionMeta?.mode
             }
+            var sessionChanged = data.sessionId !== sessionId;
             new_data = {
                 ...data,
                 sessionId: sessionId,
@@ -1130,9 +1131,12 @@ export function dataReducer(data, action) {
                 toolSelected: 'scroll',
                 answerKeyAuthoring: false,
                 heatmapVisible: false,
-                submittedQuestionAnswers: {},
                 participantAnswerContentAvailable: false,
             };
+            if (sessionChanged) {
+                new_data.submittedQuestionAnswers = {};
+                new_data.submittedAnnotations = {};
+            }
             break;
         case 'update_chat_history':
             new_data = { ...data, chatHistory: action.payload };

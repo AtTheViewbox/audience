@@ -78,7 +78,7 @@ export function UploaderComp({ onLocalSeriesReady }) {
         <DialogHeader>
           <DialogTitle className="text-slate-100">Upload DICOM Files</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Select a folder of DICOM files to load locally in the Builder. Files are anonymized on your device. Cloud upload happens when you save the case.
+            Select a folder of DICOM files to load locally in the Builder. Files are de-identified on this device (identifiers, UIDs, dates, private tags). Cloud upload happens when you save the case.
           </DialogDescription>
         </DialogHeader>
 
@@ -157,7 +157,7 @@ export function UploaderComp({ onLocalSeriesReady }) {
                     <div className="space-y-1">
                       <p className="text-xs font-semibold text-foreground">Privacy & Anonymization</p>
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        Files are anonymized locally before preview. Nothing is uploaded until you save the case in the Builder.
+                        De-identification runs in your browser before preview: patient identifiers are replaced, UIDs are remapped, dates are offset, and private tags are removed. Burned-in names on the pixels are not removed.
                       </p>
                     </div>
                   </div>
@@ -173,7 +173,7 @@ export function UploaderComp({ onLocalSeriesReady }) {
                       htmlFor="phi-verification"
                       className="text-xs font-medium text-slate-300 cursor-pointer leading-tight flex-1"
                     >
-                      I have reviewed these files and confirm they do not contain any additional Protected Health Information (PHI)
+                      I have reviewed these images and confirm they do not contain burned-in names or other PHI on the pixels
                     </Label>
                   </div>
                 </div>
