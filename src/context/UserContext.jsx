@@ -9,6 +9,13 @@ import {
   shouldSimulateSupabaseError,
 } from '../lib/supabaseConnectivity.js';
 
+function isMissingAuthSession(error) {
+  if (!error) return false;
+  const name = String(error.name || "");
+  const msg = String(error.message || error.error_description || "").toLowerCase();
+  return name === "AuthSessionMissingError" || msg.includes("auth session missing");
+}
+
 
 // Create the context
 export const UserContext = createContext({});
@@ -48,13 +55,17 @@ export const UserProvider = ({ children }) => {
         }
 
         try {
-            // if there is a user logged in, store that as user
-            let { data: { user }, error } = await cl.auth.getUser();
-            if (error) throw error;
+            const { data: { session } } = await cl.auth.getSession();
+            let user = session?.user ?? null;
+            if (user) {
+                const { data: { user: verified }, error } = await cl.auth.getUser();
+                if (error && !isMissingAuthSession(error)) throw error;
+                user = verified || user;
+            }
             if (!user) {
-                // otherwise, use anonymous login
-                ({ data: { user }, error } = await cl.auth.signInAnonymously());
+                const { data, error } = await cl.auth.signInAnonymously();
                 if (error) throw error;
+                user = data?.user ?? null;
             }
 
             if (cancelled) return;
