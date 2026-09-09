@@ -1143,11 +1143,19 @@ export function dataReducer(data, action) {
             break;
 
         case 'apply_share_change': {
-            const { user, ts, by } = action.payload;
+            const { user, ts, by, override } = action.payload;
             const prevTs = data.shareClock ?? 0;
             const prevBy = data.shareBy ?? "";
             const wins = ts > prevTs || (ts === prevTs && String(by) > String(prevBy));
             if (!wins) return data;
+
+            const isTakeover = user && data.sharingUser && user !== data.sharingUser;
+            const byIsOwner = Boolean(by && data.sessionMeta?.owner && by === data.sessionMeta.owner);
+            // Someone else is already broadcasting: only the session owner / presenter
+            // can steal. Everyone else must wait for a release.
+            if (isTakeover && !override && !byIsOwner) {
+                return data;
+            }
 
             const sharingUser = user ?? null;
             // update roster flags
@@ -1202,8 +1210,20 @@ export function dataReducer(data, action) {
         case 'toggle_sharing': {
             let { userData } = action.payload;
             if (data.shareController) {
+                const iAmPresenter = isPresenter({
+                    sessionId: data.sessionId,
+                    userId: userData?.id,
+                    ownerId: data.sessionMeta?.owner,
+                });
+                const current = data.sharingUser;
+                const iAmSharing = current === userData.id;
+                if (current && !iAmSharing && !iAmPresenter) {
+                    toast("Wait for the current user to release control");
+                    return data;
+                }
+
                 // If I'm not current owner, I'll take; else I'll release
-                const taking = data.sharingUser !== userData.id;
+                const taking = !iAmSharing;
                 if (!taking) {
                     // releasing — stop emitting interaction events immediately
                     data?.eventListenerManager?.reset();
@@ -1212,7 +1232,12 @@ export function dataReducer(data, action) {
                 data.shareController.send({
                     type: 'broadcast',
                     event: 'share-changed',
-                    payload: { user: taking ? userData.id : null, ts, by: userData.id },
+                    payload: {
+                        user: taking ? userData.id : null,
+                        ts,
+                        by: userData.id,
+                        override: iAmPresenter,
+                    },
                 });
             }
             break;
