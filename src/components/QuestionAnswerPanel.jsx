@@ -201,7 +201,9 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
       setLoadedQuestions(getDemoQuestions());
       return;
     }
-    if (!supabaseClient || !isCaseLinked(caseLink) || !authorId) return;
+    const link = hasSessionCaseLink ? sessionCaseLink : caseLink;
+    if (!supabaseClient || !isCaseLinked(link)) return;
+    if (!link.studyId && !authorId) return;
     setLoading(true);
     try {
       let query = supabaseClient
@@ -209,7 +211,7 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
         .select("*")
         .eq("kind", "question")
         .order("created_at", { ascending: true });
-      query = applyQuestionCaseFilter(query, { ...caseLink, authorId });
+      query = applyQuestionCaseFilter(query, { ...link, authorId });
       if (!query) return;
       const { data, error } = await query;
       if (error) throw error;
@@ -219,11 +221,11 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
     } finally {
       setLoading(false);
     }
-  }, [questionsProp?.length, supabaseClient, authorId, studyId, dicomSeriesId, caseUrlKey]);
+  }, [questionsProp?.length, supabaseClient, authorId, studyId, dicomSeriesId, caseUrlKey, hasSessionCaseLink, sessionCaseLink?.studyId, sessionCaseLink?.dicomSeriesId, sessionCaseLink?.caseUrlKey]);
 
   useEffect(() => {
-    if (sessionId && authorId) fetchQuestions();
-  }, [sessionId, authorId, fetchQuestions]);
+    if (sessionId && (authorId || studyId || sessionCaseLink?.studyId)) fetchQuestions();
+  }, [sessionId, authorId, studyId, sessionCaseLink?.studyId, fetchQuestions]);
 
   useEffect(() => {
     setDrafts((prev) => {

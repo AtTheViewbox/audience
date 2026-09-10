@@ -54,7 +54,7 @@ function DialogPage() {
 
   return (
     <>
-      <DialogHeader>
+      <DialogHeader className="shrink-0">
         <DialogTitle>{canShare ? "Share" : "Account"}</DialogTitle>
         <DialogDescription>
           {canShare
@@ -63,8 +63,12 @@ function DialogPage() {
         </DialogDescription>
       </DialogHeader>
 
-      <Tabs value={tabValue} onValueChange={setTabValue}>
-        <TabsList className={`grid w-full ${tabsClass}`}>
+      <Tabs
+        value={tabValue}
+        onValueChange={setTabValue}
+        className="min-h-0 flex-1 overflow-hidden flex flex-col"
+      >
+        <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>
           {canShare && <TabsTrigger value="sharing">Share</TabsTrigger>}
           {showLogin && <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>}
           {canAnnotate && <TabsTrigger value="annotate">Questions</TabsTrigger>}
@@ -72,24 +76,24 @@ function DialogPage() {
         </TabsList>
 
         {canShare && (
-          <TabsContent value="sharing">
+          <TabsContent value="sharing" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
             <ShareTab />
           </TabsContent>
         )}
 
         {showLogin && (
-          <TabsContent value="login" className="mt-4">
+          <TabsContent value="login" className="mt-4 min-h-0 overflow-y-auto overscroll-contain">
             <LoginDialog authMode={authMode} setAuthMode={setAuthMode} />
           </TabsContent>
         )}
 
         {canAnnotate && (
-          <TabsContent value="annotate">
+          <TabsContent value="annotate" className="mt-2 min-h-0 min-w-0 overflow-y-auto overscroll-contain">
             <AnnotationTab />
           </TabsContent>
         )}
 
-        <TabsContent value="setting">
+        <TabsContent value="setting" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
           <SettingTab />
         </TabsContent>
       </Tabs>

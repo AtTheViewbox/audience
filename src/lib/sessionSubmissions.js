@@ -73,3 +73,27 @@ export async function clearSessionSubmissions(supabaseClient, sessionId, caseKey
   const { error } = await query;
   if (error) throw error;
 }
+
+/** All persisted answers for a case, across share sessions. */
+export async function fetchCaseSubmissions(supabaseClient, caseKey) {
+  if (!supabaseClient || !caseKey) return [];
+  const { data, error } = await supabaseClient
+    .from(TABLE)
+    .select("id, session_id, user_id, user_name, answers, boxes, created_at, updated_at")
+    .eq("case_key", caseKey)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Case owner: wipe answer history for this case. */
+export async function clearCaseSubmissions(supabaseClient, caseKey) {
+  if (!supabaseClient || !caseKey) return [];
+  const { data, error } = await supabaseClient
+    .from(TABLE)
+    .delete()
+    .eq("case_key", caseKey)
+    .select("id");
+  if (error) throw error;
+  return data || [];
+}

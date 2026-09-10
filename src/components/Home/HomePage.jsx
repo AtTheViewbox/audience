@@ -1,5 +1,8 @@
 import { useState, useEffect, useContext } from "react"
-import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil } from "lucide-react"
+import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork } from "lucide-react"
+import { toast } from "sonner"
+import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
+import { duplicateCase } from "../../lib/cloneCase.js"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +46,7 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   const [copyClicked, setCopyClicked] = useState(false);
+  const [duplicating, setDuplicating] = useState(null);
   const minRightWidth = 240
   const maxRightWidth = 500
 
@@ -145,24 +149,9 @@ export default function HomePage() {
       console.log(error)
     }
   };
-  const getIframeURL = (url_params, preview = false) => {
+  const getIframeURL = (url_params, preview = false, studyId = null) => {
     const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
-
-    // Handle both full URLs and search params strings
-    let searchString = '';
-    try {
-      // Check if it's a full URL
-      if (url_params.startsWith('http')) {
-        const url = new URL(url_params);
-        searchString = url.search.substring(1); // Remove leading '?'
-      } else {
-        // It's already just search params
-        searchString = url_params;
-      }
-    } catch (e) {
-      // If parsing fails, assume it's search params
-      searchString = url_params;
-    }
+    const searchString = extractSearchString(url_params);
 
     let params = new URLSearchParams(searchString);
     const initialData = unflatten(Object.fromEntries(params));
@@ -183,10 +172,38 @@ export default function HomePage() {
       params = new URLSearchParams(updatedFlatData);
       params.set('preview', 'true');
     }
+    if (studyId) params.set(CASE_ID_PARAM, studyId);
     const newSearch = '?' + params.toString();
     const fullUrl = rootUrl + newSearch;
     return fullUrl;
   }
+
+  const handleDuplicate = async (mode) => {
+    if (!selectedSeries?.id || !userData?.id || duplicating) return;
+    setDuplicating(mode);
+    try {
+      const result = await duplicateCase(supabaseClient, {
+        userId: userData.id,
+        sourceStudy: selectedSeries,
+        sourceStudyId: selectedSeries.id,
+        urlParams: selectedSeries.url_params,
+        caseLink: { studyId: selectedSeries.id },
+        mode,
+      });
+      toast.success(
+        mode === "fork"
+          ? `Forked with ${result.copied} item${result.copied === 1 ? "" : "s"}`
+          : "Created a new case on the same images"
+      );
+      await getSeries();
+      window.open(result.href, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || "Failed to duplicate case");
+    } finally {
+      setDuplicating(null);
+    }
+  };
   const getSeries = async () => {
     try {
       let data, error;
@@ -415,7 +432,7 @@ export default function HomePage() {
                             <iframe
                               src={
                                 selectedSeries?.url_params
-                                  ? getIframeURL(selectedSeries?.url_params, true)
+                                  ? getIframeURL(selectedSeries?.url_params, true, selectedSeries.id)
                                   : ""
                               }
                               title={`${selectedSeries.name}`}
@@ -472,7 +489,7 @@ export default function HomePage() {
                               onClick={() => {
                                 window.open(
                                   selectedSeries?.url_params
-                                    ? getIframeURL(selectedSeries?.url_params)
+                                    ? getIframeURL(selectedSeries?.url_params, false, selectedSeries.id)
                                     : "",
                                   "_blank"
                                 );
@@ -481,11 +498,35 @@ export default function HomePage() {
                               Launch to New Tab
                             </Button>
                           </div>
+                          {userData?.id && !userData?.is_anonymous && selectedSeries?.url_params && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-slate-800 text-slate-200 hover:bg-slate-900"
+                                disabled={!!duplicating}
+                                onClick={() => handleDuplicate("images")}
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                {duplicating === "images" ? "Copying…" : "Images only"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-slate-800 text-slate-200 hover:bg-slate-900"
+                                disabled={!!duplicating}
+                                onClick={() => handleDuplicate("fork")}
+                              >
+                                <GitFork className="h-3.5 w-3.5 mr-1.5" />
+                                {duplicating === "fork" ? "Forking…" : "Fork questions"}
+                              </Button>
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             <Input
                               value={
                                 selectedSeries?.url_params
-                                  ? getIframeURL(selectedSeries?.url_params)
+                                  ? getIframeURL(selectedSeries?.url_params, false, selectedSeries.id)
                                   : "" ?? ""
                               }
                               readOnly
@@ -498,7 +539,7 @@ export default function HomePage() {
                               onClick={() => {
                                 navigator.clipboard.writeText(
                                   selectedSeries?.url_params
-                                    ? getIframeURL(selectedSeries?.url_params)
+                                    ? getIframeURL(selectedSeries?.url_params, false, selectedSeries.id)
                                     : ""
                                 );
                                 setCopyClicked(true);

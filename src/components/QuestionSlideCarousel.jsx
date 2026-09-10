@@ -60,7 +60,7 @@ const QuestionSlideCarousel = forwardRef(function QuestionSlideCarousel(
   const showNav = count > 1;
 
   return (
-    <div className={cn(compact ? "flex flex-col" : "flex flex-col min-h-0", className)}>
+    <div className={cn(compact ? "flex flex-col min-w-0" : "flex flex-col min-h-0 min-w-0", className)}>
       {showNav && (
         <div className="shrink-0 flex items-center justify-between gap-2 mb-2">
           <span className="text-[11px] tabular-nums text-slate-400">
@@ -93,7 +93,7 @@ const QuestionSlideCarousel = forwardRef(function QuestionSlideCarousel(
         ref={scrollRef}
         onScroll={syncIndexFromScroll}
         className={cn(
-          compact ? "flex overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" : "flex-1 min-h-0 flex overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+          compact ? "flex w-full min-w-0 overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" : "flex-1 min-h-0 min-w-0 flex overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
           !showNav && !compact && "overflow-y-auto overscroll-contain"
         )}
       >
@@ -101,8 +101,8 @@ const QuestionSlideCarousel = forwardRef(function QuestionSlideCarousel(
           <div
             key={i}
             className={cn(
-              "min-h-0 overflow-y-auto overscroll-contain",
-              showNav ? "w-full shrink-0 snap-start snap-always pr-0.5" : "w-full"
+              "min-h-0 min-w-0 overflow-y-auto overscroll-contain break-words [overflow-wrap:anywhere]",
+              showNav ? "min-w-full w-full shrink-0 snap-start snap-always pr-0.5" : "w-full",
             )}
           >
             {slide}

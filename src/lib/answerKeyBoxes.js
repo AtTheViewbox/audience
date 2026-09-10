@@ -104,7 +104,8 @@ export function flattenBoxRows(rows) {
 }
 
 export async function fetchBoxAnnotationRows(supabaseClient, caseLink, userId) {
-  if (!supabaseClient || !userId || !isCaseLinked(caseLink)) return [];
+  if (!supabaseClient || !isCaseLinked(caseLink)) return [];
+  if (!caseLink.studyId && !userId) return [];
 
   let query = supabaseClient
     .from("series_annotations")

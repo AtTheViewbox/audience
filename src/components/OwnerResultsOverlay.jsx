@@ -88,7 +88,7 @@ function OwnerResultsOverlay() {
       setQuestions(getDemoQuestions());
       return;
     }
-    if (!supabaseClient || !linked || !authorId) {
+    if (!supabaseClient || !linked || (!authorId && !studyId)) {
       setQuestions([]);
       return;
     }

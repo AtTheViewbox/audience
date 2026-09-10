@@ -5,20 +5,55 @@
 import { Visibility } from "./constants.js";
 import { resolveSeriesPrefix } from "./seriesLink.js";
 
+/** Viewer query param that pins questions to a specific studies row. */
+export const CASE_ID_PARAM = "caseId";
+
+export function extractSearchString(urlOrParams) {
+  if (!urlOrParams) return "";
+  const raw = String(urlOrParams);
+  try {
+    if (raw.startsWith("http")) {
+      return new URL(raw).search.substring(1);
+    }
+  } catch {
+    // fall through
+  }
+  return raw.startsWith("?") ? raw.slice(1) : raw;
+}
+
+export function getCaseIdFromSearch(search = typeof window !== "undefined" ? window.location.search : "") {
+  const params = new URLSearchParams(extractSearchString(search));
+  return params.get(CASE_ID_PARAM) || null;
+}
+
+/** Image-only URL key: strips session, demo, preview, and case identity. */
 export function normalizeUrlParams(input) {
   if (!input) return "";
-  const raw = String(input).startsWith("?") ? String(input).slice(1) : String(input);
+  const raw = extractSearchString(input);
   if (!raw) return "";
 
   const params = new URLSearchParams(raw);
   params.delete("s");
   params.delete("preview");
   params.delete("demo");
+  params.delete(CASE_ID_PARAM);
 
   return [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
     .join("&");
+}
+
+/** Open this teaching case in the viewer (same images, this case's questions). */
+export function buildCaseViewerHref({ url_params, studyId, preview = false } = {}) {
+  const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const params = new URLSearchParams(extractSearchString(url_params));
+  params.delete("s");
+  if (studyId) params.set(CASE_ID_PARAM, studyId);
+  else params.delete(CASE_ID_PARAM);
+  if (preview) params.set("preview", "true");
+  else params.delete("preview");
+  return `${rootUrl}?${params.toString()}`;
 }
 
 export function buildUrlParamCandidates({ search, caseUrlParams }) {
@@ -53,6 +88,19 @@ export function resolveCaseUrlKey({ search, caseUrlParams }) {
 }
 
 export async function findStudyForViewer(supabaseClient, { search, caseUrlParams, userId }) {
+  const caseId =
+    getCaseIdFromSearch(search) || getCaseIdFromSearch(caseUrlParams || "");
+  if (caseId) {
+    const { data, error } = await supabaseClient
+      .from("studies")
+      .select("id, name, owner, url_params")
+      .eq("id", caseId)
+      .maybeSingle();
+    if (!error && data) return data;
+    // RLS may hide the row; still bind questions to this case id.
+    return { id: caseId, name: null, owner: null, url_params: null };
+  }
+
   const candidates = buildUrlParamCandidates({ search, caseUrlParams });
   if (candidates.length === 0) return null;
 
@@ -151,16 +199,18 @@ export function buildAnnotationInsert({ studyId, dicomSeriesId, caseUrlKey, user
 }
 
 export function applyAnnotationCaseFilter(query, { studyId, dicomSeriesId, caseUrlKey, userId }) {
-  if (!query || !userId || !isCaseLinked({ studyId, dicomSeriesId, caseUrlKey })) {
+  if (!query || !isCaseLinked({ studyId, dicomSeriesId, caseUrlKey })) {
     return null;
   }
+  // Questions and boxes belong to the case once a study id is known.
+  if (studyId) return query.eq("study_id", studyId);
+  if (!userId) return null;
   let filtered = query.eq("user_id", userId);
-  if (studyId) return filtered.eq("study_id", studyId);
   if (dicomSeriesId) return filtered.eq("dicom_series_id", dicomSeriesId);
   return filtered.eq("case_url_params", caseUrlKey);
 }
 
-/** Load session questions for participants (any author on this case). */
+/** Load questions for this case (not "that user's questions on these images"). */
 export function applyQuestionCaseFilter(
   query,
   { studyId, dicomSeriesId, caseUrlKey, authorId }
@@ -169,8 +219,8 @@ export function applyQuestionCaseFilter(
     return null;
   }
   let filtered = query.eq("kind", "question");
-  if (authorId) filtered = filtered.eq("user_id", authorId);
   if (studyId) return filtered.eq("study_id", studyId);
+  if (authorId) filtered = filtered.eq("user_id", authorId);
   if (dicomSeriesId) return filtered.eq("dicom_series_id", dicomSeriesId);
   return filtered.eq("case_url_params", caseUrlKey);
 }

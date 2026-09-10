@@ -10,18 +10,21 @@ import {
   GripVertical,
   ListChecks,
   MessageSquare,
+  Copy,
+  GitFork,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
-import { isJoinParticipant } from "../lib/demoCase.js";
+import { isDemoMode, isJoinParticipant } from "../lib/demoCase.js";
 import {
   isCaseLinked,
   buildAnnotationInsert,
   applyAnnotationCaseFilter,
 } from "../lib/answerKeyCase.js";
+import { duplicateCase } from "../lib/cloneCase.js";
 import { restoreBoxRows, removeBoxRowFromCanvas } from "../lib/answerKeyBoxes.js";
 import {
   QUESTION_TYPES,
@@ -33,6 +36,7 @@ import {
 } from "../lib/questionTypes.js";
 import QuestionAnswerPanel from "./QuestionAnswerPanel.jsx";
 import QuestionSlideCarousel from "./QuestionSlideCarousel.jsx";
+import CaseAnswerHistory from "./CaseAnswerHistory.jsx";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -185,6 +189,7 @@ function AnnotationTab() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [duplicating, setDuplicating] = useState(null);
 
   const [questionType, setQuestionType] = useState(QUESTION_TYPES.FREE_RESPONSE);
   const [questionText, setQuestionText] = useState("");
@@ -198,7 +203,8 @@ function AnnotationTab() {
   const [editMcqOptions, setEditMcqOptions] = useState(defaultMcqOptions());
 
   const fetchAll = useCallback(async () => {
-    if (!supabaseClient || !linked || !userData?.id) return;
+    if (!supabaseClient || !linked) return;
+    if (!studyId && !userData?.id) return;
     setLoading(true);
     try {
       let query = supabaseClient
@@ -207,7 +213,7 @@ function AnnotationTab() {
         .order("created_at", { ascending: true });
       query = applyAnnotationCaseFilter(query, {
         ...caseLink,
-        userId: userData.id,
+        userId: userData?.id,
       });
       if (!query) return;
 
@@ -223,6 +229,37 @@ function AnnotationTab() {
       setLoading(false);
     }
   }, [supabaseClient, studyId, dicomSeriesId, caseUrlKey, linked, userData?.id]);
+
+  const canDuplicate =
+    !isDemoMode() &&
+    !userData?.is_anonymous &&
+    !!userData?.id &&
+    (linked || !!window.location.search);
+
+  const handleDuplicate = async (mode) => {
+    if (!canDuplicate || duplicating) return;
+    setDuplicating(mode);
+    try {
+      const result = await duplicateCase(supabaseClient, {
+        userId: userData.id,
+        sourceStudyId: studyId,
+        urlParams: window.location.search,
+        caseLink,
+        mode,
+      });
+      toast.success(
+        mode === "fork"
+          ? `Forked with ${result.copied} item${result.copied === 1 ? "" : "s"}`
+          : "Opened a new case on the same images"
+      );
+      window.open(result.href, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      console.error("Failed to duplicate case:", e);
+      toast.error(e?.message || "Failed to duplicate case");
+    } finally {
+      setDuplicating(null);
+    }
+  };
 
   useEffect(() => {
     if (!isParticipant) fetchAll();
@@ -259,13 +296,19 @@ function AnnotationTab() {
 
   const handleDelete = async (id) => {
     try {
-      const { error } = await supabaseClient
+      const { data, error } = await supabaseClient
         .from("series_annotations")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) {
+        toast.error("Could not delete \u2014 you can only remove items on cases you own");
+        return;
+      }
       removeBoxRowFromCanvas(renderingEngine, id);
       dispatch({ type: "remove_persisted_answer_box", payload: id });
+      toast.success("Deleted");
       await fetchAll();
     } catch (e) {
       console.error("Failed to delete:", e);
@@ -433,10 +476,10 @@ function AnnotationTab() {
               </div>
             </div>
           ) : (
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium break-words">
+            <div className="flex items-start justify-between gap-2 min-w-0">
+              <div className="space-y-1 min-w-0 overflow-hidden">
+                <div className="flex items-start gap-2 flex-wrap">
+                  <p className="text-sm font-medium break-words [overflow-wrap:anywhere]">
                     {idx + 1}. {q.question}
                   </p>
                   <Badge variant="outline" className="text-[10px] h-5">
@@ -450,6 +493,7 @@ function AnnotationTab() {
                         <GripVertical className="h-3 w-3 opacity-40" />
                         <span
                           className={cn(
+                            "min-w-0 break-words [overflow-wrap:anywhere]",
                             normalizeMcqOptions(q.options).correctIndex === i &&
                               "text-emerald-600 dark:text-emerald-400 font-medium"
                           )}
@@ -478,7 +522,11 @@ function AnnotationTab() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-red-500 hover:text-red-600"
-                  onClick={() => handleDelete(q.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDelete(q.id);
+                  }}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -509,12 +557,45 @@ function AnnotationTab() {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-3 max-h-[min(calc(100dvh-9rem),560px)] overflow-y-auto overscroll-contain space-y-3">
+    <Card className="min-w-0 overflow-hidden">
+      <CardContent className="pt-3 space-y-3">
         {!linked && (
           <p className="text-xs text-muted-foreground">
             Link this case via the viewer URL (vd.*) or save it in Your Viewbox.
           </p>
+        )}
+
+        {canDuplicate && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2.5 space-y-1.5">
+            <div>
+              <Label className="text-sm font-medium">Duplicate this case</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Same images, new case — opens in a new tab.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!!duplicating}
+                onClick={() => handleDuplicate("images")}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                {duplicating === "images" ? "Copying…" : "Images only"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!!duplicating}
+                onClick={() => handleDuplicate("fork")}
+              >
+                <GitFork className="h-3.5 w-3.5 mr-1.5" />
+                {duplicating === "fork" ? "Forking…" : "Fork questions"}
+              </Button>
+            </div>
+          </div>
         )}
 
         <div className="flex items-center justify-between gap-2">
@@ -536,7 +617,7 @@ function AnnotationTab() {
             Draw on the image after closing this dialog — each box saves automatically.
           </p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 max-h-36 overflow-y-auto overscroll-contain">
             {boxAnswers.map((b, idx) => (
               <div
                 key={b.id}
@@ -576,6 +657,15 @@ function AnnotationTab() {
         )}
 
         <Separator />
+
+        <CaseAnswerHistory
+          supabaseClient={supabaseClient}
+          userId={userData?.id}
+          studyId={studyId}
+          caseLink={caseLink}
+          questions={questions}
+          onCleared={() => dispatch({ type: "clear_all_annotations" })}
+        />
 
         {questions.length > 0 ? (
           <QuestionSlideCarousel slides={questionSlides} compact />

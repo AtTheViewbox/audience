@@ -8,7 +8,10 @@ export async function fetchHostAnswerContent(supabaseClient, caseLink, authorId)
     return { questions, hasBoxAnswers: true, hasContent: true };
   }
 
-  if (!supabaseClient || !authorId || !isCaseLinked(caseLink)) {
+  if (!supabaseClient || !isCaseLinked(caseLink)) {
+    return { questions: [], hasBoxAnswers: false, hasContent: false };
+  }
+  if (!caseLink.studyId && !authorId) {
     return { questions: [], hasBoxAnswers: false, hasContent: false };
   }
 
