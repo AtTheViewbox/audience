@@ -157,13 +157,51 @@ export function recreateUriStringList(
     return variableStringList.map((str) => "wadouri:" + prefix + str + suffix);
 }
 
+/** Inclusive 0-based index range available for this series. */
+export function getSliceBounds(metadata) {
+    const step = Number(metadata?.step) > 0 ? Number(metadata.step) : 1;
+    const fromFiles = metadata?.localBlobUrls?.length || metadata?.localFiles?.length || 0;
+    if (fromFiles > 0) {
+        return { minIndex: 0, maxIndex: fromFiles - 1, count: fromFiles };
+    }
+
+    const minS = Number(metadata?.min_slice);
+    const maxS = Number(metadata?.max_slice);
+    if (Number.isFinite(minS) && Number.isFinite(maxS) && maxS >= minS) {
+        const count = Math.floor((maxS - minS) / step) + 1;
+        return { minIndex: 0, maxIndex: Math.max(0, count - 1), count: Math.max(1, count) };
+    }
+
+    const start = Number(metadata?.start_slice);
+    const end = Number(metadata?.end_slice);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        const count = end + 1;
+        return { minIndex: 0, maxIndex: Math.max(0, count - 1), count: Math.max(1, count) };
+    }
+
+    return { minIndex: 0, maxIndex: 0, count: 1 };
+}
+
+export function clampSliceRange(metadata, bounds = getSliceBounds(metadata)) {
+    const { minIndex, maxIndex } = bounds;
+    let start = Number(metadata?.start_slice);
+    let end = Number(metadata?.end_slice);
+    if (!Number.isFinite(start)) start = minIndex;
+    if (!Number.isFinite(end)) end = maxIndex;
+    start = Math.min(Math.max(Math.round(start), minIndex), maxIndex);
+    end = Math.min(Math.max(Math.round(end), start), maxIndex);
+    let ci = Number(metadata?.ci);
+    if (!Number.isFinite(ci)) ci = start;
+    ci = Math.min(Math.max(Math.round(ci), start), end);
+    return { start_slice: start, end_slice: end, ci };
+}
+
 export function buildLocalStack(metadata) {
     const urls = metadata?.localBlobUrls || [];
     if (!urls.length) return [];
 
-    const start = metadata.start_slice ?? 0;
-    const end = metadata.end_slice ?? urls.length - 1;
-    const step = metadata.step ?? 1;
+    const { start_slice: start, end_slice: end } = clampSliceRange(metadata);
+    const step = Number(metadata.step) > 0 ? Number(metadata.step) : 1;
     const stack = [];
 
     for (let i = start; i <= end; i += step) {

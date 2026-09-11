@@ -13,7 +13,7 @@ import DragComp from "./DragComp";
 import DropComp from "./DropComp";
 import PropertyPanel from "./PropertyPanel";
 import CustomDragLayer from "./CustomDragLayer";
-import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, findFirstEmptyCell } from "./builderUtils";
+import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, findFirstEmptyCell, clampSliceRange } from "./builderUtils";
 
 import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
@@ -26,18 +26,20 @@ const mapSeriesToMetaData = (seriesList) => {
     return seriesList.map((series) => {
         // Prioritize existing metadata structure
         if (series.metadata) {
-            return {
+            const withSlices = {
                 ...initalValues,
-                ...series.metadata, // Spread metadata first (it might contain prefix, etc.)
+                ...series.metadata,
                 id: series.id,
-                // Ensure we don't overwrite if series.metadata already had them, or provide top-level fallback
                 label: series.name || series.folder_name || series.metadata.label || "Untitled",
                 prefix: series.prefix || series.metadata.prefix || "",
                 suffix: series.suffix || series.metadata.suffix || "",
                 start_slice: series.start_slice ?? series.metadata.start_slice ?? 0,
                 end_slice: series.end_slice ?? series.metadata.end_slice ?? 1,
-                cord: [-1, -1]
+                min_slice: series.min_slice ?? series.metadata.min_slice ?? 0,
+                max_slice: series.max_slice ?? series.metadata.max_slice ?? 0,
+                cord: [-1, -1],
             };
+            return { ...withSlices, ...clampSliceRange(withSlices) };
         }
 
         // Fallback for raw series without pre-calculated metadata

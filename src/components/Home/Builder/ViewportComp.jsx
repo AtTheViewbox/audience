@@ -3,7 +3,7 @@ import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
 import dicomParser from 'dicom-parser';
-import { recreateUriStringList, initalValues, buildLocalStack } from "./builderUtils";
+import { recreateUriStringList, initalValues, buildLocalStack, clampSliceRange } from "./builderUtils";
 import { rewriteImageUrl } from "../../../lib/inputParser.ts";
 import { Loader2 } from "lucide-react";
 
@@ -54,11 +54,12 @@ const ViewportComp = ({
             return buildLocalStack(currentMetadata);
         }
         if (!currentMetadata.prefix) return [];
+        const { start_slice, end_slice } = clampSliceRange(currentMetadata);
         return recreateUriStringList(
             currentMetadata.prefix,
             currentMetadata.suffix,
-            currentMetadata.start_slice,
-            currentMetadata.end_slice,
+            start_slice,
+            end_slice,
             currentMetadata.pad,
             currentMetadata.step
         ).map(rewriteImageUrl);
@@ -74,8 +75,11 @@ const ViewportComp = ({
 
     const viewportId = `preview-vp-${currentMetadata.id}`;
     const renderingEngineId = `preview-engine-${currentMetadata.id}`;
+    const startSliceRef = useRef(0);
+    const applyingRangeRef = useRef(false);
+    startSliceRef.current = clampSliceRange(currentMetadata).start_slice;
 
-    const updateStates = (event) => {
+    const updateWindowCamera = () => {
         const renderingEngine = renderingEngineRef.current;
         if (!renderingEngine) return;
 
@@ -84,23 +88,30 @@ const ViewportComp = ({
 
         const properties = vp.getProperties();
         const voiRange = properties.voiRange;
+        if (!voiRange) return;
 
-        if (voiRange) {
-            // External repo logic: uses toWindowLevel on lower/upper
-            const { windowWidth, windowCenter } = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
+        const { windowWidth, windowCenter } = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
+        const [x, y] = vp.getPan();
+        const zoom = vp.getZoom();
 
-            const [x, y] = vp.getPan();
-            const zoom = vp.getZoom();
+        onUpdate({
+            wc: windowCenter,
+            ww: windowWidth,
+            z: zoom,
+            px: x,
+            py: y,
+        });
+    };
 
-            onUpdate({
-                wc: windowCenter,
-                ww: windowWidth,
-                ci: vp.getCurrentImageIdIndex() + currentMetadata.start_slice,
-                z: zoom,
-                px: x,
-                py: y
-            });
-        }
+    const updateCurrentSlice = () => {
+        if (applyingRangeRef.current) return;
+        const renderingEngine = renderingEngineRef.current;
+        if (!renderingEngine) return;
+        const vp = renderingEngine.getViewport(viewportId);
+        if (!vp) return;
+        onUpdate({
+            ci: vp.getCurrentImageIdIndex() + startSliceRef.current,
+        });
     };
 
     useEffect(() => {
@@ -167,8 +178,9 @@ const ViewportComp = ({
                 const viewport = renderingEngine.getViewport(viewportId);
 
                 // 3. Add Event Listeners
-                element.addEventListener(cornerstone.EVENTS.CAMERA_MODIFIED, updateStates);
-                element.addEventListener(cornerstone.EVENTS.VOI_MODIFIED, updateStates);
+                element.addEventListener(cornerstone.EVENTS.CAMERA_MODIFIED, updateWindowCamera);
+                element.addEventListener(cornerstone.EVENTS.VOI_MODIFIED, updateWindowCamera);
+                element.addEventListener(cornerstone.EVENTS.STACK_NEW_IMAGE, updateCurrentSlice);
 
                 // 4. Setup Tools
                 const {
@@ -235,7 +247,8 @@ const ViewportComp = ({
                 );
 
                 // Set Stack
-                const relativeSliceIndex = Math.max(0, (currentMetadata.ci || currentMetadata.start_slice) - currentMetadata.start_slice);
+                const { start_slice: stackStart, ci: stackCi } = clampSliceRange(currentMetadata);
+                const relativeSliceIndex = Math.max(0, stackCi - stackStart);
 
                 // Check if component is still mounted before setting stack?
                 // (Cleanup function might have run)
@@ -311,13 +324,69 @@ const ViewportComp = ({
             }
 
             if (element) {
-                element.removeEventListener(cornerstone.EVENTS.CAMERA_MODIFIED, updateStates);
-                element.removeEventListener(cornerstone.EVENTS.VOI_MODIFIED, updateStates);
+                element.removeEventListener(cornerstone.EVENTS.CAMERA_MODIFIED, updateWindowCamera);
+                element.removeEventListener(cornerstone.EVENTS.VOI_MODIFIED, updateWindowCamera);
+                element.removeEventListener(cornerstone.EVENTS.STACK_NEW_IMAGE, updateCurrentSlice);
             }
         };
     }, []); // Mount only once
 
+    const onUpdateRef = useRef(onUpdate);
+    onUpdateRef.current = onUpdate;
+
+    useEffect(() => {
+        const element = elementRef.current;
+        if (!element) return;
+
+        let frame = 0;
+        const lastSize = { w: 0, h: 0 };
+
+        const fitToCell = () => {
+            const engine = renderingEngineRef.current;
+            if (!engine) return;
+            const viewport = engine.getViewport(viewportId);
+            if (!viewport) return;
+
+            const w = element.clientWidth;
+            const h = element.clientHeight;
+            if (w < 4 || h < 4) return;
+            if (Math.abs(w - lastSize.w) < 2 && Math.abs(h - lastSize.h) < 2) return;
+            lastSize.w = w;
+            lastSize.h = h;
+
+            try {
+                applyingRangeRef.current = true;
+                engine.resize(true, false);
+                viewport.render();
+                const [x, y] = viewport.getPan();
+                onUpdateRef.current?.({
+                    z: viewport.getZoom(),
+                    px: x,
+                    py: y,
+                });
+            } catch (err) {
+                console.warn("[ViewportComp] resize failed", err);
+            } finally {
+                requestAnimationFrame(() => {
+                    applyingRangeRef.current = false;
+                });
+            }
+        };
+
+        const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(fitToCell);
+        });
+        observer.observe(element);
+
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
+    }, [viewportId]);
+
     const lastPropertyEditRef = useRef(0);
+    const lastRangeKeyRef = useRef("");
 
     // React to property-panel edits for the grid viewport
     useEffect(() => {
@@ -327,13 +396,26 @@ const ViewportComp = ({
             const viewport = renderingEngine.getViewport(viewportId);
             if (!viewport) return;
 
-            const shouldSyncFromPanel = stateFlag || propertyEditTick > lastPropertyEditRef.current;
+            const { start_slice, end_slice, ci } = clampSliceRange(currentMetadata);
+            const rangeKey = `${start_slice}:${end_slice}:${stack.length}`;
+            const rangeChanged = lastRangeKeyRef.current !== rangeKey;
+            const shouldSyncFromPanel = stateFlag || propertyEditTick > lastPropertyEditRef.current || rangeChanged;
             if (!shouldSyncFromPanel) return;
             lastPropertyEditRef.current = propertyEditTick;
+            lastRangeKeyRef.current = rangeKey;
 
-            const relativeSliceIndex = Math.max(0, (currentMetadata.ci || currentMetadata.start_slice) - currentMetadata.start_slice);
+            const relativeSliceIndex = Math.max(0, Math.min(stack.length - 1, ci - start_slice));
 
-            await viewport.setStack(stack, relativeSliceIndex);
+            applyingRangeRef.current = true;
+            try {
+                await viewport.setStack(stack, relativeSliceIndex);
+                if (viewport.getCurrentImageIdIndex() !== relativeSliceIndex) {
+                    viewport.setImageIdIndex(relativeSliceIndex);
+                }
+            } catch (err) {
+                applyingRangeRef.current = false;
+                throw err;
+            }
 
             if (stack.length > 0) {
                 const image = cornerstone.cache.getImage(stack[0]);
@@ -359,10 +441,29 @@ const ViewportComp = ({
             });
 
             viewport.render();
+            requestAnimationFrame(() => {
+                applyingRangeRef.current = false;
+            });
             if (stateFlag && setStateFlag) setStateFlag(false);
         };
         update();
     }, [currentMetadata, stateFlag, stack, propertyEditTick]);
+
+    useEffect(() => {
+        if (applyingRangeRef.current) return;
+        const viewport = renderingEngineRef.current?.getViewport(viewportId);
+        if (!viewport || !stack.length) return;
+        const { start_slice, ci } = clampSliceRange(currentMetadata);
+        const idx = Math.max(0, Math.min(stack.length - 1, ci - start_slice));
+        if (viewport.getCurrentImageIdIndex() !== idx) {
+            applyingRangeRef.current = true;
+            viewport.setImageIdIndex(idx);
+            viewport.render();
+            requestAnimationFrame(() => {
+                applyingRangeRef.current = false;
+            });
+        }
+    }, [currentMetadata.ci, stack.length, viewportId]);
 
     if (loadError) {
         return (

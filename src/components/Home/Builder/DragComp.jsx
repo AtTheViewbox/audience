@@ -3,6 +3,8 @@ import { useDrag } from "react-dnd";
 import { X, Pencil, GripVertical } from "lucide-react";
 import { getEmptyImage } from "react-dnd-html5-backend";
 import ViewportComp from "./ViewportComp";
+import SliceRangeSlider from "./SliceRangeSlider";
+import { clampSliceRange } from "./builderUtils";
 
 const DragComp = ({
     metadata,
@@ -115,6 +117,25 @@ const DragComp = ({
                         className="absolute top-0 left-0 w-8 h-8 z-50 cursor-grab active:cursor-grabbing hover:bg-white/10 rounded-br-md transition-colors"
                         title="Drag to move"
                     />
+                    <div
+                        className="absolute bottom-0 left-0 right-0 z-30 px-2 pt-3 pb-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <SliceRangeSlider
+                            compact
+                            metadata={metadata}
+                            onChange={(range) => {
+                                setMetaDataList((prev) =>
+                                    prev.map((item) =>
+                                        item.id === metadata.id
+                                            ? { ...item, ...clampSliceRange({ ...item, ...range }) }
+                                            : item
+                                    )
+                                );
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

@@ -4,11 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 import {
+    clampSliceRange,
     getAdjustedWC,
     getAdjustedWW,
     getReveredAdjustedWC,
-    getReveredAdjustedWW
+    getReveredAdjustedWW,
 } from "./builderUtils";
+import SliceRangeSlider from "./SliceRangeSlider";
 
 const PropertyPanel = ({
     metadataId,
@@ -25,10 +27,21 @@ const PropertyPanel = ({
     const handleChange = (key, value) => {
         setMetaDataList(prev => prev.map(item => {
             if (item.id === metadataId) {
-                return { ...item, [key]: value };
+                const next = { ...item, [key]: value };
+                if (key === "start_slice" || key === "end_slice" || key === "ci") {
+                    return { ...next, ...clampSliceRange(next) };
+                }
+                return next;
             }
             return item;
         }));
+        onPropertyEdit?.();
+    };
+
+    const handleSliceRange = (range) => {
+        setMetaDataList((prev) =>
+            prev.map((item) => (item.id === metadataId ? { ...item, ...range } : item))
+        );
         onPropertyEdit?.();
     };
 
@@ -50,24 +63,7 @@ const PropertyPanel = ({
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label>Start Slice</Label>
-                    <Input
-                        type="number"
-                        value={metadata.start_slice}
-                        onChange={(e) => handleChange("start_slice", Number(e.target.value))}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>End Slice</Label>
-                    <Input
-                        type="number"
-                        value={metadata.end_slice}
-                        onChange={(e) => handleChange("end_slice", Number(e.target.value))}
-                    />
-                </div>
-            </div>
+            <SliceRangeSlider metadata={metadata} onChange={handleSliceRange} />
 
             <div className="space-y-2">
                 <Label>Window Width (WW)</Label>
@@ -90,14 +86,6 @@ const PropertyPanel = ({
                         const val = Number(e.target.value);
                         handleChange("wc", getAdjustedWC(val, metadata));
                     }}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label>Initial Slice (CI)</Label>
-                <Input
-                    type="number"
-                    value={metadata.ci}
-                    onChange={(e) => handleChange("ci", Number(e.target.value))}
                 />
             </div>
             <div className="space-y-2">
