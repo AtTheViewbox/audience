@@ -55,14 +55,6 @@ const PropertyPanel = ({
                     Local draft — not uploaded yet
                 </p>
             )}
-            <div className="space-y-2">
-                <Label>Label</Label>
-                <Input
-                    value={metadata.label || ""}
-                    onChange={(e) => handleChange("label", e.target.value)}
-                />
-            </div>
-
             <SliceRangeSlider metadata={metadata} onChange={handleSliceRange} />
 
             <div className="space-y-2">

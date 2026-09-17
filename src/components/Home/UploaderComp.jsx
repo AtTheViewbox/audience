@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import {
@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { FileIcon, FolderIcon, UploadCloudIcon, XIcon, ShieldCheck } from "lucide-react"
-import { prepareLocalDraftSeries } from "../../lib/dicomUploadUtils"
+import { prepareLocalDraftSeries, extractDicomNameFields } from "../../lib/dicomUploadUtils"
 import { toast } from "sonner"
 
 export function UploaderComp({ onLocalSeriesReady }) {
@@ -24,14 +24,21 @@ export function UploaderComp({ onLocalSeriesReady }) {
   const [progress, setProgress] = useState(0)
   const [phiVerified, setPhiVerified] = useState(false)
   const [seriesName, setSeriesName] = useState("")
+  const processingRef = useRef(false)
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     if (e.target.files) {
       const fileArray = Array.from(e.target.files)
         .filter((file) => file.name.endsWith(".dcm") || file.type === "application/dicom")
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }))
       setFiles(fileArray)
       setPhiVerified(false)
+      if (fileArray[0]) {
+        const names = await extractDicomNameFields(fileArray[0])
+        if (names.seriesName) {
+          setSeriesName((current) => current.trim() ? current : names.seriesName)
+        }
+      }
     }
   }
 
@@ -39,23 +46,34 @@ export function UploaderComp({ onLocalSeriesReady }) {
     if (files.length === 0 || !phiVerified || processing) return
 
     setProcessing(true)
+    processingRef.current = true
     setProgress(0)
 
     try {
-      const draftSeries = await prepareLocalDraftSeries(files, seriesName, setProgress)
+      const draftSeries = await prepareLocalDraftSeries(files, seriesName, (pct) => {
+        setProgress(pct)
+        if (pct > 0) {
+          toast.loading(`Preparing DICOM… ${pct}%`, {
+            id: "dicom-prep",
+            duration: Infinity,
+          })
+        }
+      })
       onLocalSeriesReady?.(draftSeries)
-      toast.success("DICOM loaded into Builder. Edit in the grid, then save when ready.")
+      toast.success("DICOM loaded into Builder", { id: "dicom-prep", duration: 1500 })
       setOpen(false)
       resetUpload()
     } catch (error) {
       console.error("Failed to prepare local DICOM series:", error)
-      toast.error("Failed to load DICOM files")
+      toast.error("Failed to load DICOM files", { id: "dicom-prep" })
     } finally {
+      processingRef.current = false
       setProcessing(false)
     }
   }
 
   const resetUpload = () => {
+    processingRef.current = false
     setFiles([])
     setProgress(0)
     setProcessing(false)
@@ -65,6 +83,10 @@ export function UploaderComp({ onLocalSeriesReady }) {
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen && processingRef.current) {
+        setOpen(false)
+        return
+      }
       setOpen(nextOpen)
       if (!nextOpen) setTimeout(resetUpload, 300)
     }}>
@@ -85,10 +107,10 @@ export function UploaderComp({ onLocalSeriesReady }) {
         <Card className="bg-slate-900/50 border-dashed border-2 border-slate-800">
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="series-name" className="text-slate-300">Series Name (Optional)</Label>
+              <Label htmlFor="series-name" className="text-slate-300">Series Name</Label>
               <Input
                 id="series-name"
-                placeholder="Enter a name for this series..."
+                placeholder="Filled from the DICOM series description…"
                 value={seriesName}
                 onChange={(e) => setSeriesName(e.target.value)}
                 className="bg-slate-950/50 border-slate-800 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-700/30"

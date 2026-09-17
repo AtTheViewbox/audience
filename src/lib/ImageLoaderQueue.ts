@@ -29,7 +29,8 @@ export class ImageLoaderQueue {
     private isScrolling = false;
 
     // Prefetch window
-    private readonly PREFETCH_WINDOW = 30;
+    private readonly PREFETCH_WINDOW: number;
+    private hasReceivedFocus = false;
 
     constructor(
         imageIds: string[],
@@ -41,9 +42,10 @@ export class ImageLoaderQueue {
 
         // HTTP/2 multiplexes over a single connection, so higher concurrency is safe.
         // Mobile: conservative to prevent WASM memory exhaustion.
-        this.baseConcurrency = isMobile ? 1 : 4;
-        this.idleConcurrency = isMobile ? 2 : 10;
-        this.concurrency = this.baseConcurrency;
+        this.baseConcurrency = isMobile ? 2 : 6;
+        this.idleConcurrency = isMobile ? 3 : 12;
+        this.concurrency = this.idleConcurrency;
+        this.PREFETCH_WINDOW = isMobile ? 16 : 40;
 
         this.onImageLoaded = onImageLoaded;
         this.onImageLoadStart = onImageLoadStart;
@@ -81,6 +83,13 @@ export class ImageLoaderQueue {
     }
 
     public updateFocus(focusIndex: number) {
+        if (!this.hasReceivedFocus) {
+            this.hasReceivedFocus = true;
+            this.currentFocusIndex = focusIndex;
+            this.applyFocusUpdate(focusIndex);
+            return;
+        }
+
         this.pendingFocusIndex = focusIndex;
         this.handleScrollActivity();
 
@@ -171,9 +180,17 @@ export class ImageLoaderQueue {
     }
 
     public start() {
-        // Trigger initial idle state
-        this.handleScrollActivity();
+        this.isScrolling = false;
+        this.concurrency = this.idleConcurrency;
         this.processNext();
+    }
+
+    private isFullyLoaded(id: string) {
+        try {
+            return Boolean(cornerstone.cache.isLoaded(id));
+        } catch {
+            return false;
+        }
     }
 
     public markAsLoaded(index: number) {
@@ -202,20 +219,26 @@ export class ImageLoaderQueue {
             const item = this.queue.shift();
             if (!item) break;
 
-            if (this.loaded.has(item.idx)) continue;
+            if (this.loaded.has(item.idx) || this.isFullyLoaded(item.id)) {
+                this.loaded.add(item.idx);
+                this.onImageLoaded(item.idx);
+                continue;
+            }
 
             this.processing.add(item.id);
             this.onImageLoadStart(item.idx);
 
             const loadItem = item;
+            const distance = Math.abs(loadItem.idx - this.currentFocusIndex);
+            const near = distance <= 3;
             cornerstone.imageLoader.loadAndCacheImage(loadItem.id, {
-                priority: 10,
-                requestType: 'prefetch'
+                priority: near ? 50 : 10,
+                requestType: near ? 'interaction' : 'prefetch'
             }).then(() => {
-                if (!this.isDestroyed) {
-                    this.loaded.add(loadItem.idx);
-                    this.onImageLoaded(loadItem.idx);
-                }
+                if (this.isDestroyed) return;
+                if (!this.isFullyLoaded(loadItem.id)) return;
+                this.loaded.add(loadItem.idx);
+                this.onImageLoaded(loadItem.idx);
             }).catch((e: unknown) => {
                 console.error(`Failed to load image ${loadItem.idx}`, e);
             }).finally(() => {

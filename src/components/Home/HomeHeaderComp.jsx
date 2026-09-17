@@ -4,6 +4,7 @@ import { useContext, useState } from "react"
 import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
 import { getDemoCaseHref } from "../../lib/demoCase"
+import { cn } from "@/lib/utils"
 
 import {
     Dialog,
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import DialogPage from "../DialogPage.jsx";
 
-function HomeHeaderComp({ setSearch, setMobileMenuOpen }) {
+function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
     const [isOpen, setIsOpen] = useState(false)
     let [dialogIsOpen, setDialogIsOpen] = useState(false);
@@ -35,8 +36,12 @@ function HomeHeaderComp({ setSearch, setMobileMenuOpen }) {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="lg:hidden mr-2 text-slate-400 hover:text-slate-100 hover:bg-slate-900/50"
+                    className={cn(
+                        "mr-2 text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                        !showMenuButton && "lg:hidden"
+                    )}
                     onClick={() => setMobileMenuOpen(true)}
+                    title="Open menu"
                 >
                     <Menu className="h-5 w-5" />
                 </Button>

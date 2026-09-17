@@ -6,8 +6,6 @@ import * as cornerstone from '@cornerstonejs/core';
 import { eventTarget } from '@cornerstonejs/core';
 import * as cornerstoneTools from '@cornerstonejs/tools';
 
-import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
-import dicomParser from 'dicom-parser';
 import { utilities } from '@cornerstonejs/core';
 import { toast } from "sonner"
 import defaultData from "./defaultData.jsx";
@@ -22,6 +20,7 @@ import { sameViewerStudy, resolvePersistentDemoSession } from "../lib/shareSessi
 import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
+import { initCornerstone } from "../lib/initCornerstone.js";
 
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
@@ -279,54 +278,7 @@ export const DataProvider = ({ children }) => {
         //    auth to be initialized.
 
         const setupCornerstone = async () => {
-            window.cornerstone = cornerstone;
-            window.cornerstoneTools = cornerstoneTools;
-            cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
-            cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
-
-            // Configure DICOM image loader with web workers for codec support
-            cornerstoneDICOMImageLoader.configure({
-                useWebWorkers: true,
-                decodeConfig: {
-                    convertFloatPixelDataToInt: false,
-                    use16BitDataType: true
-                }
-            });
-
-
-            // Cap at 4 workers to prevent WASM memory exhaustion
-            // (concurrency is 3-6, so 4 workers is plenty)
-            const workerCount = Math.min(navigator.hardwareConcurrency || 4, 4);
-
-            cornerstoneDICOMImageLoader.webWorkerManager.initialize({
-                maxWebWorkers: workerCount,
-                startWebWorkersOnDemand: false,  // Pre-spawn workers
-                taskConfiguration: {
-                    decodeTask: {
-                        initializeCodecsOnStartup: true,  // Initialize codecs early
-                        strict: false,
-                    },
-                },
-            });
-
-
-            // Register the wadouri image loader
-            cornerstone.imageLoader.registerImageLoader(
-                'wadouri',
-                cornerstoneDICOMImageLoader.wadouri.loadImage
-            );
-
-            await cornerstone.init();
-
-            // Reduce cache size on mobile to prevent WASM memory exhaustion
-            const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-            const cacheSizeBytes = isMobile
-                ? 384 * 1024 * 1024  // 384MB for mobile (reduced from 512MB)
-                : 3000 * 1024 * 1024; // 3GB for desktop
-            cornerstone.cache.setMaxCacheSize(cacheSizeBytes);
-
-            await cornerstoneTools.init();
+            await initCornerstone();
 
             const renderingEngineId = 'myRenderingEngine';
             const re = new cornerstone.RenderingEngine(renderingEngineId);

@@ -271,7 +271,7 @@ export default function Viewport(props) {
     scheduleProgressPaint();
 
     try {
-      await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100 });
+      await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100, requestType: 'interaction' });
       scheduleProgressPaint();
 
       // Initial Stack: Use ALL image IDs to allow navigation/scrolling immediately
@@ -284,6 +284,25 @@ export default function Viewport(props) {
         isComputedVOI: false,
       });
       invertRef.current = viewport.getProperties().invert ?? false;
+
+      const sliceIsReady = (index) => {
+        const id = s[index];
+        if (id == null || !loadedSetRef.current.has(index)) return false;
+        try {
+          return Boolean(cornerstone.cache.isLoaded(id));
+        } catch {
+          return false;
+        }
+      };
+
+      const applyDesiredVoi = () => {
+        if (!voiRef.current) return;
+        viewport.setProperties({
+          voiRange: voiRef.current,
+          invert: invertRef.current,
+          isComputedVOI: false,
+        });
+      };
 
       addCornerstoneTools();
       setViewportReady(true);
@@ -299,6 +318,9 @@ export default function Viewport(props) {
 
       viewport.setImageIdIndex = async (index) => {
         if (_gating) {
+          if (!sliceIsReady(index)) {
+            return viewport.getCurrentImageIdIndex();
+          }
           const result = _origSetImageIdIndex(index);
           viewport.targetImageIdIndex = index;
           return result;
@@ -306,12 +328,12 @@ export default function Viewport(props) {
         _gating = true;
 
         let target = index;
-        if (!loadedSetRef.current.has(index)) {
+        if (!sliceIsReady(index)) {
           const prev = viewport.getCurrentImageIdIndex();
           const dir = index >= prev ? 1 : -1;
           let nearest = -1;
           for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
-            if (loadedSetRef.current.has(i)) { nearest = i; break; }
+            if (sliceIsReady(i)) { nearest = i; break; }
           }
           if (nearest === -1) nearest = prev;
           target = nearest;
@@ -320,15 +342,8 @@ export default function Viewport(props) {
         try {
           const result = await _origSetImageIdIndex(target);
           viewport.targetImageIdIndex = target;
-
-          if (voiRef.current) {
-            viewport.setProperties({
-              voiRange: voiRef.current,
-              invert: invertRef.current,
-              isComputedVOI: false,
-            });
-            viewport.render();
-          }
+          applyDesiredVoi();
+          viewport.render();
 
           prevImageIndexRef.current = target;
           scheduleProgressPaint();
@@ -353,13 +368,25 @@ export default function Viewport(props) {
         const currentId = viewport.getCurrentImageId();
         const current = s.indexOf(currentId);
 
-        // Navigate to next loaded image in scroll direction
+        // Navigate to next fully decoded image in scroll direction
         for (let i = current + delta; i >= 0 && i < s.length; i += delta) {
-          if (loadedSetRef.current.has(i)) {
-            viewport.setImageIdIndex(i); // goes through our gate
+          if (sliceIsReady(i)) {
+            viewport.setImageIdIndex(i);
             break;
           }
         }
+      };
+
+      let correctingVoi = false;
+      const handleImageRendered = () => {
+        if (correctingVoi || !voiRef.current) return;
+        const props = viewport.getProperties();
+        const invertDrifted = Boolean(props.invert) !== Boolean(invertRef.current);
+        if (!invertDrifted && props.isComputedVOI !== true) return;
+        correctingVoi = true;
+        applyDesiredVoi();
+        viewport.render();
+        correctingVoi = false;
       };
 
       // ─── User windowing capture ───
@@ -375,6 +402,7 @@ export default function Viewport(props) {
       el?.addEventListener('wheel', handleWheel, { capture: true, passive: false });
       el?.addEventListener('mouseup', captureUserVoi);
       el?.addEventListener('touchend', captureUserVoi);
+      el?.addEventListener(cornerstone.EVENTS.IMAGE_RENDERED, handleImageRendered);
 
       return () => {
         // Restore original setImageIdIndex
@@ -383,6 +411,7 @@ export default function Viewport(props) {
         el?.removeEventListener('wheel', handleWheel, true);
         el?.removeEventListener('mouseup', captureUserVoi);
         el?.removeEventListener('touchend', captureUserVoi);
+        el?.removeEventListener(cornerstone.EVENTS.IMAGE_RENDERED, handleImageRendered);
 
         if (progressRafRef.current != null) {
           cancelAnimationFrame(progressRafRef.current);

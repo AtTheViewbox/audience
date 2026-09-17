@@ -1,34 +1,11 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
-import cornerstoneDICOMImageLoader from '@cornerstonejs/dicom-image-loader';
-import dicomParser from 'dicom-parser';
-import { recreateUriStringList, initalValues, buildLocalStack, clampSliceRange } from "./builderUtils";
+import { initalValues, buildLocalStack, clampSliceRange, getIncludedSliceIndices, getImageIdForSlice, stackIndexForSlice } from "./builderUtils";
 import { rewriteImageUrl } from "../../../lib/inputParser.ts";
 import { Loader2 } from "lucide-react";
-
-// Helper for concurrency limiting
-const pLimit = (limit) => {
-    const queue = [];
-    let active = 0;
-
-    const next = () => {
-        if (active >= limit || queue.length === 0) return;
-        const fn = queue.shift();
-        if (fn) {
-            active++;
-            fn().finally(() => {
-                active--;
-                next();
-            });
-        }
-    };
-
-    return async (fn) => {
-        queue.push(fn);
-        next();
-    };
-};
+import { ImageLoaderQueue } from "../../../lib/ImageLoaderQueue.ts";
+import { initCornerstone, isMobileDevice } from "../../../lib/initCornerstone.js";
 
 const ViewportComp = ({
     metadata,
@@ -40,6 +17,10 @@ const ViewportComp = ({
 }) => {
     const elementRef = useRef(null);
     const renderingEngineRef = useRef(null);
+    const queueRef = useRef(null);
+    const loadedSetRef = useRef(new Set());
+    const voiRef = useRef(null);
+    const invertRef = useRef(false);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
 
@@ -54,30 +35,29 @@ const ViewportComp = ({
             return buildLocalStack(currentMetadata);
         }
         if (!currentMetadata.prefix) return [];
-        const { start_slice, end_slice } = clampSliceRange(currentMetadata);
-        return recreateUriStringList(
-            currentMetadata.prefix,
-            currentMetadata.suffix,
-            start_slice,
-            end_slice,
-            currentMetadata.pad,
-            currentMetadata.step
-        ).map(rewriteImageUrl);
+        return getIncludedSliceIndices(currentMetadata)
+            .map((index) => {
+                const id = getImageIdForSlice(currentMetadata, index);
+                return id ? rewriteImageUrl(id) : null;
+            })
+            .filter(Boolean);
     }, [
         currentMetadata.localBlobUrls,
         currentMetadata.prefix,
         currentMetadata.suffix,
         currentMetadata.start_slice,
         currentMetadata.end_slice,
+        currentMetadata.excluded_slices,
         currentMetadata.pad,
-        currentMetadata.step
+        currentMetadata.step,
+        currentMetadata.min_slice
     ]);
 
     const viewportId = `preview-vp-${currentMetadata.id}`;
     const renderingEngineId = `preview-engine-${currentMetadata.id}`;
-    const startSliceRef = useRef(0);
+    const includedRef = useRef([]);
     const applyingRangeRef = useRef(false);
-    startSliceRef.current = clampSliceRange(currentMetadata).start_slice;
+    includedRef.current = getIncludedSliceIndices(currentMetadata);
 
     const updateWindowCamera = () => {
         const renderingEngine = renderingEngineRef.current;
@@ -109,8 +89,11 @@ const ViewportComp = ({
         if (!renderingEngine) return;
         const vp = renderingEngine.getViewport(viewportId);
         if (!vp) return;
+        const included = includedRef.current;
+        const stackIndex = vp.getCurrentImageIdIndex();
+        queueRef.current?.updateFocus(stackIndex);
         onUpdate({
-            ci: vp.getCurrentImageIdIndex() + startSliceRef.current,
+            ci: included[stackIndex] ?? included[0],
         });
     };
 
@@ -125,36 +108,8 @@ const ViewportComp = ({
 
         const setupViewport = async () => {
             try {
-                // 1. Initialize Cornerstone (idempotent, safe to call multiple times)
-                cornerstoneDICOMImageLoader.external.cornerstone = cornerstone;
-                cornerstoneDICOMImageLoader.external.dicomParser = dicomParser;
+                await initCornerstone();
 
-                cornerstoneDICOMImageLoader.configure({
-                    useWebWorkers: false, // Force main thread for reliability
-                    decodeConfig: {
-                        convertFloatPixelDataToInt: false,
-                        use16BitDataType: true
-                    }
-                });
-
-                console.log("[ViewportComp] Generated Stack URLs:", stack);
-
-                // Register loader
-                cornerstone.imageLoader.registerImageLoader('wadouri', cornerstoneDICOMImageLoader.wadouri.loadImage);
-
-
-
-                // Register both schemes to be safe
-
-                // Register both schemes to be safe
-                // Register both schemes to be safe
-                cornerstone.imageLoader.registerImageLoader('wadouri', cornerstoneDICOMImageLoader.wadouri.loadImage);
-                cornerstone.imageLoader.registerImageLoader('dicomweb', cornerstoneDICOMImageLoader.wadouri.loadImage);
-
-                await cornerstone.init();
-                await cornerstoneTools.init();
-
-                // 2. Create Rendering Engine
                 renderingEngine = new cornerstone.RenderingEngine(renderingEngineId);
                 renderingEngineRef.current = renderingEngine;
 
@@ -186,6 +141,7 @@ const ViewportComp = ({
                 const {
                     PanTool,
                     WindowLevelTool,
+                    StackScrollTool,
                     StackScrollMouseWheelTool,
                     ZoomTool,
                     ToolGroupManager,
@@ -206,6 +162,7 @@ const ViewportComp = ({
                     cornerstoneTools.addTool(WindowLevelTool);
                     cornerstoneTools.addTool(PanTool);
                     cornerstoneTools.addTool(ZoomTool);
+                    cornerstoneTools.addTool(StackScrollTool);
                     cornerstoneTools.addTool(StackScrollMouseWheelTool);
                 } catch (error) {
                     // Tools might be already added if component is re-mounted.
@@ -217,76 +174,53 @@ const ViewportComp = ({
                 toolGroup.addTool(WindowLevelTool.toolName);
                 toolGroup.addTool(PanTool.toolName);
                 toolGroup.addTool(ZoomTool.toolName);
-                toolGroup.addTool(StackScrollMouseWheelTool.toolName);
+                toolGroup.addTool(StackScrollTool.toolName, { loop: false });
 
-                // Set Active
-                toolGroup.setToolActive(WindowLevelTool.toolName, {
-                    bindings: [{ mouseButton: csToolsEnums.MouseBindings.Primary }],
+                const { MouseBindings, KeyboardBindings } = csToolsEnums;
+                toolGroup.setToolActive(StackScrollTool.toolName, {
+                    bindings: [{ mouseButton: MouseBindings.Primary }],
                 });
+                if (KeyboardBindings?.Shift != null) {
+                    toolGroup.setToolActive(WindowLevelTool.toolName, {
+                        bindings: [{ mouseButton: MouseBindings.Primary, modifierKey: KeyboardBindings.Shift }],
+                    });
+                }
                 toolGroup.setToolActive(PanTool.toolName, {
-                    bindings: [{ mouseButton: csToolsEnums.MouseBindings.Auxiliary }],
+                    bindings: [{ mouseButton: MouseBindings.Auxiliary }],
                 });
                 toolGroup.setToolActive(ZoomTool.toolName, {
-                    bindings: [{ mouseButton: csToolsEnums.MouseBindings.Secondary }],
+                    bindings: [{ mouseButton: MouseBindings.Secondary }],
                 });
-                toolGroup.setToolActive(StackScrollMouseWheelTool.toolName);
 
                 toolGroup.addViewport(viewportId, renderingEngineId);
 
-                // 5. Load Images
                 setIsLoading(true);
                 setLoadError(null);
-                const limit = pLimit(5);
 
-                await Promise.all(
-                    stack.map((id) => limit(() => cornerstone.imageLoader.loadAndCacheImage(id).catch(e => {
-                        console.error("Failed to load image:", id, e);
-                        setLoadError(`Failed to load: ${id.split('/').pop()}`);
-                        throw e; // Rethrow to trigger main catch
-                    })))
+                const relativeSliceIndex = Math.max(
+                    0,
+                    Math.min(stack.length - 1, stackIndexForSlice(currentMetadata, clampSliceRange(currentMetadata).ci))
                 );
 
-                // Set Stack
-                const { start_slice: stackStart, ci: stackCi } = clampSliceRange(currentMetadata);
-                const relativeSliceIndex = Math.max(0, stackCi - stackStart);
+                const firstId = stack[relativeSliceIndex] || stack[0];
+                await cornerstone.imageLoader.loadAndCacheImage(firstId, {
+                    priority: 100,
+                    requestType: "interaction",
+                });
 
-                // Check if component is still mounted before setting stack?
-                // (Cleanup function might have run)
                 if (!renderingEngineRef.current) return;
 
                 await viewport.setStack(stack, relativeSliceIndex);
 
-                // Sync Rescale Slope/Intercept if missing or default
-                if (stack.length > 0) {
-                    const image = cornerstone.cache.getImage(stack[0]);
-                    if (image) {
-                        const { intercept, slope } = image;
-                        if (intercept !== undefined && slope !== undefined) {
-                            if (currentMetadata.rescaleIntercept !== intercept || currentMetadata.rescaleSlope !== slope) {
-                                onUpdate({
-                                    rescaleIntercept: intercept,
-                                    rescaleSlope: slope
-                                });
-                            }
-                        }
-                    }
-                }
-
-                await viewport.setStack(stack, relativeSliceIndex);
-
-                // Sync Rescale Slope/Intercept if missing or default
-                // This is CRITICAL if the metadata (DB) has default 0/1 but image has real values (e.g. -1024)
-                if (stack.length > 0) {
-                    const image = cornerstone.cache.getImage(stack[0]);
-                    if (image) {
-                        const { intercept: imgIntercept, slope: imgSlope } = image;
-                        if (imgIntercept !== undefined && imgSlope !== undefined) {
-                            if (currentMetadata.rescaleIntercept !== imgIntercept || currentMetadata.rescaleSlope !== imgSlope) {
-                                onUpdate({
-                                    rescaleIntercept: imgIntercept,
-                                    rescaleSlope: imgSlope
-                                });
-                            }
+                const image = cornerstone.cache.getImage(firstId);
+                if (image) {
+                    const { intercept, slope } = image;
+                    if (intercept !== undefined && slope !== undefined) {
+                        if (currentMetadata.rescaleIntercept !== intercept || currentMetadata.rescaleSlope !== slope) {
+                            onUpdate({
+                                rescaleIntercept: intercept,
+                                rescaleSlope: slope
+                            });
                         }
                     }
                 }
@@ -294,18 +228,122 @@ const ViewportComp = ({
                 viewport.setZoom(currentMetadata.z || 1);
                 viewport.setPan([Number(currentMetadata.px || 0), Number(currentMetadata.py || 0)]);
 
-                // Use Raw values directly, formatted as Lower/Upper range
+                voiRef.current = cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc);
+                invertRef.current = false;
                 viewport.setProperties({
-                    voiRange: cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc),
-                    isComputedVOI: true
+                    voiRange: voiRef.current,
+                    invert: false,
+                    isComputedVOI: false
                 });
 
                 viewport.render();
+                if (renderingEngineRef.current) setIsLoading(false);
+
+                loadedSetRef.current = new Set([relativeSliceIndex]);
+                const sliceIsReady = (index) => {
+                    const id = stack[index];
+                    if (id == null || !loadedSetRef.current.has(index)) return false;
+                    try {
+                        return Boolean(cornerstone.cache.isLoaded(id));
+                    } catch {
+                        return false;
+                    }
+                };
+                const applyDesiredVoi = () => {
+                    if (!voiRef.current) return;
+                    viewport.setProperties({
+                        voiRange: voiRef.current,
+                        invert: invertRef.current,
+                        isComputedVOI: false,
+                    });
+                };
+
+                if (queueRef.current) queueRef.current.destroy();
+                const queue = new ImageLoaderQueue(
+                    stack,
+                    6,
+                    (loadedIndex) => {
+                        loadedSetRef.current.add(loadedIndex);
+                    },
+                    () => {},
+                    isMobileDevice()
+                );
+                queue.markAsLoaded(relativeSliceIndex);
+                queue.updateFocus(relativeSliceIndex);
+                queue.start();
+                queueRef.current = queue;
+
+                let gating = false;
+                const origSetImageIdIndex = viewport.setImageIdIndex.bind(viewport);
+                viewport.setImageIdIndex = async (index) => {
+                    if (gating) {
+                        if (!sliceIsReady(index)) return viewport.getCurrentImageIdIndex();
+                        return origSetImageIdIndex(index);
+                    }
+                    gating = true;
+                    let target = index;
+                    if (!sliceIsReady(index)) {
+                        const prev = viewport.getCurrentImageIdIndex();
+                        const dir = index >= prev ? 1 : -1;
+                        let nearest = -1;
+                        for (let i = prev + dir; i >= 0 && i < stack.length; i += dir) {
+                            if (sliceIsReady(i)) { nearest = i; break; }
+                        }
+                        target = nearest === -1 ? prev : nearest;
+                    }
+                    try {
+                        const result = await origSetImageIdIndex(target);
+                        applyDesiredVoi();
+                        viewport.render();
+                        queueRef.current?.updateFocus(target);
+                        return result;
+                    } finally {
+                        gating = false;
+                    }
+                };
+
+                const handleWheel = (event) => {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const delta = event.deltaY > 0 ? 1 : -1;
+                    const current = viewport.getCurrentImageIdIndex();
+                    for (let i = current + delta; i >= 0 && i < stack.length; i += delta) {
+                        if (sliceIsReady(i)) {
+                            viewport.setImageIdIndex(i);
+                            break;
+                        }
+                    }
+                };
+                let correctingVoi = false;
+                const handleImageRendered = () => {
+                    if (correctingVoi || !voiRef.current) return;
+                    const props = viewport.getProperties();
+                    if (Boolean(props.invert) === Boolean(invertRef.current) && props.isComputedVOI !== true) return;
+                    correctingVoi = true;
+                    applyDesiredVoi();
+                    viewport.render();
+                    correctingVoi = false;
+                };
+                const captureUserVoi = () => {
+                    const props = viewport.getProperties();
+                    if (props.voiRange && props.isComputedVOI !== true) {
+                        voiRef.current = props.voiRange;
+                        invertRef.current = props.invert ?? false;
+                    }
+                };
+
+                element.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+                element.addEventListener("mouseup", captureUserVoi);
+                element.addEventListener(cornerstone.EVENTS.IMAGE_RENDERED, handleImageRendered);
+                element._atvbScrollCleanup = () => {
+                    viewport.setImageIdIndex = origSetImageIdIndex;
+                    element.removeEventListener("wheel", handleWheel, true);
+                    element.removeEventListener("mouseup", captureUserVoi);
+                    element.removeEventListener(cornerstone.EVENTS.IMAGE_RENDERED, handleImageRendered);
+                };
             } catch (err) {
                 console.error("Viewport Setup Error", err);
-            } finally {
-                // Only set loading false if we didn't crash early or unmount
-                if (renderingEngineRef.current) setIsLoading(false);
+                setLoadError(err?.message || "Failed to load images");
             }
         };
 
@@ -313,6 +351,11 @@ const ViewportComp = ({
 
         // Cleanup
         return () => {
+            if (queueRef.current) {
+                queueRef.current.destroy();
+                queueRef.current = null;
+            }
+
             const { ToolGroupManager } = cornerstoneTools;
             if (ToolGroupManager.getToolGroup(toolGroupId)) {
                 ToolGroupManager.destroyToolGroup(toolGroupId);
@@ -324,6 +367,8 @@ const ViewportComp = ({
             }
 
             if (element) {
+                element._atvbScrollCleanup?.();
+                delete element._atvbScrollCleanup;
                 element.removeEventListener(cornerstone.EVENTS.CAMERA_MODIFIED, updateWindowCamera);
                 element.removeEventListener(cornerstone.EVENTS.VOI_MODIFIED, updateWindowCamera);
                 element.removeEventListener(cornerstone.EVENTS.STACK_NEW_IMAGE, updateCurrentSlice);
@@ -396,15 +441,15 @@ const ViewportComp = ({
             const viewport = renderingEngine.getViewport(viewportId);
             if (!viewport) return;
 
-            const { start_slice, end_slice, ci } = clampSliceRange(currentMetadata);
-            const rangeKey = `${start_slice}:${end_slice}:${stack.length}`;
+            const { start_slice, end_slice, ci, excluded_slices } = clampSliceRange(currentMetadata);
+            const rangeKey = `${start_slice}:${end_slice}:${stack.length}:${(excluded_slices || []).join(",")}`;
             const rangeChanged = lastRangeKeyRef.current !== rangeKey;
             const shouldSyncFromPanel = stateFlag || propertyEditTick > lastPropertyEditRef.current || rangeChanged;
             if (!shouldSyncFromPanel) return;
             lastPropertyEditRef.current = propertyEditTick;
             lastRangeKeyRef.current = rangeKey;
 
-            const relativeSliceIndex = Math.max(0, Math.min(stack.length - 1, ci - start_slice));
+            const relativeSliceIndex = Math.max(0, Math.min(stack.length - 1, stackIndexForSlice(currentMetadata, ci)));
 
             applyingRangeRef.current = true;
             try {
@@ -437,8 +482,10 @@ const ViewportComp = ({
 
             viewport.setProperties({
                 voiRange: cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc),
-                isComputedVOI: true
+                invert: invertRef.current,
+                isComputedVOI: false
             });
+            voiRef.current = cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc);
 
             viewport.render();
             requestAnimationFrame(() => {
@@ -453,8 +500,8 @@ const ViewportComp = ({
         if (applyingRangeRef.current) return;
         const viewport = renderingEngineRef.current?.getViewport(viewportId);
         if (!viewport || !stack.length) return;
-        const { start_slice, ci } = clampSliceRange(currentMetadata);
-        const idx = Math.max(0, Math.min(stack.length - 1, ci - start_slice));
+        const { ci } = clampSliceRange(currentMetadata);
+        const idx = Math.max(0, Math.min(stack.length - 1, stackIndexForSlice(currentMetadata, ci)));
         if (viewport.getCurrentImageIdIndex() !== idx) {
             applyingRangeRef.current = true;
             viewport.setImageIdIndex(idx);

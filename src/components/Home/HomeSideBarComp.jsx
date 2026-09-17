@@ -23,6 +23,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
 
     const minLeftWidth = 180
     const maxLeftWidth = 400
+    const overlayMenu = filter === Filter.BUILDER || !isDesktop
 
     useEffect(() => {
         const onResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -65,9 +66,9 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
     return (
         <>
             {/* Mobile/Tablet Overlay */}
-            {mobileMenuOpen && (
+            {mobileMenuOpen && overlayMenu && (
                 <div
-                    className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm lg:hidden"
+                    className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
                     onClick={() => setMobileMenuOpen(false)}
                 />
             )}
@@ -75,11 +76,12 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
             {/* Left Sidebar */}
             <div
                 className={cn(
-                    "bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
-                    "fixed inset-y-0 left-0 z-50 w-64 lg:static lg:z-auto",
-                    mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                    "bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out",
+                    overlayMenu
+                        ? cn("fixed inset-y-0 left-0 z-50 w-64", mobileMenuOpen ? "translate-x-0" : "-translate-x-full")
+                        : "lg:static lg:z-auto lg:translate-x-0 fixed inset-y-0 left-0 z-50 w-64"
                 )}
-                style={{ width: isDesktop ? `${leftPanelWidth}px` : undefined }}
+                style={{ width: !overlayMenu && isDesktop ? `${leftPanelWidth}px` : undefined }}
             >
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-6">
@@ -87,7 +89,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="lg:hidden text-slate-400 hover:text-slate-100"
+                            className={cn("text-slate-400 hover:text-slate-100", !overlayMenu && "lg:hidden")}
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             <X className="h-4 w-4" />
@@ -179,11 +181,12 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                 </div>
             </div>
 
-            {/* Resize handle for left panel - Desktop Only */}
-            <div
-                className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden lg:block"
-                onMouseDown={() => setIsResizingLeft(true)}
-            />
+            {!overlayMenu && (
+                <div
+                    className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors hidden lg:block"
+                    onMouseDown={() => setIsResizingLeft(true)}
+                />
+            )}
         </>
     )
 }

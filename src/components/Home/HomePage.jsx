@@ -3,6 +3,7 @@ import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil
 import { toast } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
+import { extractUploadFolderNames, deleteUnusedCloudSeries } from "../../lib/dicomUploadUtils.js"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +20,7 @@ import { Filter } from "../../lib/constants"
 import { unflatten, flatten } from "flat";
 import BuilderPage from "./Builder/BuilderPage";
 import DemoHero from "./DemoHero";
+import { Toaster } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,20 +120,35 @@ export default function HomePage() {
   }, [isResizingRight])
 
 
-  const handleDelete = async (series_id) => {
+  const handleDelete = async (study) => {
+    const studyId = typeof study === "object" ? study.id : study;
+    const urlParams = typeof study === "object" ? study.url_params : "";
+    const studyName = typeof study === "object" ? study.name : "this case";
+    if (!studyId) return;
+
+    if (!window.confirm(`Delete “${studyName || "this case"}”? Uploaded images are removed from Cloudflare only if no other case uses them.`)) {
+      return;
+    }
+
     try {
-      const { data, error } = await supabaseClient
+      const folders = extractUploadFolderNames(urlParams);
+      const { error } = await supabaseClient
         .from("studies")
         .delete()
-        .eq("id", series_id);
+        .eq("id", studyId);
 
       if (error) throw error;
 
-      // Refresh the study list after deletion
+      const removedFolders = await deleteUnusedCloudSeries(supabaseClient, folders, studyId);
+      toast.success(
+        removedFolders.length
+          ? "Case deleted. Unused Cloudflare files were removed."
+          : "Case deleted."
+      );
       getSeries();
-
     } catch (error) {
-      console.log(error)
+      console.log(error);
+      toast.error(error?.message || "Failed to delete case");
     }
   };
 
@@ -285,12 +302,17 @@ export default function HomePage() {
 
   return (
     <>
+      <Toaster position="top-right" richColors />
       <div className="flex h-screen bg-background relative text-foreground">
         <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden w-full">
-          <HomeHeaderComp setSearch={setSearch} setMobileMenuOpen={setMobileMenuOpen} />
+          <HomeHeaderComp
+            setSearch={setSearch}
+            setMobileMenuOpen={setMobileMenuOpen}
+            showMenuButton={filter === Filter.BUILDER}
+          />
 
           <div className="flex-1 flex overflow-hidden relative">
             {filter === Filter.BUILDER ? (
@@ -367,7 +389,7 @@ export default function HomePage() {
                             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(series.id);
+                              handleDelete(series);
                             }}
                             aria-label="Delete series"
                           >

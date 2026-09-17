@@ -1,5 +1,6 @@
 import * as dcmjs from "dcmjs";
 import { anonymizeDicomFile, createAnonymizerSession } from "./dicomAnonymizer.js";
+import { concurrentExecutor } from "./utils";
 
 export { anonymizeDicomFile, createAnonymizerSession };
 
@@ -40,6 +41,34 @@ export async function extractDicomWindowSettings(file) {
   }
 
   return { windowWidth, windowCenter, rescaleSlope, rescaleIntercept };
+}
+
+function dicomText(value) {
+  if (value == null) return "";
+  const raw = Array.isArray(value) ? value[0] : value;
+  return String(raw ?? "")
+    .replace(/\0/g, "")
+    .replace(/\^/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function extractDicomNameFields(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const dicomData = dcmjs.data.DicomMessage.readFile(arrayBuffer);
+    const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
+    const seriesDescription = dicomText(dataset.SeriesDescription);
+    const studyDescription = dicomText(dataset.StudyDescription);
+    const protocolName = dicomText(dataset.ProtocolName);
+    const modality = dicomText(dataset.Modality);
+    const seriesName = seriesDescription || protocolName || studyDescription || modality || "";
+    const studyName = studyDescription || seriesName;
+    return { seriesName, studyName, seriesDescription, studyDescription, protocolName };
+  } catch (error) {
+    console.warn("Could not extract DICOM name fields:", error);
+    return { seriesName: "", studyName: "", seriesDescription: "", studyDescription: "" };
+  }
 }
 
 function longestCommonPrefix(strs) {
@@ -133,6 +162,10 @@ export function revokeDraftBlobUrls(draft) {
 }
 
 export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
+  const nameFields = files[0]
+    ? await extractDicomNameFields(files[0])
+    : { seriesName: "", studyName: "", seriesDescription: "", studyDescription: "", protocolName: "" };
+
   const session = createAnonymizerSession();
   const anonymizedFiles = [];
   for (let i = 0; i < files.length; i++) {
@@ -143,6 +176,7 @@ export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
   const localBlobUrls = anonymizedFiles.map((file) => URL.createObjectURL(file));
   const { windowWidth, windowCenter, rescaleSlope, rescaleIntercept } =
     await extractDicomWindowSettings(anonymizedFiles[0]);
+  const resolvedName = (seriesName || "").trim() || nameFields.seriesName;
 
   const pseudoUrls = anonymizedFiles.map((_, index) => `local/${index}.dcm`);
   const metadata = generateMetaDataFromUrls(
@@ -157,13 +191,32 @@ export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
     ...metadata,
     id: `draft-${Date.now()}`,
     isDraft: true,
-    label: seriesName || `Local upload ${new Date().toLocaleDateString()}`,
+    label: resolvedName || `Local upload ${new Date().toLocaleDateString()}`,
+    studyName: nameFields.studyDescription || "",
     localFiles: anonymizedFiles,
     localBlobUrls,
     prefix: "",
     suffix: "",
     cord: [-1, -1],
   };
+}
+
+async function gzipDicomFile(file, fileName) {
+  const baseName = fileName.endsWith(".dcm") ? fileName : `${fileName}.dcm`;
+  const gzName = `${baseName}.gz`;
+  if (typeof CompressionStream === "undefined") {
+    return { file, fileName: baseName };
+  }
+  try {
+    const compressed = file.stream().pipeThrough(new CompressionStream("gzip"));
+    const blob = await new Response(compressed).blob();
+    return {
+      file: new File([blob], gzName, { type: "application/gzip" }),
+      fileName: gzName,
+    };
+  } catch {
+    return { file, fileName: baseName };
+  }
 }
 
 export async function uploadImageToR2(supabaseClient, file, folderName = "", customFileName = null) {
@@ -215,19 +268,39 @@ export async function uploadDraftSeries(
 ) {
   if (!draft?.localFiles?.length) return draft;
 
-  const folderName = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const uploadedUrlsWithIndex = [];
-
-  for (let i = 0; i < draft.localFiles.length; i++) {
-    const result = await uploadImageToR2(
-      supabaseClient,
-      draft.localFiles[i],
-      folderName,
-      `${i}.dcm`
-    );
-    uploadedUrlsWithIndex.push({ url: result.url, index: i });
-    onProgress?.(Math.round(((i + 1) / draft.localFiles.length) * 100));
+  const excluded = new Set(
+    (Array.isArray(draft.excluded_slices) ? draft.excluded_slices : []).map(Number)
+  );
+  const start = Number.isFinite(Number(draft.start_slice)) ? Math.round(Number(draft.start_slice)) : 0;
+  const end = Number.isFinite(Number(draft.end_slice))
+    ? Math.round(Number(draft.end_slice))
+    : draft.localFiles.length - 1;
+  const included = [];
+  for (let i = Math.max(0, start); i <= Math.min(draft.localFiles.length - 1, end); i++) {
+    if (!excluded.has(i)) included.push(i);
   }
+  const keep = included.length ? included : [Math.max(0, start)];
+
+  const folderName = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const uploadedUrlsWithIndex = new Array(keep.length);
+  let completed = 0;
+
+  await concurrentExecutor(
+    keep.map((sourceIndex, k) => ({ sourceIndex, k })),
+    4,
+    async ({ sourceIndex, k }) => {
+      const gz = await gzipDicomFile(draft.localFiles[sourceIndex], `${k}.dcm`);
+      const result = await uploadImageToR2(
+        supabaseClient,
+        gz.file,
+        folderName,
+        gz.fileName
+      );
+      uploadedUrlsWithIndex[k] = { url: result.url, index: k };
+      completed += 1;
+      onProgress?.(Math.round((completed / keep.length) * 100));
+    }
+  );
 
   uploadedUrlsWithIndex.sort((a, b) => a.index - b.index);
   const uploadedUrls = uploadedUrlsWithIndex.map((item) => item.url);
@@ -243,9 +316,9 @@ export async function uploadDraftSeries(
     ...cloudMeta,
     id: draft.id,
     label: draft.label,
-    start_slice: draft.start_slice,
-    end_slice: draft.end_slice,
-    ci: draft.ci,
+    start_slice: 0,
+    end_slice: Math.max(0, keep.length - 1),
+    ci: Math.max(0, keep.indexOf(Number(draft.ci)) === -1 ? 0 : keep.indexOf(Number(draft.ci))),
     z: draft.z,
     px: draft.px,
     py: draft.py,
@@ -279,7 +352,91 @@ export async function uploadDraftSeries(
   return {
     ...merged,
     isDraft: false,
+    folder_name: folderName,
     localFiles: undefined,
     localBlobUrls: undefined,
   };
+}
+
+const UPLOAD_FOLDER_RE = /upload_[A-Za-z0-9_]+/g;
+const DELETE_S3_URL = "https://gcoomnnwmbehpkmbgroi.supabase.co/functions/v1/deleteS3-ts";
+
+export function extractUploadFolderName(value) {
+  const match = String(value || "").match(UPLOAD_FOLDER_RE);
+  return match?.[0] || null;
+}
+
+export function extractUploadFolderNames(value) {
+  return [...new Set(String(value || "").match(UPLOAD_FOLDER_RE) || [])];
+}
+
+export async function countStudiesUsingFolder(supabaseClient, folderName) {
+  if (!folderName) return 0;
+  const { count, error } = await supabaseClient
+    .from("studies")
+    .select("id", { count: "exact", head: true })
+    .ilike("url_params", `%${folderName}%`);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function deleteR2Folder(supabaseClient, folderName) {
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Missing user session");
+
+  const response = await fetch(DELETE_S3_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ folderPath: folderName }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to delete Cloudflare files");
+  return data;
+}
+
+export async function deleteCloudSeries(supabaseClient, series) {
+  const folderName = series?.folder_name || extractUploadFolderName(series?.prefix);
+  if (folderName) {
+    await deleteR2Folder(supabaseClient, folderName);
+  }
+  if (!series?.id) return;
+  const { error } = await supabaseClient.from("dicom_series").delete().eq("id", series.id);
+  if (error) throw error;
+}
+
+export async function deleteUnusedCloudSeries(supabaseClient, folderNames, excludeStudyId = null) {
+  const unique = [...new Set((folderNames || []).filter(Boolean))];
+  const removed = [];
+
+  for (const folderName of unique) {
+    let query = supabaseClient
+      .from("studies")
+      .select("id")
+      .ilike("url_params", `%${folderName}%`);
+    const { data: matches, error: matchError } = await query;
+    if (matchError) throw matchError;
+
+    const stillUsed = (matches || []).some((study) => study.id !== excludeStudyId);
+    if (stillUsed) continue;
+
+    const { data: series, error: seriesError } = await supabaseClient
+      .from("dicom_series")
+      .select("id, folder_name, prefix")
+      .eq("folder_name", folderName)
+      .maybeSingle();
+    if (seriesError) throw seriesError;
+    if (!series) continue;
+
+    await deleteCloudSeries(supabaseClient, series);
+    removed.push(folderName);
+  }
+
+  return removed;
 }

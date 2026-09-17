@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, Copy, Check, Loader2, X } from "lucide-react";
+import { Plus, Minus, Copy, Check, Loader2, X, PanelRightOpen } from "lucide-react";
 
 import DragComp from "./DragComp";
 import DropComp from "./DropComp";
@@ -17,8 +17,9 @@ import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, fi
 
 import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
-import { uploadDraftSeries } from "../../../lib/dicomUploadUtils"
+import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName } from "../../../lib/dicomUploadUtils"
 import { toast } from "sonner";
+import { initCornerstone } from "../../../lib/initCornerstone.js";
 
 // We need to export this or move map logic to ensure it's available if needed, but for now we keep it here.
 const mapSeriesToMetaData = (seriesList) => {
@@ -31,6 +32,7 @@ const mapSeriesToMetaData = (seriesList) => {
                 ...series.metadata,
                 id: series.id,
                 label: series.name || series.folder_name || series.metadata.label || "Untitled",
+                folder_name: series.folder_name || extractUploadFolderName(series.prefix || series.metadata.prefix),
                 prefix: series.prefix || series.metadata.prefix || "",
                 suffix: series.suffix || series.metadata.suffix || "",
                 start_slice: series.start_slice ?? series.metadata.start_slice ?? 0,
@@ -48,7 +50,7 @@ const mapSeriesToMetaData = (seriesList) => {
             id: series.id,
             label: series.name || "Untitled",
             modality: series.modality || "CT",
-            // Try to map raw fields if they exist
+            folder_name: series.folder_name || extractUploadFolderName(series.prefix),
             prefix: series.prefix || "",
             cord: [-1, -1]
         };
@@ -61,6 +63,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [metaDataList, setMetaDataList] = useState([]);
     const [metaDataSelected, setMetaDataSelected] = useState(null);
     const [drawerState, setDrawerState] = useState(false);
+    const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
     // User Context for saving
     const { supabaseClient, userData } = useContext(UserContext).data; // accessing .data based on usage in other files
@@ -68,7 +71,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [rows, setRows] = useState(1);
     const [cols, setCols] = useState(1);
 
-    const [url, setURL] = useState("Click Generate URL");
+    const [savedUrl, setSavedUrl] = useState(null); // share link shown only after upload
     const [copyClicked, setCopyClicked] = useState(false);
 
     // Save Form State
@@ -82,6 +85,10 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [uploadProgress, setUploadProgress] = useState(null);
     const [propertyEditTick, setPropertyEditTick] = useState(0);
 
+    useEffect(() => {
+        initCornerstone();
+    }, []);
+
     const handleLocalSeriesReady = (draftSeries) => {
         const slot = findFirstEmptyCell(metaDataList, cols, rows) ?? [0, 0];
         const placedDraft = { ...draftSeries, cord: slot };
@@ -89,15 +96,75 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
         setMetaDataList((prev) => [...prev, placedDraft]);
         setMetaDataSelected(placedDraft.id);
         setDrawerState(true);
+        setRightPanelOpen(true);
 
-        if (!saveForm.name) {
-            setSaveForm((prev) => ({
-                ...prev,
-                name: placedDraft.label || "New Uploaded Study",
-            }));
+        const defaultName = placedDraft.label || "New Uploaded Study";
+        const defaultDescription = placedDraft.studyName && placedDraft.studyName !== defaultName
+            ? placedDraft.studyName
+            : "";
+        setSaveForm((prev) => ({
+            ...prev,
+            name: prev.name || defaultName,
+            description: prev.description || defaultDescription,
+        }));
+    };
+
+    const handleDeleteSeries = async (series) => {
+        if (series?.isDraft) {
+            if (!window.confirm(`Remove “${series.label || "this upload"}” from the builder?`)) return;
+            revokeDraftBlobUrls(series);
+            setMetaDataList((prev) => prev.filter((item) => item.id !== series.id));
+            if (metaDataSelected === series.id) {
+                setMetaDataSelected(null);
+                setDrawerState(false);
+            }
+            toast.success("Upload removed");
+            return;
         }
 
-        toast.info("Edit window, slices, and layout in the grid. Save when ready.");
+        const folderName = series?.folder_name || extractUploadFolderName(series?.prefix);
+        if (!folderName && !series?.id) return;
+
+        let usedBy = 0;
+        try {
+            usedBy = folderName ? await countStudiesUsingFolder(supabaseClient, folderName) : 0;
+        } catch (error) {
+            console.error(error);
+        }
+
+        const usageNote = usedBy
+            ? ` ${usedBy} saved case${usedBy === 1 ? "" : "s"} still point at these images and will break.`
+            : "";
+        if (!window.confirm(`Delete “${series.label || "this series"}” and its Cloudflare files?${usageNote}`)) return;
+
+        try {
+            await deleteCloudSeries(supabaseClient, { ...series, folder_name: folderName });
+            setMetaDataList((prev) => prev.filter((item) => item.id !== series.id));
+            if (metaDataSelected === series.id) {
+                setMetaDataSelected(null);
+                setDrawerState(false);
+            }
+            toast.success("Series and Cloudflare files deleted");
+            onStudySaved?.();
+        } catch (error) {
+            console.error(error);
+            toast.error(error?.message || "Failed to delete series");
+        }
+    };
+
+    const closeRightPanel = () => {
+        setRightPanelOpen(false);
+        setDrawerState(false);
+        setMetaDataSelected(null);
+    };
+
+    const reportUploadProgress = (percent, label = "Uploading images") => {
+        setUploadProgress(percent);
+        if (percent <= 0) return;
+        toast.loading(`${label}… ${Math.round(percent)}%`, {
+            id: "builder-upload",
+            duration: Infinity,
+        });
     };
 
     const handleSaveCase = async () => {
@@ -121,18 +188,26 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
         setIsSaving(true);
         setUploadProgress(null);
 
+        const caseName = saveForm.name.trim();
+        const caseDescription = saveForm.description;
+        const caseVisibility = saveForm.visibility;
+        const draftsToUpload = placedItems.filter((item) => item.isDraft);
+
         try {
             let workingList = [...metaDataList];
-            const draftsToUpload = placedItems.filter((item) => item.isDraft);
 
-            for (const draft of draftsToUpload) {
-                setUploadProgress(0);
+            for (let i = 0; i < draftsToUpload.length; i++) {
+                const draft = draftsToUpload[i];
+                const label = draftsToUpload.length > 1
+                    ? `Uploading ${i + 1}/${draftsToUpload.length}`
+                    : `Uploading ${draft.label || "series"}`;
+                reportUploadProgress(0, label);
                 const uploaded = await uploadDraftSeries(
                     workingList.find((item) => item.id === draft.id) || draft,
                     supabaseClient,
                     userData.id,
-                    saveForm.name.trim(),
-                    setUploadProgress
+                    caseName,
+                    (pct) => reportUploadProgress(pct, label)
                 );
                 workingList = workingList.map((item) =>
                     item.id === draft.id ? uploaded : item
@@ -141,7 +216,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
             setMetaDataList(workingList);
             const finalUrl = generateGridURL(workingList, rows, cols);
-            setURL(finalUrl);
+            setSavedUrl(finalUrl);
 
             const parsedUrl = new URL(finalUrl);
             const searchParams = parsedUrl.search.substring(1);
@@ -150,15 +225,15 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                 .from("studies")
                 .insert({
                     owner: userData.id,
-                    name: saveForm.name.trim(),
-                    description: saveForm.description,
+                    name: caseName,
+                    description: caseDescription,
                     url_params: searchParams,
-                    visibility: saveForm.visibility,
+                    visibility: caseVisibility,
                 });
 
             if (error) throw error;
 
-            toast.success("Study saved and uploaded successfully!");
+            toast.success("Study saved and uploaded successfully!", { id: "builder-upload" });
             if (onStudySaved) onStudySaved();
 
             setSaveForm({
@@ -170,7 +245,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             setMetaDataList((prev) => prev.map((item) => ({ ...item, cord: [-1, -1] })));
         } catch (error) {
             console.error("Error saving case:", error);
-            toast.error("Failed to save study");
+            toast.error("Failed to save study", { id: "builder-upload" });
         } finally {
             setIsSaving(false);
             setUploadProgress(null);
@@ -186,19 +261,17 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     // ... (UseEffects for metaDataList init and resize handlers remain the same) ...
     // Note: I will just retain them in the full file rewrite/replace logic below.
 
-    // Initialize metaDataList from allSeries once
+    // Keep cloud series in sync with the library, but preserve drafts and grid placement.
     useEffect(() => {
-        if (allSeries && allSeries.length > 0 && metaDataList.length === 0) {
-            const mapped = mapSeriesToMetaData(allSeries);
-            setMetaDataList(mapped);
-        } else if (allSeries && allSeries.length > 0 && metaDataList.length > 0) {
-            // Check if items were added
-            const newItems = allSeries.filter(s => !metaDataList.find(m => m.id === s.id));
-            if (newItems.length > 0) {
-                const mappedNew = mapSeriesToMetaData(newItems);
-                setMetaDataList(prev => [...prev, ...mappedNew]);
-            }
-        }
+        setMetaDataList((prev) => {
+            const drafts = prev.filter((item) => item.isDraft);
+            const existingById = new Map(prev.map((item) => [item.id, item]));
+            const mapped = mapSeriesToMetaData(allSeries || []).map((item) => {
+                const existing = existingById.get(item.id);
+                return existing ? { ...item, cord: existing.cord } : item;
+            });
+            return [...mapped, ...drafts];
+        });
     }, [allSeries]);
 
     // Resize Handlers
@@ -244,14 +317,17 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const addRow = () => { if (rows < 3) setRows(rows + 1); };
     const minusRow = () => { if (rows > 1) setRows(rows - 1); };
 
+    const placedItems = metaDataList.filter(isPlacedOnGrid);
+    const hasLeftoverDrafts = metaDataList.some((item) => item.isDraft);
+    const hasUploadDrafts = placedItems.some((item) => item.isDraft);
+    const saveLabel = hasUploadDrafts ? "Save & Upload Case" : "Save Combined Case";
+    const saveTitle = hasUploadDrafts ? "Save Case" : "Combine Series";
+
     useEffect(() => {
         if (hasDraftPlacedOnGrid(metaDataList)) {
-            setURL("Save to cloud to generate shareable URL");
-        } else {
-            setURL(generateGridURL(metaDataList, rows, cols));
+            setSavedUrl(null);
         }
-        setCopyClicked(false);
-    }, [metaDataList, rows, cols]);
+    }, [metaDataList]);
 
 
     return (
@@ -285,6 +361,8 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             setMetaDataList={setMetaDataList}
                                             setMetaDataSelected={setMetaDataSelected}
                                             setDrawerState={setDrawerState}
+                                            setRightPanelOpen={setRightPanelOpen}
+                                            onDeleteSeries={handleDeleteSeries}
                                             variant="list"
                                         />
                                     );
@@ -323,6 +401,21 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                 </div>
                             </div>
                         </div>
+                        {!rightPanelOpen && (
+                            <Button size="sm" variant="secondary" className="gap-2" onClick={() => setRightPanelOpen(true)}>
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        {uploadProgress != null ? `Uploading ${uploadProgress}%` : "Saving…"}
+                                    </>
+                                ) : (
+                                    <>
+                                        <PanelRightOpen className="h-4 w-4" />
+                                        {saveTitle}
+                                    </>
+                                )}
+                            </Button>
+                        )}
                     </div>
 
                     {/* Canvas Area */}
@@ -344,6 +437,8 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             setDrawerState={setDrawerState}
                                             metaDataSelected={metaDataSelected}
                                             propertyEditTick={propertyEditTick}
+                                            setRightPanelOpen={setRightPanelOpen}
+                                            onDeleteSeries={handleDeleteSeries}
                                         />
                                     </div>
                                 ))
@@ -351,15 +446,15 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                         </div>
                     </div>
 
-                    {/* Footer / URL Bar */}
+                    {savedUrl && (
                     <div className="p-4 border-t bg-background shrink-0 z-10">
                         <div className="max-w-2xl mx-auto flex gap-2 items-center">
                             <div className="relative flex-1">
-                                <Input value={url} readOnly className="pr-20 font-mono text-xs text-muted-foreground bg-muted/50" />
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground px-2">Generated URL</div>
+                                <Input value={savedUrl} readOnly className="pr-20 font-mono text-xs text-muted-foreground bg-muted/50" />
+                                <div className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground px-2">Share URL</div>
                             </div>
-                            <Button size="icon" variant="secondary" disabled={url.startsWith("Save to cloud")} onClick={() => {
-                                navigator.clipboard.writeText(url);
+                            <Button size="icon" variant="secondary" onClick={() => {
+                                navigator.clipboard.writeText(savedUrl);
                                 setCopyClicked(true);
                                 setTimeout(() => setCopyClicked(false), 2000);
                             }}>
@@ -367,9 +462,10 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                             </Button>
                         </div>
                     </div>
+                    )}
                 </div>
 
-                {/* RIGHT SIDEBAR: unified edit + save panel */}
+                {rightPanelOpen && (
                 <div
                     className={`flex flex-col border-l bg-background shrink-0 relative`}
                     style={{ width: rightPanelWidth }}
@@ -384,9 +480,37 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                     />
 
                     <div className="flex flex-col h-full min-h-0">
-                        <div className="p-4 border-b font-semibold shrink-0">Case Builder</div>
+                        <div className="p-4 border-b font-semibold shrink-0 flex items-center justify-between gap-2">
+                            <span>{saveTitle}</span>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeRightPanel} title="Close panel">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
                         <ScrollArea className="flex-1">
                             <div className="p-4 space-y-6">
+                                <div className="space-y-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="upload-name">Name</Label>
+                                        <Input
+                                            id="upload-name"
+                                            value={saveForm.name}
+                                            onChange={(e) => setSaveForm({ ...saveForm, name: e.target.value })}
+                                            placeholder="Filled from the DICOM series name"
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="upload-desc">Description</Label>
+                                        <Input
+                                            id="upload-desc"
+                                            value={saveForm.description}
+                                            onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
+                                            placeholder="Filled from the DICOM study description"
+                                        />
+                                    </div>
+                                </div>
+
+                                <Separator />
+
                                 {metaDataSelected ? (
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between gap-2">
@@ -418,31 +542,14 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                     </div>
                                 ) : (
                                     <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground">
-                                        Upload DICOM, drag series onto the grid, then click the pencil icon to edit properties.
+                                        {hasUploadDrafts || hasLeftoverDrafts
+                                            ? "Upload DICOM, drag series onto the grid, then click the pencil icon to edit properties."
+                                            : "Drag existing series onto the grid to combine them, then click the pencil icon to edit properties."}
                                     </div>
                                 )}
 
                                 <div className="space-y-4">
-                                    <h4 className="text-sm font-semibold">Save Case</h4>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="upload-name">Name</Label>
-                                        <Input
-                                            id="upload-name"
-                                            value={saveForm.name}
-                                            onChange={(e) => setSaveForm({ ...saveForm, name: e.target.value })}
-                                            placeholder="My Study"
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="upload-desc">Description</Label>
-                                        <Input
-                                            id="upload-desc"
-                                            value={saveForm.description}
-                                            onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
-                                            placeholder="Optional description"
-                                        />
-                                    </div>
+                                    <h4 className="text-sm font-semibold">{saveTitle}</h4>
                                     <div className="grid gap-2">
                                         <div className="flex items-center justify-between">
                                             <Label htmlFor="upload-vis">Visibility</Label>
@@ -463,13 +570,14 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             ? uploadProgress != null
                                                 ? `Uploading... ${uploadProgress}%`
                                                 : "Saving..."
-                                            : "Save & Upload to Cloud"}
+                                            : saveLabel}
                                     </Button>
                                 </div>
                             </div>
                         </ScrollArea>
                     </div>
                 </div>
+                )}
             </div>
         </DndProvider>
     );

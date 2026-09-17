@@ -23,7 +23,8 @@ export const initalValues = {
     intLoad: true,
     rescaleIntercept: 0,
     rescaleSlope: 1,
-    step: 1
+    step: 1,
+    excluded_slices: [],
 };
 
 export function generateURL(data) {
@@ -182,6 +183,41 @@ export function getSliceBounds(metadata) {
     return { minIndex: 0, maxIndex: 0, count: 1 };
 }
 
+export function getExcludedSliceSet(metadata, start, end) {
+    const list = Array.isArray(metadata?.excluded_slices) ? metadata.excluded_slices : [];
+    const excluded = new Set();
+    for (const value of list) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) continue;
+        const i = Math.round(n);
+        if (i >= start && i <= end) excluded.add(i);
+    }
+    return excluded;
+}
+
+export function getIncludedSliceIndices(metadata, bounds = getSliceBounds(metadata)) {
+    const { start_slice: start, end_slice: end } = clampSliceRange(metadata, bounds);
+    const excluded = getExcludedSliceSet(metadata, start, end);
+    const included = [];
+    for (let i = start; i <= end; i++) {
+        if (!excluded.has(i)) included.push(i);
+    }
+    return included.length ? included : [start];
+}
+
+export function stackIndexForSlice(metadata, sliceIndex) {
+    const included = getIncludedSliceIndices(metadata);
+    const idx = included.indexOf(sliceIndex);
+    return idx >= 0 ? idx : 0;
+}
+
+export function sliceIndexForStack(metadata, stackIndex) {
+    const included = getIncludedSliceIndices(metadata);
+    if (!included.length) return 0;
+    const i = Math.max(0, Math.min(included.length - 1, Number(stackIndex) || 0));
+    return included[i];
+}
+
 export function clampSliceRange(metadata, bounds = getSliceBounds(metadata)) {
     const { minIndex, maxIndex } = bounds;
     let start = Number(metadata?.start_slice);
@@ -190,25 +226,51 @@ export function clampSliceRange(metadata, bounds = getSliceBounds(metadata)) {
     if (!Number.isFinite(end)) end = maxIndex;
     start = Math.min(Math.max(Math.round(start), minIndex), maxIndex);
     end = Math.min(Math.max(Math.round(end), start), maxIndex);
+
+    let excluded = [...getExcludedSliceSet(metadata, start, end)];
+    while (excluded.includes(start) && start < end) start += 1;
+    while (excluded.includes(end) && end > start) end -= 1;
+    excluded = excluded.filter((i) => i > start && i < end);
+
     let ci = Number(metadata?.ci);
     if (!Number.isFinite(ci)) ci = start;
     ci = Math.min(Math.max(Math.round(ci), start), end);
-    return { start_slice: start, end_slice: end, ci };
+    if (excluded.includes(ci)) {
+        const included = [];
+        for (let i = start; i <= end; i++) {
+            if (!excluded.includes(i)) included.push(i);
+        }
+        if (included.length) {
+            ci = included.reduce((best, i) =>
+                Math.abs(i - ci) < Math.abs(best - ci) ? i : best
+            , included[0]);
+        }
+    }
+
+    return { start_slice: start, end_slice: end, ci, excluded_slices: excluded };
+}
+
+/** wadouri for a 0-based slice index across the full series, not the cropped stack. */
+export function getImageIdForSlice(metadata, index) {
+    const urls = metadata?.localBlobUrls;
+    if (Array.isArray(urls) && urls[index]) {
+        return `wadouri:${urls[index]}`;
+    }
+    if (!metadata?.prefix) return null;
+    const step = Number(metadata.step) > 0 ? Number(metadata.step) : 1;
+    const minS = Number.isFinite(Number(metadata.min_slice)) ? Number(metadata.min_slice) : 0;
+    const fileNum = index * step + minS;
+    const pad = Number(metadata.pad) || 0;
+    const padded = String(fileNum).padStart(pad, "0");
+    return `wadouri:${metadata.prefix}${padded}${metadata.suffix || ""}`;
 }
 
 export function buildLocalStack(metadata) {
     const urls = metadata?.localBlobUrls || [];
     if (!urls.length) return [];
-
-    const { start_slice: start, end_slice: end } = clampSliceRange(metadata);
-    const step = Number(metadata.step) > 0 ? Number(metadata.step) : 1;
-    const stack = [];
-
-    for (let i = start; i <= end; i += step) {
-        if (urls[i]) stack.push(`wadouri:${urls[i]}`);
-    }
-
-    return stack;
+    return getIncludedSliceIndices(metadata)
+        .map((i) => (urls[i] ? `wadouri:${urls[i]}` : null))
+        .filter(Boolean);
 }
 
 export function isPlacedOnGrid(metadata) {

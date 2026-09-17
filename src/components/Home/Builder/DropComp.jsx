@@ -10,6 +10,8 @@ const DropComp = ({
   setMetaDataList,
   setMetaDataSelected,
   setDrawerState,
+  setRightPanelOpen,
+  onDeleteSeries,
   metaDataSelected,
   propertyEditTick,
 }) => {
@@ -58,6 +60,8 @@ const DropComp = ({
               setMetaDataList={setMetaDataList}
               setMetaDataSelected={setMetaDataSelected}
               setDrawerState={setDrawerState}
+              setRightPanelOpen={setRightPanelOpen}
+              onDeleteSeries={onDeleteSeries}
               propertyEditTick={metaDataSelected === data.id ? propertyEditTick : 0}
               variant="grid"
             />

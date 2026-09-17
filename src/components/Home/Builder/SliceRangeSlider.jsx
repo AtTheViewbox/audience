@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { clampSliceRange, getSliceBounds } from "./builderUtils";
+import { clampSliceRange, getIncludedSliceIndices, getSliceBounds } from "./builderUtils";
 
 function toIndex(display, minIndex) {
   const n = Number(display);
@@ -21,7 +21,7 @@ export default function SliceRangeSlider({ metadata, onChange, compact = false }
   const bounds = getSliceBounds(metadata);
   const { minIndex, maxIndex, count } = bounds;
   const { start_slice: start, end_slice: end, ci } = clampSliceRange(metadata, bounds);
-  const selected = end - start + 1;
+  const selected = getIncludedSliceIndices(metadata, bounds).length;
 
   valuesRef.current = { start, end, ci, minIndex, maxIndex, bounds, metadata };
 
