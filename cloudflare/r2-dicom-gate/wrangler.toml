@@ -1,0 +1,15 @@
+name = "r2-dicom-gate"
+main = "src/index.js"
+compatibility_date = "2026-09-18"
+
+[[r2_buckets]]
+binding = "STUDIES"
+bucket_name = "studies"
+
+[vars]
+SUPABASE_URL = "https://gcoomnnwmbehpkmbgroi.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw"
+
+# Set the same value as the Supabase secret R2_ACCESS_SIGNING_SECRET:
+#   npx wrangler secret put R2_ACCESS_SIGNING_SECRET
+# Then attach this worker to dicom.attheviewbox.dev and disable r2.dev public access.

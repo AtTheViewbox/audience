@@ -8,6 +8,7 @@ import {
   probeSupabase,
   shouldSimulateSupabaseError,
 } from '../lib/supabaseConnectivity.js';
+import { clearR2AccessToken, ensureR2AccessToken } from '../lib/r2Access.js';
 
 function isMissingAuthSession(error) {
   if (!error) return false;
@@ -84,13 +85,16 @@ export const UserProvider = ({ children }) => {
                 (event, session) => {
                         if (event === 'SIGNED_IN') {
                             userDispatch({type: 'auth_update', payload: {session}})
+                            ensureR2AccessToken().catch(() => {});
                       } else if (event === 'SIGNED_OUT') {
+                        clearR2AccessToken();
                         userDispatch({type: 'log_out', payload: {session}})
                       }
                 }
             )
 
             userDispatch({type: 'supabase_initialized', payload: {supabaseClient: cl, supabaseAuthSubscription: ss, userData: decoratedUser}})
+            ensureR2AccessToken().catch(() => {});
             setLoading(false);
             setRetrying(false);
         } catch (error) {

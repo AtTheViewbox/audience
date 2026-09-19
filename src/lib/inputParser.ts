@@ -1,3 +1,5 @@
+import { attachR2AccessToken, DICOM_CDN } from "./r2Access.js";
+
 //window.studydata.series.reduce((pS, cS) => [...pS, cS.instances.reduce((pV, cV) => [...pV, cV.url], [])], [])
 
 function longestCommonPrefix(strs) {
@@ -80,7 +82,6 @@ function recreateListFromList(strs) {
     return true; // The lists match
 }
 
-const DICOM_CDN = 'https://dicom.attheviewbox.dev';
 const S3_BUCKET_PREFIX = 'https://s3.amazonaws.com/elasticbeanstalk-us-east-1-843279806438/';
 // Cloudflare R2 public dev domains (e.g. pub-<hash>.r2.dev). These do NOT send
 // CORS headers, so browser image loaders (Cornerstone wadouri/XHR) are blocked
@@ -92,21 +93,20 @@ export function rewriteImageUrl(url: string): string {
     const schemeMatch = url.match(/^(dicomweb:|wadouri:)/);
     const scheme = schemeMatch ? schemeMatch[0] : '';
     const rawUrl = scheme ? url.slice(scheme.length) : url;
-
-    if (rawUrl.startsWith(DICOM_CDN)) return url;
+    let next = url;
 
     if (rawUrl.startsWith(S3_BUCKET_PREFIX)) {
         const key = rawUrl.slice(S3_BUCKET_PREFIX.length);
-        return scheme + DICOM_CDN + '/' + key;
+        next = scheme + DICOM_CDN + '/' + key;
+    } else {
+        const r2Match = rawUrl.match(R2_PUBLIC_HOST_RE);
+        if (r2Match) {
+            const key = rawUrl.slice(r2Match[0].length);
+            next = scheme + DICOM_CDN + '/' + key;
+        }
     }
 
-    const r2Match = rawUrl.match(R2_PUBLIC_HOST_RE);
-    if (r2Match) {
-        const key = rawUrl.slice(r2Match[0].length);
-        return scheme + DICOM_CDN + '/' + key;
-    }
-
-    return url;
+    return attachR2AccessToken(next);
 }
 
 export function smallestInStack(s){

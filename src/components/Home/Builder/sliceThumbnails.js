@@ -1,5 +1,6 @@
 import * as cornerstone from "@cornerstonejs/core";
 import { rewriteImageUrl } from "../../../lib/inputParser.ts";
+import { ensureR2AccessToken } from "../../../lib/r2Access.js";
 import { getImageIdForSlice } from "./builderUtils";
 
 const thumbCache = new Map();
@@ -45,6 +46,7 @@ function firstNumber(value, fallback) {
 
 export async function renderSliceThumb(imageId, { ww, wc, size = 64 } = {}) {
   if (!imageId) return null;
+  await ensureR2AccessToken();
   const resolved = rewriteImageUrl(imageId);
   const key = `${resolved}|${Math.round(firstNumber(ww, 0))}|${Math.round(firstNumber(wc, 0))}|${size}`;
   if (thumbCache.has(key)) return thumbCache.get(key);

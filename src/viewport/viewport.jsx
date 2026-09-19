@@ -6,6 +6,7 @@ import * as cornerstoneTools from '@cornerstonejs/tools';
 
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
 import { rewriteImageUrl } from '../lib/inputParser.ts';
+import { ensureR2AccessToken } from '../lib/r2Access.js';
 import { getRemotePointer, subscribeRemotePointer } from '../lib/pointerStore.js';
 import { toast } from "sonner";
 
@@ -244,6 +245,7 @@ export default function Viewport(props) {
 
     const viewport = rendering_engine.getViewport(viewportId);
     const { s: rawUrls, ww, wc } = viewport_data;
+    await ensureR2AccessToken();
     const s = rawUrls.map(rewriteImageUrl);
 
     let initialIndex = 0;

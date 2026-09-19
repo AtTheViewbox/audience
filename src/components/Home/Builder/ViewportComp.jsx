@@ -3,6 +3,7 @@ import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import { initalValues, buildLocalStack, clampSliceRange, getIncludedSliceIndices, getImageIdForSlice, stackIndexForSlice } from "./builderUtils";
 import { rewriteImageUrl } from "../../../lib/inputParser.ts";
+import { ensureR2AccessToken, getR2AccessToken } from "../../../lib/r2Access.js";
 import { Loader2 } from "lucide-react";
 import { ImageLoaderQueue } from "../../../lib/ImageLoaderQueue.ts";
 import { initCornerstone, isMobileDevice } from "../../../lib/initCornerstone.js";
@@ -23,12 +24,16 @@ const ViewportComp = ({
     const invertRef = useRef(false);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
+    const [r2Token, setR2Token] = useState(() => getR2AccessToken());
 
 
     // Unpack metadata safely (DragComp passes currentMetadata; PropertyPanel passes metadata)
     const currentMetadata = metadata || currentMetadataProp || initalValues;
 
-
+    useEffect(() => {
+        if (currentMetadata.localBlobUrls?.length) return;
+        ensureR2AccessToken().then((token) => setR2Token(token || null));
+    }, [currentMetadata.prefix, currentMetadata.localBlobUrls]);
 
     const stack = useMemo(() => {
         if (currentMetadata.localBlobUrls?.length) {
@@ -50,7 +55,8 @@ const ViewportComp = ({
         currentMetadata.excluded_slices,
         currentMetadata.pad,
         currentMetadata.step,
-        currentMetadata.min_slice
+        currentMetadata.min_slice,
+        r2Token,
     ]);
 
     const viewportId = `preview-vp-${currentMetadata.id}`;
