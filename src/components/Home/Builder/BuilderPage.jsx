@@ -658,7 +658,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             <div className="flex items-start gap-2">
                                                 <ShieldCheck className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                    Files are de-identified in your browser before upload. Burned-in names on the pixels are not removed.
+                                                    Headers are de-identified to HIPAA Safe Harbor in your browser before upload (names, IDs, contacts, geography, device serials, dates except year, ages 90+, and descriptors). Burned-in names or faces on the pixels are not removed.
                                                 </p>
                                             </div>
                                             <div className="flex items-start gap-3">
