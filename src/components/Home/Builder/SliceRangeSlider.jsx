@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { clampSliceRange, getIncludedSliceIndices, getSliceBounds } from "./builderUtils";
+import { clampSliceRange, excludedSlicesInRange, getIncludedSliceIndices, getSliceBounds } from "./builderUtils";
+import SliceStrideControl from "./SliceStrideControl";
 
 function toIndex(display, minIndex) {
   const n = Number(display);
@@ -20,8 +21,8 @@ export default function SliceRangeSlider({ metadata, onChange, compact = false }
 
   const bounds = getSliceBounds(metadata);
   const { minIndex, maxIndex, count } = bounds;
-  const { start_slice: start, end_slice: end, ci } = clampSliceRange(metadata, bounds);
-  const selected = getIncludedSliceIndices(metadata, bounds).length;
+  const { start_slice: start, end_slice: end, ci, excluded_slices: excluded } = clampSliceRange(metadata, bounds);
+  const selected = getIncludedSliceIndices(metadata, bounds, { allowEmpty: true }).length;
 
   valuesRef.current = { start, end, ci, minIndex, maxIndex, bounds, metadata };
 
@@ -202,6 +203,30 @@ export default function SliceRangeSlider({ metadata, onChange, compact = false }
             />
           </label>
         </div>
+      )}
+
+      {!compact && (
+        <SliceStrideControl
+          start={start}
+          end={end}
+          excluded={excluded}
+          onSelect={(nextExcluded) => {
+            commit({
+              start_slice: start,
+              end_slice: end,
+              ci,
+              excluded_slices: nextExcluded,
+            });
+          }}
+          onDeselectAll={() => {
+            commit({
+              start_slice: start,
+              end_slice: end,
+              ci,
+              excluded_slices: excludedSlicesInRange(start, end),
+            });
+          }}
+        />
       )}
     </div>
   );

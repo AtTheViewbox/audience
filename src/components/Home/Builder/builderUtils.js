@@ -195,14 +195,54 @@ export function getExcludedSliceSet(metadata, start, end) {
     return excluded;
 }
 
-export function getIncludedSliceIndices(metadata, bounds = getSliceBounds(metadata)) {
+export function getIncludedSliceIndices(metadata, bounds = getSliceBounds(metadata), { allowEmpty = false } = {}) {
     const { start_slice: start, end_slice: end } = clampSliceRange(metadata, bounds);
     const excluded = getExcludedSliceSet(metadata, start, end);
     const included = [];
     for (let i = start; i <= end; i++) {
         if (!excluded.has(i)) included.push(i);
     }
-    return included.length ? included : [start];
+    if (included.length) return included;
+    return allowEmpty ? [] : [start];
+}
+
+/** Skip interior slices so the crop keeps start, then every Nth, then end. */
+export function excludedSlicesForStride(start, end, step) {
+    const s = Math.round(Number(start));
+    const e = Math.round(Number(end));
+    const n = Math.max(1, Math.round(Number(step) || 1));
+    if (!Number.isFinite(s) || !Number.isFinite(e) || n <= 1 || e <= s) return [];
+    const excluded = [];
+    for (let i = s + 1; i < e; i++) {
+        if ((i - s) % n !== 0) excluded.push(i);
+    }
+    return excluded;
+}
+
+export function detectKeepStride(start, end, excluded) {
+    const set = new Set(excluded || []);
+    if (set.size === 0) return 1;
+    for (const step of [2, 3, 4, 5, 6, 8, 10]) {
+        const expected = excludedSlicesForStride(start, end, step);
+        if (expected.length === set.size && expected.every((i) => set.has(i))) return step;
+    }
+    return 0;
+}
+
+export function excludedSlicesInRange(start, end) {
+    const s = Math.round(Number(start));
+    const e = Math.round(Number(end));
+    if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return [];
+    const excluded = [];
+    for (let i = s; i <= e; i++) excluded.push(i);
+    return excluded;
+}
+
+export function allSlicesDeselected(start, end, excluded) {
+    const s = Math.round(Number(start));
+    const e = Math.round(Number(end));
+    if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return false;
+    return (excluded || []).length >= (e - s + 1);
 }
 
 export function stackIndexForSlice(metadata, sliceIndex) {
@@ -228,9 +268,7 @@ export function clampSliceRange(metadata, bounds = getSliceBounds(metadata)) {
     end = Math.min(Math.max(Math.round(end), start), maxIndex);
 
     let excluded = [...getExcludedSliceSet(metadata, start, end)];
-    while (excluded.includes(start) && start < end) start += 1;
-    while (excluded.includes(end) && end > start) end -= 1;
-    excluded = excluded.filter((i) => i > start && i < end);
+    excluded = excluded.filter((i) => i >= start && i <= end);
 
     let ci = Number(metadata?.ci);
     if (!Number.isFinite(ci)) ci = start;
