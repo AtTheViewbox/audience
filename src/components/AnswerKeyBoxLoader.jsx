@@ -29,7 +29,8 @@ function AnswerKeyBoxLoader() {
 
   const caseLink = { studyId, dicomSeriesId, caseUrlKey };
   const linked = isCaseLinked(caseLink);
-  const loadKeyRef = useRef(null);
+  const fetchedKeyRef = useRef(null);
+  const rowsRef = useRef(null);
 
   const demoMode = isDemoMode();
 
@@ -38,56 +39,54 @@ function AnswerKeyBoxLoader() {
     if (!demoMode && (!linked || !supabaseClient || !userData?.id)) return;
 
     const loadKey = [studyId, dicomSeriesId, caseUrlKey, ld?.r, ld?.c, demoMode].join("|");
-    if (loadKeyRef.current !== loadKey) {
-      loadKeyRef.current = null;
+    if (fetchedKeyRef.current !== loadKey) {
+      fetchedKeyRef.current = null;
+      rowsRef.current = null;
     }
 
     let cancelled = false;
     let timer = null;
+    let tries = 0;
 
-    const syncFromTable = async () => {
+    const loadRows = async () => {
+      if (rowsRef.current && fetchedKeyRef.current === loadKey) return rowsRef.current;
       const rows = demoMode
         ? getDemoBoxRows()
         : (userData?.id && supabaseClient
             ? await fetchBoxAnnotationRows(supabaseClient, caseLink, userData.id)
             : []);
-      if (cancelled) return false;
-
+      if (cancelled) return [];
+      rowsRef.current = rows;
+      fetchedKeyRef.current = loadKey;
       dispatch({ type: "set_persisted_answer_boxes", payload: flattenBoxRows(rows) });
-
-      if (!viewportsHaveStacks(renderingEngine)) return false;
-
-      if (demoMode) {
-        restoreBoxRows(renderingEngine, rows, { replaceExisting: true });
-      } else if (!boxesArePlaced(renderingEngine, rows)) {
-        restoreBoxRows(renderingEngine, rows);
-      }
-
-      if (sessionId) {
-        setPersistedBoxAnnotationsVisible(renderingEngine, heatmapVisible);
-      }
-
-      loadKeyRef.current = loadKey;
-      return true;
+      return rows;
     };
 
-    const attempt = () => {
-      syncFromTable()
-        .then((done) => {
-          if (done && timer) {
-            window.clearInterval(timer);
-            timer = null;
-          }
-        })
-        .catch((e) => console.error("Failed to sync answer-key boxes:", e));
+    const attempt = async () => {
+      try {
+        const rows = await loadRows();
+        if (cancelled) return;
+        if (!viewportsHaveStacks(renderingEngine)) {
+          if (tries++ < 20) timer = window.setTimeout(attempt, 500);
+          return;
+        }
+        if (demoMode) {
+          restoreBoxRows(renderingEngine, rows, { replaceExisting: true });
+        } else if (!boxesArePlaced(renderingEngine, rows)) {
+          restoreBoxRows(renderingEngine, rows);
+        }
+        if (sessionId) {
+          setPersistedBoxAnnotationsVisible(renderingEngine, heatmapVisible);
+        }
+      } catch (e) {
+        console.error("Failed to sync answer-key boxes:", e);
+      }
     };
 
     attempt();
-    timer = window.setInterval(attempt, 600);
-
     return () => {
       cancelled = true;
-      if (timer) window.clearInterval(timer);
+      if (timer) window.clearTimeout(timer);
     };
   }, [
     linked,

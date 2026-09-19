@@ -1,4 +1,4 @@
-import { attachR2AccessToken, DICOM_CDN } from "./r2Access.js";
+import { DICOM_CDN } from "./r2Access.js";
 
 //window.studydata.series.reduce((pS, cS) => [...pS, cS.instances.reduce((pV, cV) => [...pV, cV.url], [])], [])
 
@@ -106,7 +106,7 @@ export function rewriteImageUrl(url: string): string {
         }
     }
 
-    return attachR2AccessToken(next);
+    return next;
 }
 
 export function smallestInStack(s){

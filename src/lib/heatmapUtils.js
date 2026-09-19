@@ -6,11 +6,13 @@ const MAX_ALPHA = 0.65;
 
 export function normalizeImageId(id) {
     if (!id) return '';
+    let raw;
     try {
-        return decodeURI(String(id)).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+        raw = decodeURI(String(id)).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
     } catch {
-        return String(id).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+        raw = String(id).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
     }
+    return raw.split("?")[0];
 }
 
 function boxMatchesImage(box, currentImageId) {

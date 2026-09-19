@@ -114,6 +114,7 @@ const ViewportComp = ({
 
         const setupViewport = async () => {
             try {
+                await ensureR2AccessToken();
                 await initCornerstone();
 
                 renderingEngine = new cornerstone.RenderingEngine(renderingEngineId);

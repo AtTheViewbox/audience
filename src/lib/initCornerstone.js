@@ -2,6 +2,7 @@ import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import cornerstoneDICOMImageLoader from "@cornerstonejs/dicom-image-loader";
 import dicomParser from "dicom-parser";
+import { getR2AccessToken } from "./r2Access.js";
 
 let initPromise = null;
 
@@ -27,6 +28,10 @@ export function initCornerstone() {
       decodeConfig: {
         convertFloatPixelDataToInt: false,
         use16BitDataType: true,
+      },
+      beforeSend: (xhr) => {
+        const token = getR2AccessToken();
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       },
     });
 
