@@ -30,6 +30,15 @@ export function collectAnswerKeyBoxes(persistedAnswerBoxes) {
   return dedupeBoxes(persistedAnswerBoxes);
 }
 
+/** Presenter can reveal answers only when the case has a question or a box. */
+export function hasRevealableAnswer({
+  hostAnswerContentAvailable,
+  persistedAnswerBoxes,
+} = {}) {
+  if (hostAnswerContentAvailable) return true;
+  return collectAnswerKeyBoxes(persistedAnswerBoxes).length > 0;
+}
+
 export async function snapViewportToImage(renderingEngine, box) {
   if (!renderingEngine || !box?.imageId) return false;
   const vp = findViewportForBox(renderingEngine, box);

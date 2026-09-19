@@ -69,6 +69,7 @@ initialData.chatHistory = [
 initialData.submittedAnnotations = {};
 initialData.submittedQuestionAnswers = {};
 initialData.participantAnswerContentAvailable = false;
+initialData.hostAnswerContentAvailable = false;
 initialData.heatmapVisible = false;
 
 // Resolved case link for the answer-key feature (studies and/or dicom_series).
@@ -1084,6 +1085,7 @@ export function dataReducer(data, action) {
                 answerKeyAuthoring: false,
                 heatmapVisible: false,
                 participantAnswerContentAvailable: false,
+                hostAnswerContentAvailable: false,
             };
             if (sessionChanged) {
                 new_data.submittedQuestionAnswers = {};
@@ -1348,6 +1350,9 @@ export function dataReducer(data, action) {
             break;
         case 'set_participant_answer_content':
             new_data = { ...data, participantAnswerContentAvailable: !!action.payload };
+            break;
+        case 'set_host_answer_content':
+            new_data = { ...data, hostAnswerContentAvailable: !!action.payload };
             break;
         default:
             throw Error('Unknown action: ' + action.type);

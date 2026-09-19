@@ -22,6 +22,7 @@ import {
 import {
   collectSubmissionHeatmapBoxes,
   collectAnswerKeyBoxes,
+  hasRevealableAnswer,
   snapToBoxAtIndex,
   snapToDensityPeak,
 } from "../lib/heatmapNavigation.js";
@@ -59,6 +60,7 @@ function AnnotationPanel() {
     heatmapVisible,
     answerKeyAuthoring,
     participantAnswerContentAvailable,
+    hostAnswerContentAvailable,
     studyId,
     dicomSeriesId,
     caseUrlKey,
@@ -94,8 +96,16 @@ function AnnotationPanel() {
     submittedAnnotations,
     submittedQuestionAnswers
   );
+  const canRevealAnswer = hasRevealableAnswer({
+    hostAnswerContentAvailable,
+    persistedAnswerBoxes,
+  });
   const showHeatmapOwnerBar =
-    isSessionOwner && sessionId && !showAuthorControls && !showParticipantControls;
+    isSessionOwner &&
+    sessionId &&
+    canRevealAnswer &&
+    !showAuthorControls &&
+    !showParticipantControls;
 
   const submissionBoxes = collectSubmissionHeatmapBoxes(submittedAnnotations);
   const answerKeyBoxes = collectAnswerKeyBoxes(persistedAnswerBoxes);

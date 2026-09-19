@@ -8,6 +8,7 @@ import AtlasOverlayMenu from './MedGemma/AtlasOverlayMenu'
 import OnboardingOverlay from './OnboardingOverlay'
 import DemoOnboardingOverlay from './DemoOnboardingOverlay'
 import { isDemoMode, isPresenter } from '../lib/demoCase.js';
+import { hasRevealableAnswer } from '../lib/heatmapNavigation.js';
 import AnnotationPanel from './AnnotationPanel'
 import AnswerKeyBoxLoader from './AnswerKeyBoxLoader'
 import HeatmapOverlay from './HeatmapOverlay'
@@ -27,7 +28,12 @@ function MainPage() {
   const isPreview = searchParams.get("preview") === "true";
   const demoMode = isDemoMode(location.search);
   const { userData } = useContext(UserContext).data;
-  const { sessionId, sessionMeta } = useContext(DataContext).data;
+  const {
+    sessionId,
+    sessionMeta,
+    hostAnswerContentAvailable,
+    persistedAnswerBoxes,
+  } = useContext(DataContext).data;
   const { dispatch } = useContext(DataDispatchContext);
   const [prefTick, setPrefTick] = useState(0);
 
@@ -47,8 +53,13 @@ function MainPage() {
     return () => window.removeEventListener(PREF_EVENT, onPrefs);
   }, []);
 
+  const canRevealAnswer = hasRevealableAnswer({
+    hostAnswerContentAvailable,
+    persistedAnswerBoxes,
+  });
+
   useEffect(() => {
-    if (!isSessionOwner) return;
+    if (!isSessionOwner || !canRevealAnswer) return;
 
     const onKeyDown = (e) => {
       if (e.code !== "Space" && e.key !== " ") return;
@@ -60,7 +71,7 @@ function MainPage() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isSessionOwner, dispatch]);
+  }, [isSessionOwner, canRevealAnswer, dispatch]);
 
   void prefTick;
   const showMedGemma = getShowMedGemmaButton(userData);

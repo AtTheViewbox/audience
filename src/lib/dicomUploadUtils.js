@@ -161,6 +161,66 @@ export function revokeDraftBlobUrls(draft) {
   });
 }
 
+function isDicomFile(file) {
+  if (!file) return false;
+  const name = String(file.name || "").toLowerCase();
+  return name.endsWith(".dcm") || file.type === "application/dicom";
+}
+
+async function collectFromEntry(entry, files) {
+  if (!entry) return;
+  if (entry.isFile) {
+    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+    if (isDicomFile(file)) files.push(file);
+    return;
+  }
+  if (!entry.isDirectory) return;
+  const reader = entry.createReader();
+  const readBatch = () =>
+    new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+  let batch = await readBatch();
+  while (batch.length) {
+    for (const child of batch) await collectFromEntry(child, files);
+    batch = await readBatch();
+  }
+}
+
+export async function collectDicomFilesFromDataTransfer(dataTransfer) {
+  const files = [];
+  const items = Array.from(dataTransfer?.items || []);
+  if (items.length) {
+    await Promise.all(
+      items.map(async (item) => {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry) {
+          await collectFromEntry(entry, files);
+          return;
+        }
+        const file = item.getAsFile?.();
+        if (isDicomFile(file)) files.push(file);
+      })
+    );
+  }
+  if (!files.length) {
+    Array.from(dataTransfer?.files || []).filter(isDicomFile).forEach((file) => files.push(file));
+  }
+  return files.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+  );
+}
+
+export function groupDicomFilesByFolder(files) {
+  const groups = new Map();
+  for (const file of files || []) {
+    const rel = file.webkitRelativePath || file.name;
+    const top = rel.includes("/") ? rel.split("/")[0] : "__root__";
+    if (!groups.has(top)) groups.set(top, []);
+    groups.get(top).push(file);
+  }
+  const values = [...groups.values()].filter((group) => group.length);
+  return values.length ? values : [files || []];
+}
+
 export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
   const nameFields = files[0]
     ? await extractDicomNameFields(files[0])

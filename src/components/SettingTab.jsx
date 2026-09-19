@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button"
 import { ChevronRight, LogOut, Home } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 import { UserContext, UserDispatchContext } from "../context/UserContext"
-import { DataContext, DataDispatchContext } from "../context/DataContext"
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
@@ -12,10 +11,7 @@ import {
   getShowMedGemmaButton,
   getAutoTransferSession,
   setShowMedGemmaLocal,
-  getLeaderboardEnabled,
-  setLeaderboardEnabledLocal,
 } from "../lib/userPreferences"
-import { isPresenter } from "../lib/demoCase.js"
 
 import {
   Card,
@@ -26,23 +22,10 @@ import {
 function SettingTab() {
   const { userData, supabaseClient } = useContext(UserContext).data;
   const { userDispatch } = useContext(UserDispatchContext);
-  const { sessionId, sessionMeta } = useContext(DataContext).data;
-  const { dispatch } = useContext(DataDispatchContext);
   const navigate = useNavigate();
-
-  const inSession = !!sessionId;
-  const isSessionOwner = isPresenter({
-    sessionId,
-    userId: userData?.id,
-    ownerId: sessionMeta?.owner,
-  });
-  // The leaderboard is a session-wide setting: only the author may change it,
-  // and participants don't get an individual toggle.
-  const canControlLeaderboard = !inSession || isSessionOwner;
 
   const [showMedGemma, setShowMedGemma] = useState(false);
   const [autoTransfer, setAutoTransfer] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const isAnonymous = userData?.is_anonymous;
@@ -51,14 +34,12 @@ function SettingTab() {
     if (!userData) return;
     setShowMedGemma(getShowMedGemmaButton(userData));
     setAutoTransfer(getAutoTransferSession(userData));
-    setShowLeaderboard(getLeaderboardEnabled(userData));
   }, [
     userData,
     userData?.id,
     userData?.is_anonymous,
     userData?.user_metadata?.show_medgemma_button,
     userData?.user_metadata?.auto_transfer_session,
-    userData?.user_metadata?.show_leaderboard,
   ]);
 
   function mergeUserMetadata(patch) {
@@ -117,45 +98,6 @@ function SettingTab() {
         payload: { session: { user: mergeUserMetadata({ auto_transfer_session: prev }) } },
       });
       setAutoTransfer(!checked);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function persistLeaderboard(checked) {
-    setShowLeaderboard(checked);
-    // Push the change to everyone in the session immediately (author only).
-    if (inSession && isSessionOwner) {
-      dispatch({ type: 'broadcast_leaderboard', payload: checked });
-    }
-    if (isAnonymous) {
-      setLeaderboardEnabledLocal(checked);
-      return;
-    }
-    const prev = userData.user_metadata?.show_leaderboard;
-    userDispatch({
-      type: 'auth_update',
-      payload: {
-        session: {
-          user: mergeUserMetadata({ show_leaderboard: checked }),
-        },
-      },
-    });
-    setSaving(true);
-    try {
-      const { error } = await supabaseClient.auth.updateUser({
-        data: { show_leaderboard: checked },
-      });
-      if (error) throw error;
-    } catch (e) {
-      console.error(e);
-      userDispatch({
-        type: 'auth_update',
-        payload: {
-          session: { user: mergeUserMetadata({ show_leaderboard: prev }) },
-        },
-      });
-      setShowLeaderboard(!checked);
     } finally {
       setSaving(false);
     }
@@ -235,27 +177,6 @@ function SettingTab() {
               onCheckedChange={persistAutoTransfer}
             />
           </div>
-
-          {canControlLeaderboard && (
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="pref-leaderboard" className="text-sm font-medium">
-                  Leaderboard
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {inSession
-                    ? "Show the ranking to everyone in this session after they submit answers."
-                    : "Show ranking after participants submit answers."}
-                </p>
-              </div>
-              <Switch
-                id="pref-leaderboard"
-                checked={showLeaderboard}
-                disabled={saving}
-                onCheckedChange={persistLeaderboard}
-              />
-            </div>
-          )}
 
           <Separator />
 

@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, Copy, Check, Loader2, X, PanelRightOpen } from "lucide-react";
+import { Plus, Minus, Copy, Check, Loader2, X, PanelRightOpen, ShieldCheck } from "lucide-react";
 
 import DragComp from "./DragComp";
 import DropComp from "./DropComp";
@@ -17,7 +18,7 @@ import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, fi
 
 import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
-import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName } from "../../../lib/dicomUploadUtils"
+import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName, collectDicomFilesFromDataTransfer, groupDicomFilesByFolder, prepareLocalDraftSeries } from "../../../lib/dicomUploadUtils"
 import { toast } from "sonner";
 import { initCornerstone } from "../../../lib/initCornerstone.js";
 
@@ -84,14 +85,37 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(null);
     const [propertyEditTick, setPropertyEditTick] = useState(0);
+    const [phiVerified, setPhiVerified] = useState(false);
 
     useEffect(() => {
         initCornerstone();
     }, []);
 
     const handleLocalSeriesReady = (draftSeries) => {
-        const slot = findFirstEmptyCell(metaDataList, cols, rows) ?? [0, 0];
-        const placedDraft = { ...draftSeries, cord: slot };
+        const requested = Array.isArray(draftSeries.cord) ? draftSeries.cord : [-1, -1];
+        let nextCols = cols;
+        let nextRows = rows;
+
+        if (requested[0] >= 0 && requested[1] >= 0) {
+            nextCols = Math.max(nextCols, requested[0] + 1);
+            nextRows = Math.max(nextRows, requested[1] + 1);
+        }
+
+        let slot = requested[0] >= 0 && requested[1] >= 0
+            ? requested
+            : findFirstEmptyCell(metaDataList, nextCols, nextRows);
+
+        while (!slot && (nextCols < 5 || nextRows < 5)) {
+            if (nextCols <= nextRows && nextCols < 5) nextCols += 1;
+            else if (nextRows < 5) nextRows += 1;
+            else break;
+            slot = findFirstEmptyCell(metaDataList, nextCols, nextRows);
+        }
+
+        if (nextCols !== cols) setCols(nextCols);
+        if (nextRows !== rows) setRows(nextRows);
+
+        const placedDraft = { ...draftSeries, cord: slot || [-1, -1] };
 
         setMetaDataList((prev) => [...prev, placedDraft]);
         setMetaDataSelected(placedDraft.id);
@@ -107,6 +131,65 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             name: prev.name || defaultName,
             description: prev.description || defaultDescription,
         }));
+    };
+
+    const growGridToFit = (needed) => {
+        let nextCols = cols;
+        let nextRows = rows;
+        while (nextCols * nextRows < needed && (nextCols < 5 || nextRows < 5)) {
+            if (nextCols <= nextRows && nextCols < 5) nextCols += 1;
+            else if (nextRows < 5) nextRows += 1;
+            else break;
+        }
+        if (nextCols !== cols) setCols(nextCols);
+        if (nextRows !== rows) setRows(nextRows);
+        return { cols: nextCols, rows: nextRows };
+    };
+
+    const handleGridFileDrop = async (dataTransfer, slot) => {
+        const files = await collectDicomFilesFromDataTransfer(dataTransfer);
+        if (!files.length) {
+            toast.error("No DICOM files in that drop");
+            return;
+        }
+        const groups = groupDicomFilesByFolder(files).filter((group) => group.length);
+        const placedCount = metaDataList.filter(isPlacedOnGrid).length;
+        const grid = growGridToFit(placedCount + groups.length);
+        let occupied = metaDataList.filter(isPlacedOnGrid).map((item) => `${item.cord[0]},${item.cord[1]}`);
+        const nextSlot = () => {
+            if (slot && !occupied.includes(`${slot[0]},${slot[1]}`)) {
+                occupied.push(`${slot[0]},${slot[1]}`);
+                return slot;
+            }
+            for (let r = 0; r < grid.rows; r++) {
+                for (let c = 0; c < grid.cols; c++) {
+                    const key = `${c},${r}`;
+                    if (!occupied.includes(key)) {
+                        occupied.push(key);
+                        return [c, r];
+                    }
+                }
+            }
+            return [-1, -1];
+        };
+
+        try {
+            for (let i = 0; i < groups.length; i++) {
+                toast.loading(`Preparing DICOM… ${i + 1}/${groups.length}`, {
+                    id: "dicom-prep",
+                    duration: Infinity,
+                });
+                const draft = await prepareLocalDraftSeries(groups[i], "", () => {});
+                handleLocalSeriesReady({ ...draft, cord: nextSlot() });
+            }
+            toast.success(
+                groups.length > 1 ? `${groups.length} series loaded into Builder` : "DICOM loaded into Builder",
+                { id: "dicom-prep", duration: 1500 }
+            );
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load dropped DICOM files", { id: "dicom-prep" });
+        }
     };
 
     const handleDeleteSeries = async (series) => {
@@ -179,6 +262,10 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
         }
 
         const placedItems = metaDataList.filter(isPlacedOnGrid);
+        if (placedItems.some((item) => item.isDraft) && !phiVerified) {
+            toast.error("Confirm the images are de-identified before uploading");
+            return;
+        }
         if (placedItems.length === 0) {
             toast.error("Drag at least one series onto the grid before saving");
             return;
@@ -206,7 +293,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                     workingList.find((item) => item.id === draft.id) || draft,
                     supabaseClient,
                     userData.id,
-                    caseName,
+                    draft.label,
                     (pct) => reportUploadProgress(pct, label)
                 );
                 workingList = workingList.map((item) =>
@@ -241,6 +328,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                 description: "",
                 visibility: "PUBLIC",
             });
+            setPhiVerified(false);
 
             setMetaDataList((prev) => prev.map((item) => ({ ...item, cord: [-1, -1] })));
         } catch (error) {
@@ -439,6 +527,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             propertyEditTick={propertyEditTick}
                                             setRightPanelOpen={setRightPanelOpen}
                                             onDeleteSeries={handleDeleteSeries}
+                                            onFilesDropped={handleGridFileDrop}
                                         />
                                     </div>
                                 ))
@@ -564,7 +653,29 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                         </div>
                                     </div>
 
-                                    <Button className="w-full" onClick={handleSaveCase} disabled={isSaving}>
+                                    {hasUploadDrafts && (
+                                        <div className="p-3 bg-muted/40 border rounded-md space-y-3">
+                                            <div className="flex items-start gap-2">
+                                                <ShieldCheck className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                    Files are de-identified in your browser before upload. Burned-in names on the pixels are not removed.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-start gap-3">
+                                                <Checkbox
+                                                    id="phi-verification"
+                                                    checked={phiVerified}
+                                                    onCheckedChange={setPhiVerified}
+                                                    className="mt-0.5"
+                                                />
+                                                <Label htmlFor="phi-verification" className="text-xs font-medium cursor-pointer leading-snug">
+                                                    I have reviewed these images and confirm they do not contain burned-in names or other PHI on the pixels
+                                                </Label>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <Button className="w-full" onClick={handleSaveCase} disabled={isSaving || (hasUploadDrafts && !phiVerified)}>
                                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         {isSaving
                                             ? uploadProgress != null

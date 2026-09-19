@@ -9,14 +9,7 @@ import { isCaseLinked, applyQuestionCaseFilter } from "../lib/answerKeyCase.js";
 import { isDemoMode, isDemoPresenter, isPresenter, getDemoQuestions } from "../lib/demoCase.js";
 import { fetchDemoStats } from "../lib/demoVisits.js";
 import { isMcqQuestion, normalizeMcqOptions } from "../lib/questionTypes.js";
-import { computeMcqLeaderboard } from "../lib/leaderboard.js";
-import { getLeaderboardEnabled, PREF_EVENT } from "../lib/userPreferences.js";
-import Leaderboard from "./Leaderboard.jsx";
 import QuestionSlideCarousel from "./QuestionSlideCarousel.jsx";
-
-// Temporarily disabled: leaderboard scores aren't reliably persisting across
-// session transfers yet. Flip back to true once that's resolved.
-const LEADERBOARD_ENABLED = false;
 
 const PANEL_CLASS =
   "dark fixed top-14 right-3 z-[200] w-[min(340px,calc(100vw-1.5rem))] max-h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-xl backdrop-blur-sm";
@@ -35,21 +28,11 @@ function OwnerResultsOverlay() {
 
   const [open, setOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
-  const [prefTick, setPrefTick] = useState(0);
   const [demoStats, setDemoStats] = useState({ visitors: 0, answers: 0 });
-
-  useEffect(() => {
-    const onPrefs = () => setPrefTick((t) => t + 1);
-    window.addEventListener(PREF_EVENT, onPrefs);
-    return () => window.removeEventListener(PREF_EVENT, onPrefs);
-  }, []);
 
   useEffect(() => {
     if (heatmapVisible) setOpen(true);
   }, [heatmapVisible]);
-
-  void prefTick;
-  const showLeaderboard = getLeaderboardEnabled(userData);
 
   const isSessionOwner = isPresenter({
     sessionId,
@@ -115,11 +98,6 @@ function OwnerResultsOverlay() {
   useEffect(() => {
     if (open) fetchQuestions();
   }, [open, fetchQuestions]);
-
-  const mcqLeaderboard = useMemo(
-    () => (revealed ? computeMcqLeaderboard(questions, submittedQuestionAnswers) : []),
-    [revealed, questions, submittedQuestionAnswers]
-  );
 
   const responders = useMemo(
     () => Object.values(submittedQuestionAnswers || {}),
@@ -221,12 +199,6 @@ function OwnerResultsOverlay() {
               className="min-h-0 max-h-[55vh]"
               dotActiveClassName="bg-emerald-500"
             />
-
-            {LEADERBOARD_ENABLED && revealed && showLeaderboard && mcqLeaderboard.length > 0 && (
-              <div className="shrink-0 mt-2 pt-2 border-t border-slate-700/80">
-                <Leaderboard entries={mcqLeaderboard.slice(0, 3)} mode="mcq" compact />
-              </div>
-            )}
           </div>
         </div>
         , document.body)}

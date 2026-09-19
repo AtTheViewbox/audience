@@ -5,6 +5,7 @@ import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
 import { UserContext } from '../context/UserContext.jsx';
 import { isPresenter } from "../lib/demoCase.js";
+import { hasRevealableAnswer } from "../lib/heatmapNavigation.js";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,6 +29,8 @@ function Tools() {
         sessionMeta,
         heatmapVisible,
         answerKeyAuthoring,
+        hostAnswerContentAvailable,
+        persistedAnswerBoxes,
         renderingEngine,
     } = useContext(DataContext).data;
     const { userData } = useContext(UserContext).data;
@@ -184,7 +187,7 @@ function Tools() {
                         </DropdownMenuRadioItem>
                     )}
 
-                    {isSessionOwner && (
+                    {isSessionOwner && hasRevealableAnswer({ hostAnswerContentAvailable, persistedAnswerBoxes }) && (
                         <DropdownMenuRadioItem value="heatmap" onClick={(e) => {
                             e.preventDefault();
                             dispatch({ type: 'toggle_heatmap' });

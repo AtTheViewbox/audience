@@ -11,21 +11,12 @@ import {
   participantHasSubmitted,
   submitParticipantResponse,
 } from "../lib/participantSubmit.js";
-import {
-  computeMcqLeaderboard,
-  formatMcqAnswerLabel,
-} from "../lib/leaderboard.js";
-import { getLeaderboardEnabled, PREF_EVENT } from "../lib/userPreferences.js";
-import Leaderboard from "./Leaderboard.jsx";
+import { formatMcqAnswerLabel } from "../lib/leaderboard.js";
 import QuestionSlideCarousel from "./QuestionSlideCarousel.jsx";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-
-// Temporarily disabled: leaderboard scores aren't reliably persisting across
-// session transfers yet. Flip back to true once that's resolved.
-const LEADERBOARD_ENABLED = false;
 
 function emptyDrafts(questions) {
   const d = {};
@@ -64,17 +55,10 @@ function QuestionCardShell({ idx, q, children }) {
   );
 }
 
-function SubmittedReview({ questions, mySubmission, userId, submittedQuestionAnswers, showLeaderboard }) {
+function SubmittedReview({ questions, mySubmission }) {
   const answers = mySubmission?.answers || {};
   const boxCount = mySubmission?.boxes?.length;
   const hasBoxSubmission = boxCount != null && boxCount > 0;
-
-  // Leaderboard is based purely on MCQ correctness. With no MCQ questions
-  // there's nothing to score, so the leaderboard simply won't render.
-  const leaderboard = useMemo(
-    () => computeMcqLeaderboard(questions, submittedQuestionAnswers),
-    [questions, submittedQuestionAnswers]
-  );
 
   const answeredQuestions = questions.filter((q) => answers[q.id]);
 
@@ -114,15 +98,6 @@ function SubmittedReview({ questions, mySubmission, userId, submittedQuestionAns
       )}
 
       {answerSlides.length === 1 && answerSlides[0]}
-
-      {LEADERBOARD_ENABLED && showLeaderboard && (
-        <Leaderboard
-          entries={leaderboard}
-          mode="mcq"
-          highlightUserId={userId}
-          compact
-        />
-      )}
     </div>
   );
 }
@@ -138,7 +113,6 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
     submittedQuestionAnswers,
     submittedAnnotations,
     renderingEngine,
-    leaderboardEnabled,
     sessionCaseLink,
   } = useContext(DataContext).data;
   const { dispatch } = useContext(DataDispatchContext);
@@ -148,7 +122,6 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [prefTick, setPrefTick] = useState(0);
   const [questionIndex, setQuestionIndex] = useState(0);
   const carouselRef = useRef(null);
 
@@ -157,17 +130,6 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
   useEffect(() => {
     setQuestionIndex(0);
   }, [questions]);
-
-  useEffect(() => {
-    const onPrefs = () => setPrefTick((t) => t + 1);
-    window.addEventListener(PREF_EVENT, onPrefs);
-    return () => window.removeEventListener(PREF_EVENT, onPrefs);
-  }, []);
-
-  void prefTick;
-  // In a session the author controls leaderboard visibility for everyone;
-  // outside a session fall back to this user's own preference.
-  const showLeaderboard = sessionId ? leaderboardEnabled !== false : getLeaderboardEnabled(userData);
 
   const userId = userData?.id;
   const hasSubmitted = participantHasSubmitted(
@@ -388,9 +350,6 @@ function QuestionAnswerPanel({ questions: questionsProp }) {
       <SubmittedReview
         questions={questions}
         mySubmission={mySubmission}
-        userId={userId}
-        submittedQuestionAnswers={submittedQuestionAnswers}
-        showLeaderboard={showLeaderboard}
       />
     );
   }

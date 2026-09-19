@@ -3,6 +3,7 @@ import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked } from "../lib/answerKeyCase.js";
 import { isDemoMode, getDemoBoxRows } from "../lib/demoCase.js";
+import { fetchHostAnswerContent } from "../lib/fetchHostAnswerContent.js";
 import {
   fetchBoxAnnotationRows,
   flattenBoxRows,
@@ -59,6 +60,15 @@ function AnswerKeyBoxLoader() {
       rowsRef.current = rows;
       fetchedKeyRef.current = loadKey;
       dispatch({ type: "set_persisted_answer_boxes", payload: flattenBoxRows(rows) });
+      const content = demoMode
+        ? { hasContent: true }
+        : await fetchHostAnswerContent(supabaseClient, caseLink, userData?.id);
+      if (!cancelled) {
+        dispatch({
+          type: "set_host_answer_content",
+          payload: !!(content.hasContent || flattenBoxRows(rows).length),
+        });
+      }
       return rows;
     };
 
