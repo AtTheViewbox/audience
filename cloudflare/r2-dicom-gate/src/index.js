@@ -82,7 +82,8 @@ async function verifySupabaseJwt(token, env) {
   const cached = jwtCache.get(token);
   if (cached && cached > Date.now()) return true;
   const supabaseUrl = env.SUPABASE_URL || "https://gcoomnnwmbehpkmbgroi.supabase.co";
-  const anonKey = env.SUPABASE_ANON_KEY;
+  const anonKey = env.SUPABASE_ANON_KEY
+    || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdjb29tbm53bWJlaHBrbWJncm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzNDE5NDEsImV4cCI6MjA0MDkxNzk0MX0.S3Supif3vuWlAIz3JlRTeWDx6vMttsP5ynx_XM9Kvyw";
   if (!anonKey) return false;
   const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: {
@@ -99,11 +100,14 @@ async function authorizeToken(env, request, url) {
   const header = request.headers.get("Authorization") || "";
   const token = url.searchParams.get("t") || header.replace(/^Bearer\s+/i, "");
   if (!token) return false;
-  if (env.R2_ACCESS_SIGNING_SECRET) {
-    const claims = await verifyViewerToken(env.R2_ACCESS_SIGNING_SECRET, token);
-    if (claims) return true;
+  const parts = String(token).split(".");
+  if (parts.length >= 3) {
+    return verifySupabaseJwt(token, env);
   }
-  return verifySupabaseJwt(token, env);
+  if (env.R2_ACCESS_SIGNING_SECRET) {
+    return Boolean(await verifyViewerToken(env.R2_ACCESS_SIGNING_SECRET, token));
+  }
+  return false;
 }
 
 function objectKey(pathname) {
