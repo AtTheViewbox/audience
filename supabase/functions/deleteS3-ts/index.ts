@@ -81,6 +81,13 @@ serve(async (req) => {
       return json(req, { success: false, error: "Series not found or not owned by you" }, 403);
     }
 
+    const { data: removedStudies, error: studiesError } = await supabase
+      .from("studies")
+      .delete()
+      .ilike("url_params", `%${folderPath}%`)
+      .select("id");
+    if (studiesError) throw studiesError;
+
     let deleted = 0;
     let continuationToken: string | undefined;
     do {
@@ -105,7 +112,12 @@ serve(async (req) => {
       continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
     } while (continuationToken);
 
-    return json(req, { success: true, folder: folderPath, deleted });
+    return json(req, {
+      success: true,
+      folder: folderPath,
+      deleted,
+      removedStudies: (removedStudies || []).map((study) => study.id),
+    });
   } catch (error) {
     console.error("Delete error");
     return json(req, { success: false, error: error?.message || "Delete failed" }, 500);

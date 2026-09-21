@@ -3,6 +3,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -210,24 +211,29 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
         let usedBy = 0;
         try {
-            usedBy = folderName ? await countStudiesUsingFolder(supabaseClient, folderName) : 0;
+            usedBy = folderName ? await countStudiesUsingFolder(supabaseClient, folderName, userData?.id) : 0;
         } catch (error) {
             console.error(error);
         }
 
         const usageNote = usedBy
-            ? ` ${usedBy} saved case${usedBy === 1 ? "" : "s"} still point at these images and will break.`
+            ? ` ${usedBy} saved case${usedBy === 1 ? "" : "s"} that use these images will also be deleted.`
             : "";
         if (!window.confirm(`Delete “${series.label || "this series"}” and its Cloudflare files?${usageNote}`)) return;
 
         try {
-            await deleteCloudSeries(supabaseClient, { ...series, folder_name: folderName });
+            const result = await deleteCloudSeries(supabaseClient, { ...series, folder_name: folderName }, userData?.id);
             setMetaDataList((prev) => prev.filter((item) => item.id !== series.id));
             if (metaDataSelected === series.id) {
                 setMetaDataSelected(null);
                 setDrawerState(false);
             }
-            toast.success("Series and Cloudflare files deleted");
+            const studyCount = result?.removedStudies?.length || 0;
+            toast.success(
+                studyCount
+                    ? `Series, Cloudflare files, and ${studyCount} saved case${studyCount === 1 ? "" : "s"} deleted`
+                    : "Series and Cloudflare files deleted"
+            );
             onStudySaved?.();
         } catch (error) {
             console.error(error);
@@ -556,7 +562,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
                 {rightPanelOpen && (
                 <div
-                    className={`flex flex-col border-l bg-background shrink-0 relative`}
+                    className={`flex flex-col border-l bg-background shrink-0 relative min-w-0`}
                     style={{ width: rightPanelWidth }}
                 >
                     {/* Resizer Handle */}
@@ -576,7 +582,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                             </Button>
                         </div>
                         <ScrollArea className="flex-1">
-                            <div className="p-4 space-y-6">
+                            <div className="p-4 space-y-6 min-w-0">
                                 <div className="space-y-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="upload-name">Name</Label>
@@ -589,11 +595,12 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="upload-desc">Description</Label>
-                                        <Input
+                                        <Textarea
                                             id="upload-desc"
                                             value={saveForm.description}
                                             onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
                                             placeholder="Filled from the DICOM study description"
+                                            className="min-h-[80px] max-h-[160px] resize-none overflow-y-auto break-words [overflow-wrap:anywhere]"
                                         />
                                     </div>
                                 </div>

@@ -392,19 +392,24 @@ export async function uploadDraftSeries(
   };
 
   if (userId) {
-    const { error } = await supabaseClient.from("dicom_series").insert({
-      user_id: userId,
-      name: seriesName || draft.label,
-      folder_name: folderName,
-      prefix: merged.prefix,
-      suffix: merged.suffix,
-      start_slice: merged.start_slice,
-      end_slice: merged.end_slice,
-      window_width: merged.ww,
-      window_center: merged.wc,
-      metadata: merged,
-    });
+    const { data: inserted, error } = await supabaseClient
+      .from("dicom_series")
+      .insert({
+        user_id: userId,
+        name: seriesName || draft.label,
+        folder_name: folderName,
+        prefix: merged.prefix,
+        suffix: merged.suffix,
+        start_slice: merged.start_slice,
+        end_slice: merged.end_slice,
+        window_width: merged.ww,
+        window_center: merged.wc,
+        metadata: merged,
+      })
+      .select("id")
+      .single();
     if (error) throw error;
+    if (inserted?.id) merged.id = inserted.id;
   }
 
   revokeDraftBlobUrls(draft);
@@ -430,14 +435,28 @@ export function extractUploadFolderNames(value) {
   return [...new Set(String(value || "").match(UPLOAD_FOLDER_RE) || [])];
 }
 
-export async function countStudiesUsingFolder(supabaseClient, folderName) {
+export async function countStudiesUsingFolder(supabaseClient, folderName, ownerId = null) {
   if (!folderName) return 0;
-  const { count, error } = await supabaseClient
+  let query = supabaseClient
     .from("studies")
     .select("id", { count: "exact", head: true })
     .ilike("url_params", `%${folderName}%`);
+  if (ownerId) query = query.eq("owner", ownerId);
+  const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
+}
+
+export async function deleteStudiesUsingFolder(supabaseClient, folderName, ownerId = null) {
+  if (!folderName) return [];
+  let query = supabaseClient
+    .from("studies")
+    .delete()
+    .ilike("url_params", `%${folderName}%`);
+  if (ownerId) query = query.eq("owner", ownerId);
+  const { data, error } = await query.select("id");
+  if (error) throw error;
+  return data || [];
 }
 
 export async function deleteR2Folder(supabaseClient, folderName) {
@@ -461,14 +480,22 @@ export async function deleteR2Folder(supabaseClient, folderName) {
   return data;
 }
 
-export async function deleteCloudSeries(supabaseClient, series) {
+export async function deleteCloudSeries(supabaseClient, series, ownerId = null) {
   const folderName = series?.folder_name || extractUploadFolderName(series?.prefix);
+  let removedStudies = [];
   if (folderName) {
+    removedStudies = await deleteStudiesUsingFolder(supabaseClient, folderName, ownerId);
     await deleteR2Folder(supabaseClient, folderName);
+    const { error: folderError } = await supabaseClient
+      .from("dicom_series")
+      .delete()
+      .eq("folder_name", folderName);
+    if (folderError) throw folderError;
+  } else if (series?.id && !String(series.id).startsWith("draft-")) {
+    const { error } = await supabaseClient.from("dicom_series").delete().eq("id", series.id);
+    if (error) throw error;
   }
-  if (!series?.id) return;
-  const { error } = await supabaseClient.from("dicom_series").delete().eq("id", series.id);
-  if (error) throw error;
+  return { removedStudies };
 }
 
 export async function deleteUnusedCloudSeries(supabaseClient, folderNames, excludeStudyId = null) {

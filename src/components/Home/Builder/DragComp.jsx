@@ -109,7 +109,7 @@ const DragComp = ({
                     <div
                         className="bg-background/80 rounded-sm p-1 hover:bg-destructive/10 cursor-pointer border"
                         onClick={(e) => { e.stopPropagation(); onDeleteSeries?.(metadata); }}
-                        title={metadata.isDraft ? "Delete upload" : "Delete series and Cloudflare files"}
+                        title={metadata.isDraft ? "Delete upload" : "Delete series, Cloudflare files, and saved cases that use them"}
                     >
                         <Trash2 size={14} className="text-muted-foreground"/>
                     </div>

@@ -378,7 +378,7 @@ export default function HomePage() {
                     {displaySeriesList.map((series) => (
                       <Card
                         key={series.id}
-                        className={`relative group cursor-pointer bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
+                        className={`relative group cursor-pointer min-w-0 overflow-hidden bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
                           }`}
                         onClick={() => setSelectedSeries(series)}
                       >
@@ -397,15 +397,13 @@ export default function HomePage() {
                           </Button>
                         ) : null}
                         <CardHeader className="pb-2">
-                          <div className="flex items-start gap-3">
-                            <div>
-                              <CardTitle className="text-base text-slate-100 font-semibold mb-1">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="min-w-0 w-full overflow-hidden pr-8">
+                              <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate" title={series.name}>
                                 {series.name}
                               </CardTitle>
-                              <CardDescription className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                                {series.description && series.description.length > 100
-                                  ? series.description.slice(0, 100) + "..."
-                                  : series.description || "No description"}
+                              <CardDescription className="text-xs text-slate-400 line-clamp-2 leading-relaxed break-words [overflow-wrap:anywhere]">
+                                {series.description || "No description"}
                               </CardDescription>
                             </div>
                           </div>
@@ -433,7 +431,7 @@ export default function HomePage() {
 
                 {/* Preview Panel - Desktop: Side, Mobile/Tablet: Full Overlay */}
                 <div
-                  className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col 
+                  className={`bg-slate-950 border-l border-slate-800 overflow-hidden flex flex-col min-w-0 min-h-0
                 ${selectedSeries ? 'fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'}
             `}
                   style={{ width: isDesktop ? `${rightPanelWidth}px` : '100%' }}
@@ -448,7 +446,7 @@ export default function HomePage() {
 
                   {selectedSeries && (
                     <>
-                      <div className="border-b bg-muted/20">
+                      <div className="border-b bg-muted/20 shrink-0">
                         <div className="flex flex-col items-center text-center">
                           <div className="w-full aspect-square bg-black overflow-hidden border-b transition-colors">
                             <iframe
@@ -464,9 +462,9 @@ export default function HomePage() {
                             ></iframe>
                           </div>
 
-                          <div className="p-4 w-full text-left">
+                          <div className="p-4 w-full text-left min-w-0">
                             {isEditing ? (
-                              <div className="space-y-4">
+                              <div className="space-y-4 min-w-0">
                                 <Input
                                   value={editName}
                                   onChange={e => setEditName(e.target.value)}
@@ -482,9 +480,9 @@ export default function HomePage() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <h3 className="text-lg font-bold tracking-tight">
+                              <div className="flex items-start justify-between gap-2 min-w-0">
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="text-lg font-bold tracking-tight whitespace-normal break-words [overflow-wrap:anywhere]">
                                     {selectedSeries.name}
                                   </h3>
                                   <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-2 flex items-center gap-2">
@@ -576,8 +574,8 @@ export default function HomePage() {
                           </div>
                         </div>
                       </div>
-                      <ScrollArea className="flex-1 bg-slate-950/20">
-                        <div className="p-6">
+                      <ScrollArea className="flex-1 min-h-0 bg-slate-950/20">
+                        <div className="p-6 min-w-0">
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Description</h4>
                             {isEditing && (
@@ -592,12 +590,12 @@ export default function HomePage() {
                               <Textarea
                                 value={editDescription}
                                 onChange={e => setEditDescription(e.target.value)}
-                                className="text-sm bg-slate-900 border-slate-700 text-slate-200 resize-none placeholder:text-slate-500 p-4 min-h-[150px] max-h-[300px] overflow-y-auto focus-visible:ring-1 focus-visible:ring-slate-600 shadow-inner"
+                                className="text-sm bg-slate-900 border-slate-700 text-slate-200 resize-none placeholder:text-slate-500 p-4 min-h-[150px] max-h-[300px] overflow-y-auto break-words [overflow-wrap:anywhere] focus-visible:ring-1 focus-visible:ring-slate-600 shadow-inner"
                                 placeholder="Add a detailed description for cases, findings, and more..."
                               />
                             </div>
                           ) : (
-                            <p className="text-sm text-slate-300 leading-relaxed italic whitespace-pre-wrap mt-2">
+                            <p className="text-sm text-slate-300 leading-relaxed italic whitespace-pre-wrap mt-2 break-words [overflow-wrap:anywhere]">
                               {selectedSeries.description || "No description provided."}
                             </p>
                           )}
