@@ -25,7 +25,7 @@ export default function AddCaseDialog({ onStudyAdded }) {
     // State for dialog open/close
     const [open, setOpen] = useState(false)
     // State for dialog open/close
-    const [visibility, setVisibility] = useState(Visibility.PUBLIC);
+    const [visibility, setVisibility] = useState(Visibility.PRIVATE);
 
     function changeVisibility() {
         if (visibility === Visibility.PUBLIC) {
@@ -70,6 +70,7 @@ export default function AddCaseDialog({ onStudyAdded }) {
                 .select();
             if (upsert_error) throw upsert_error;
             if (onStudyAdded) onStudyAdded();
+            setVisibility(Visibility.PRIVATE);
             setOpen(false)
         } catch (error) {
             console.log(error);
@@ -77,7 +78,10 @@ export default function AddCaseDialog({ onStudyAdded }) {
     }
     return (
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(next) => {
+            setOpen(next);
+            if (!next) setVisibility(Visibility.PRIVATE);
+        }}>
             <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2">
                     <Plus className="h-4 w-4" />

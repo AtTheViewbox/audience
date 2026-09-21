@@ -80,7 +80,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [saveForm, setSaveForm] = useState({
         name: "",
         description: "",
-        visibility: "PUBLIC"
+        visibility: "PRIVATE"
     });
 
     const [isSaving, setIsSaving] = useState(false);
@@ -326,20 +326,21 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
             if (error) throw error;
 
-            toast.success("Study saved and uploaded successfully!", { id: "builder-upload" });
+            toast.dismiss("builder-upload");
+            toast.success("Study saved and uploaded successfully!", { duration: 2000 });
             if (onStudySaved) onStudySaved();
 
             setSaveForm({
                 name: "",
                 description: "",
-                visibility: "PUBLIC",
+                visibility: "PRIVATE",
             });
             setPhiVerified(false);
 
             setMetaDataList((prev) => prev.map((item) => ({ ...item, cord: [-1, -1] })));
         } catch (error) {
             console.error("Error saving case:", error);
-            toast.error("Failed to save study", { id: "builder-upload" });
+            toast.error("Failed to save study", { id: "builder-upload", duration: 3500 });
         } finally {
             setIsSaving(false);
             setUploadProgress(null);

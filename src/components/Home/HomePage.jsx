@@ -7,7 +7,6 @@ import { extractUploadFolderNames, deleteUnusedCloudSeries } from "../../lib/dic
 
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import HomeSideBar from "./HomeSideBarComp"
 import HomeHeaderComp from "./HomeHeaderComp"
 import AddCaseDialog from "./AddCaseDialog"
@@ -445,10 +444,10 @@ export default function HomePage() {
                   </div>
 
                   {selectedSeries && (
-                    <>
-                      <div className="border-b bg-muted/20 shrink-0">
+                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                      <div className="border-b bg-muted/20">
                         <div className="flex flex-col items-center text-center">
-                          <div className="w-full aspect-square bg-black overflow-hidden border-b transition-colors">
+                          <div className="w-full h-[min(42vh,360px)] bg-black overflow-hidden border-b transition-colors">
                             <iframe
                               src={
                                 selectedSeries?.url_params
@@ -574,34 +573,32 @@ export default function HomePage() {
                           </div>
                         </div>
                       </div>
-                      <ScrollArea className="flex-1 min-h-0 bg-slate-950/20">
-                        <div className="p-6 min-w-0">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Description</h4>
-                            {isEditing && (
-                              <div className="flex gap-3">
-                                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} className="h-8 px-3 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800">Cancel</Button>
-                                <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-8 px-4 text-xs bg-slate-100 hover:bg-white text-slate-900 font-semibold shadow-sm transition-all hover:scale-[1.02]">Save Changes</Button>
-                              </div>
-                            )}
-                          </div>
-                          {isEditing ? (
-                            <div className="pt-2">
-                              <Textarea
-                                value={editDescription}
-                                onChange={e => setEditDescription(e.target.value)}
-                                className="text-sm bg-slate-900 border-slate-700 text-slate-200 resize-none placeholder:text-slate-500 p-4 min-h-[150px] max-h-[300px] overflow-y-auto break-words [overflow-wrap:anywhere] focus-visible:ring-1 focus-visible:ring-slate-600 shadow-inner"
-                                placeholder="Add a detailed description for cases, findings, and more..."
-                              />
+                      <div className="p-6 min-w-0 bg-slate-950/20">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Description</h4>
+                          {isEditing && (
+                            <div className="flex gap-3">
+                              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} className="h-8 px-3 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800">Cancel</Button>
+                              <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-8 px-4 text-xs bg-slate-100 hover:bg-white text-slate-900 font-semibold shadow-sm transition-all hover:scale-[1.02]">Save Changes</Button>
                             </div>
-                          ) : (
-                            <p className="text-sm text-slate-300 leading-relaxed italic whitespace-pre-wrap mt-2 break-words [overflow-wrap:anywhere]">
-                              {selectedSeries.description || "No description provided."}
-                            </p>
                           )}
                         </div>
-                      </ScrollArea>
-                    </>
+                        {isEditing ? (
+                          <div className="pt-2">
+                            <Textarea
+                              value={editDescription}
+                              onChange={e => setEditDescription(e.target.value)}
+                              className="text-sm bg-slate-900 border-slate-700 text-slate-200 resize-none placeholder:text-slate-500 p-4 min-h-[150px] max-h-[300px] overflow-y-auto break-words [overflow-wrap:anywhere] focus-visible:ring-1 focus-visible:ring-slate-600 shadow-inner"
+                              placeholder="Add a detailed description for cases, findings, and more..."
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-300 leading-relaxed italic whitespace-pre-wrap mt-2 break-words [overflow-wrap:anywhere]">
+                            {selectedSeries.description || "No description provided."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </>
