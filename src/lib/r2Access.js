@@ -33,17 +33,56 @@ export function clearR2AccessToken() {
   accessExp = 0;
 }
 
+function rememberSession(session) {
+  const jwt = session?.access_token;
+  if (!jwt) return null;
+  accessToken = jwt;
+  accessExp = jwtExp(jwt) || Number(session.expires_at) || nowSec() + 3600;
+  return accessToken;
+}
+
+/** Guest sign-in is async; image loads must wait instead of fetching unauthenticated. */
+async function waitForAuthSession(timeoutMs = 8000) {
+  const { data: existing } = await cl.auth.getSession();
+  if (existing.session?.access_token) return existing.session;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (session) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      subscription.unsubscribe();
+      resolve(session || null);
+    };
+
+    const { data: { subscription } } = cl.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) finish(session);
+    });
+
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    cl.auth.getSession().then(({ data }) => {
+      if (data.session?.access_token) finish(data.session);
+    });
+  });
+}
+
 export async function ensureR2AccessToken() {
   const current = getR2AccessToken();
   if (current) return current;
   if (!inflight) {
     inflight = (async () => {
-      const { data: { session } } = await cl.auth.getSession();
-      const jwt = session?.access_token;
-      if (!jwt) return null;
-      accessToken = jwt;
-      accessExp = jwtExp(jwt) || Number(session.expires_at) || nowSec() + 3600;
-      return accessToken;
+      let session = (await cl.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        session = await waitForAuthSession();
+      }
+      if (!session?.access_token) {
+        const { data, error } = await cl.auth.signInAnonymously();
+        if (!error) {
+          session = data?.session ?? (await cl.auth.getSession()).data.session;
+        }
+      }
+      return rememberSession(session);
     })().finally(() => {
       inflight = null;
     });

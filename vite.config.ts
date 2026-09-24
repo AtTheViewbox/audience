@@ -28,6 +28,13 @@ export default defineConfig({
         ws: true,
         // rewrite: (path) => path.replace(/^\/api/, ""),
       },
+      // Local scans go through Vite so the R2 gate never sees a localhost Origin.
+      '/dicom-cdn': {
+        target: 'https://dicom.attheviewbox.dev',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/dicom-cdn/, ''),
+      },
     },
     //hmr: {
     //  clientPort: 443,

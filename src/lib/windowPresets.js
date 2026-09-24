@@ -14,6 +14,30 @@ export function presetFromDigitKey(key) {
   return WINDOW_PRESETS.find((p) => p.key === key) ?? null;
 }
 
+/**
+ * Builder/URL windows are often stored-pixel (HU - intercept). Pre-scaled
+ * images need HU. Pick whichever lands closer to the file's own window.
+ */
+export function voiRangeFromSavedWindow(ww, wc, image) {
+  const cornerstone = typeof window !== "undefined" ? window.cornerstone : null;
+  let width = Number(ww);
+  let center = Number(wc);
+  if (!Number.isFinite(width) || !Number.isFinite(center)) return null;
+
+  if (image?.isPreScaled && Number.isFinite(Number(image.intercept))) {
+    const intercept = Number(image.intercept);
+    const dicomWc = Number(
+      Array.isArray(image.windowCenter) ? image.windowCenter[0] : image.windowCenter
+    );
+    if (Number.isFinite(dicomWc)) {
+      const asHu = center + intercept;
+      if (Math.abs(asHu - dicomWc) < Math.abs(center - dicomWc)) center = asHu;
+    }
+  }
+
+  return cornerstone?.utilities?.windowLevel?.toLowHighRange(width, center) ?? null;
+}
+
 /** Apply a HU window/level preset to every viewport on the rendering engine. */
 export function applyWindowPreset(renderingEngine, wwHU, wcHU) {
   const cornerstone = typeof window !== "undefined" ? window.cornerstone : null;

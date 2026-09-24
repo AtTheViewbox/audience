@@ -7,6 +7,7 @@ import * as cornerstoneTools from '@cornerstonejs/tools';
 import { ImageLoaderQueue } from '../lib/ImageLoaderQueue.ts';
 import { rewriteImageUrl } from '../lib/inputParser.ts';
 import { ensureR2AccessToken } from '../lib/r2Access.js';
+import { voiRangeFromSavedWindow } from '../lib/windowPresets.js';
 import { getRemotePointer, subscribeRemotePointer } from '../lib/pointerStore.js';
 import { toast } from "sonner";
 
@@ -273,19 +274,35 @@ export default function Viewport(props) {
     scheduleProgressPaint();
 
     try {
-      await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100, requestType: 'interaction' });
+      let firstImageError = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await cornerstone.imageLoader.loadAndCacheImage(s[initialIndex], { priority: 100, requestType: 'interaction' });
+          firstImageError = null;
+          break;
+        } catch (err) {
+          firstImageError = err;
+          await ensureR2AccessToken();
+        }
+      }
+      if (firstImageError) throw firstImageError;
       scheduleProgressPaint();
 
       // Initial Stack: Use ALL image IDs to allow navigation/scrolling immediately
       // Cornerstone handles lazy-loading pixels as needed.
       await viewport.setStack(s, initialIndex);
+      viewport.resetCamera?.();
 
-      voiRef.current = cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
+      const firstImage = cornerstone.cache.getImage(s[initialIndex]);
+      voiRef.current =
+        voiRangeFromSavedWindow(ww, wc, firstImage) ||
+        cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
       viewport.setProperties({
         voiRange: voiRef.current,
         isComputedVOI: false,
       });
       invertRef.current = viewport.getProperties().invert ?? false;
+      viewport.render();
 
       const sliceIsReady = (index) => {
         const id = s[index];
@@ -317,6 +334,26 @@ export default function Viewport(props) {
       // setImageIdIndex — by patching it we catch every code path.
       let _gating = false;               // re-entrancy guard
       const _origSetImageIdIndex = viewport.setImageIdIndex.bind(viewport);
+
+      viewport.jumpToImageIdIndex = async (index) => {
+        const id = s[index];
+        if (id == null) return viewport.getCurrentImageIdIndex();
+        try {
+          await cornerstone.imageLoader.loadAndCacheImage(id);
+        } catch (e) {
+          console.warn("jumpToImageIdIndex load failed", e);
+          return viewport.getCurrentImageIdIndex();
+        }
+        loadedSetRef.current.add(index);
+        const result = await _origSetImageIdIndex(index);
+        viewport.targetImageIdIndex = index;
+        applyDesiredVoi();
+        viewport.render();
+        prevImageIndexRef.current = index;
+        scheduleProgressPaint();
+        if (queueRef.current) queueRef.current.updateFocus(index);
+        return result;
+      };
 
       viewport.setImageIdIndex = async (index) => {
         if (_gating) {
@@ -709,7 +746,11 @@ export default function Viewport(props) {
           // 1. Handle Windowing Changes
           if (!isWindowSame) {
             const { ww, wc } = viewport_data;
-            const newRange = cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
+            const imageId = viewport.getCurrentImageId?.();
+            const image = imageId ? cornerstone.cache.getImage(imageId) : null;
+            const newRange =
+              voiRangeFromSavedWindow(ww, wc, image) ||
+              cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
             viewport.setProperties({
               voiRange: newRange,
               isComputedVOI: false,

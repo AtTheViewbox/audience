@@ -2,7 +2,7 @@ import * as cornerstone from "@cornerstonejs/core";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import cornerstoneDICOMImageLoader from "@cornerstonejs/dicom-image-loader";
 import dicomParser from "dicom-parser";
-import { DICOM_CDN, ensureR2AccessToken, getR2AccessToken } from "./r2Access.js";
+import { DICOM_CDN, ensureR2AccessToken, getR2AccessToken, clearR2AccessToken } from "./r2Access.js";
 
 let initPromise = null;
 const originalWadoLoad = cornerstoneDICOMImageLoader.wadouri.loadImage;
@@ -31,19 +31,44 @@ function loadAuthedDicom(imageId, options) {
 
   let cancelled = false;
   const promise = (async () => {
-    const token = (await ensureR2AccessToken()) || getR2AccessToken();
+    await ensureR2AccessToken();
     if (cancelled) throw new Error("DICOM load cancelled");
-    const response = await fetch(rawUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) {
-      throw new Error(`DICOM request failed (${response.status})`);
+
+    // Native wadouri keeps image-plane + VOI working. beforeSend adds the JWT.
+    try {
+      const loaded = originalWadoLoad(imageId, options);
+      return await loaded.promise;
+    } catch (nativeErr) {
+      const fetchUrl =
+        import.meta.env.DEV && rawUrl.startsWith(DICOM_CDN)
+          ? `/dicom-cdn${rawUrl.slice(DICOM_CDN.length)}`
+          : rawUrl;
+
+      const fetchWithToken = async () => {
+        const token = (await ensureR2AccessToken()) || getR2AccessToken();
+        if (!token) throw new Error("DICOM request failed (waiting for sign-in)");
+        return fetch(fetchUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      };
+
+      if (cancelled) throw new Error("DICOM load cancelled");
+      let response = await fetchWithToken();
+      if (response.status === 401 || response.status === 403) {
+        clearR2AccessToken();
+        if (cancelled) throw new Error("DICOM load cancelled");
+        response = await fetchWithToken();
+      }
+      if (!response.ok) {
+        throw nativeErr;
+      }
+      const unzipped = await maybeGunzip(await response.arrayBuffer());
+      const blobUrl = URL.createObjectURL(new Blob([unzipped], { type: "application/dicom" }));
+      const loaded = originalWadoLoad(`${scheme || "wadouri:"}${blobUrl}`, options);
+      const image = await loaded.promise;
+      if (image && imageId) image.imageId = imageId;
+      return image;
     }
-    const unzipped = await maybeGunzip(await response.arrayBuffer());
-    const blobUrl = URL.createObjectURL(new Blob([unzipped], { type: "application/dicom" }));
-    const loaded = originalWadoLoad(`${scheme || "wadouri:"}${blobUrl}`, options);
-    const image = await loaded.promise;
-    return image;
   })();
 
   return {

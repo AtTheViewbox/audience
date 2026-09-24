@@ -1,3 +1,4 @@
+import * as cornerstone from "@cornerstonejs/core";
 import { normalizeImageId } from "./heatmapUtils.js";
 import { findViewportForBox, imageIdsMatch } from "./answerKeyBoxes.js";
 
@@ -48,7 +49,21 @@ export async function snapViewportToImage(renderingEngine, box) {
   const idx = ids.findIndex((id) => imageIdsMatch(id, box.imageId));
   if (idx === -1) return false;
 
-  await vp.setImageIdIndex(idx);
+  const targetId = ids[idx];
+  try {
+    await cornerstone.imageLoader.loadAndCacheImage(targetId);
+  } catch (e) {
+    console.warn("Failed to load answer-key slice:", e);
+    return false;
+  }
+
+  // Viewport scroll is gated to already-decoded slices; Show Answer must jump
+  // even when that slice has not been reached by the prefetch queue yet.
+  if (typeof vp.jumpToImageIdIndex === "function") {
+    await vp.jumpToImageIdIndex(idx);
+  } else {
+    await vp.setImageIdIndex(idx);
+  }
   vp.render?.();
   return true;
 }
@@ -85,7 +100,11 @@ export async function snapToDensityPeak(renderingEngine, boxes) {
     const ids = vp.getImageIds?.() || [];
     const idx = ids.findIndex((id) => normalizeImageId(id) === bestKey);
     if (idx !== -1) {
-      await vp.setImageIdIndex(idx);
+      if (typeof vp.jumpToImageIdIndex === "function") {
+        await vp.jumpToImageIdIndex(idx);
+      } else {
+        await vp.setImageIdIndex(idx);
+      }
       vp.render?.();
       return true;
     }

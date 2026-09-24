@@ -5,7 +5,15 @@ import { applyAnnotationCaseFilter, isCaseLinked } from "./answerKeyCase.js";
 export function imageIdsMatch(a, b) {
   if (!a || !b) return false;
   if (a === b) return true;
-  return normalizeImageId(a) === normalizeImageId(b);
+  const na = normalizeImageId(a);
+  const nb = normalizeImageId(b);
+  if (na === nb) return true;
+  const fileA = na.split("/").pop();
+  const fileB = nb.split("/").pop();
+  if (!fileA || fileA !== fileB) return false;
+  const folderA = na.split("/").slice(-2, -1)[0];
+  const folderB = nb.split("/").slice(-2, -1)[0];
+  return !folderA || !folderB || folderA === folderB;
 }
 
 export function resolveViewportIndex(renderingEngine, imageId) {
@@ -149,7 +157,16 @@ export function restoreBoxRows(renderingEngine, rows, { replaceExisting = false 
       const vp = findViewportForBox(renderingEngine, box);
       if (!vp?.element) continue;
 
-      mgr.addAnnotation(buildRectangleAnnotation(box, row.id), vp.element);
+      const stackId = (vp.getImageIds?.() || []).find((id) =>
+        imageIdsMatch(id, box.imageId)
+      );
+      mgr.addAnnotation(
+        buildRectangleAnnotation(
+          stackId ? { ...box, imageId: stackId } : box,
+          row.id
+        ),
+        vp.element
+      );
       restored++;
     }
   }

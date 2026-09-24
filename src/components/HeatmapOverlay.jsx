@@ -54,9 +54,9 @@ function HeatmapOverlay() {
   }, [submissionBoxes]);
 
   useEffect(() => {
-    if (!isSessionOwner || !renderingEngine || !sessionId) return;
+    if (!isSessionOwner || !renderingEngine) return;
     setPersistedBoxAnnotationsVisible(renderingEngine, heatmapVisible);
-  }, [isSessionOwner, renderingEngine, sessionId, heatmapVisible]);
+  }, [isSessionOwner, renderingEngine, heatmapVisible]);
 
   useEffect(() => {
     if (!isSessionOwner || !renderingEngine || !heatmapVisible) {

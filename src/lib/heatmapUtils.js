@@ -8,11 +8,15 @@ export function normalizeImageId(id) {
     if (!id) return '';
     let raw;
     try {
-        raw = decodeURI(String(id)).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+        raw = decodeURI(String(id));
     } catch {
-        raw = String(id).replace(/^(dicomweb:|wadouri:|wadors:)/, '');
+        raw = String(id);
     }
-    return raw.split("?")[0];
+    // Prefix may be doubled (wadouri:wadouri:https://...) depending on URL encoding.
+    raw = raw.replace(/^(dicomweb:|wadouri:|wadors:)+/, '');
+    raw = raw.split('?')[0];
+    raw = raw.replace(/\.dcm\.gz$/i, '.dcm');
+    return raw;
 }
 
 function boxMatchesImage(box, currentImageId) {

@@ -80,12 +80,16 @@ function AnswerKeyBoxLoader() {
           if (tries++ < 20) timer = window.setTimeout(attempt, 500);
           return;
         }
-        if (demoMode) {
-          restoreBoxRows(renderingEngine, rows, { replaceExisting: true });
-        } else if (!boxesArePlaced(renderingEngine, rows)) {
-          restoreBoxRows(renderingEngine, rows);
+        if (!boxesArePlaced(renderingEngine, rows)) {
+          const restored = restoreBoxRows(renderingEngine, rows, { replaceExisting: demoMode });
+          if (!restored && tries++ < 20) {
+            timer = window.setTimeout(attempt, 500);
+            return;
+          }
         }
-        if (sessionId) {
+        // Hide until Show Answer — demo joins a persistent session, but also
+        // hide for a presenter who has not connected yet.
+        if (sessionId || demoMode) {
           setPersistedBoxAnnotationsVisible(renderingEngine, heatmapVisible);
         }
       } catch (e) {
