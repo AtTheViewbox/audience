@@ -1,24 +1,8 @@
 import { useState, useEffect } from "react";
-import { X, ChevronRight, ChevronLeft, Mouse, Contrast, ZoomIn, Radio, Pointer, MousePointerClick, ArrowDownLeft, ArrowUpLeft, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Mouse, Contrast, Radio, Pointer, MousePointerClick, ArrowDownLeft, ArrowUpLeft, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "attheviewbox_onboarding_seen";
-
-// ─── Step definitions ───────────────────────────────────────────────────────
-const HOME_STEPS = [
-    {
-        icon: <Mouse className="h-6 w-6" />,
-        title: "Browse Sample Cases",
-        description: "Explore pre-saved imaging cases from the public library — no login required.",
-        arrow: null,
-    },
-    {
-        icon: <ZoomIn className="h-6 w-6" />,
-        title: "Upload Your Own",
-        description: "Sign in and upload DICOM scans from the Home page. They'll appear instantly in Your Viewbox.",
-        arrow: null,
-    },
-];
 
 const VIEWER_STEPS = [
     {
@@ -113,11 +97,11 @@ function StepCard({ step }) {
 }
 
 // ─── Main overlay ───────────────────────────────────────────────────────────
-export default function OnboardingOverlay({ page = "home" }) {
+export default function OnboardingOverlay() {
     const [visible, setVisible] = useState(false);
     const [step, setStep] = useState(0);
-
-    const steps = page === "home" ? HOME_STEPS : VIEWER_STEPS;
+    const page = "viewer";
+    const steps = VIEWER_STEPS;
 
     useEffect(() => {
         try {
@@ -179,7 +163,7 @@ export default function OnboardingOverlay({ page = "home" }) {
 
                 {/* Header badge */}
                 <div className="text-[10px] uppercase tracking-widest font-bold text-white/40">
-                    {page === "home" ? "Getting Started" : "Viewer Controls"}
+                    Viewer Controls
                 </div>
 
                 {/* Step content */}

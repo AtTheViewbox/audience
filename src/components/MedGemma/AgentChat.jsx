@@ -6,7 +6,7 @@ import { DataContext } from '../../context/DataContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Bot, Loader2, Send, User, Share, Square,
-    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search, GitCompare, LogIn
+    ChevronDown, Zap, Eye, Layers, Link, MessageSquare, Search, GitCompare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';

@@ -75,8 +75,7 @@ export function submitParticipantResponse({
 
   renderingEngine?.getViewports().forEach((vp) => vp.render());
 
-  // Durably persist alongside the live broadcast so the leaderboard survives
-  // reloads/transfers and is visible to clients that weren't connected yet.
+  // Persist alongside the live broadcast so late joins and refreshes still see answers.
   if (sessionId && caseKey) {
     persistSubmission({
       supabaseClient,

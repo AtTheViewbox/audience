@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { DataContext, } from '../context/DataContext.jsx';
+import { DataContext } from '../context/DataContext.jsx';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const MAX_VISIBLE_AVATARS = 3;

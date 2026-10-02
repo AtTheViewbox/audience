@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useReducer, useContext, useRef } from "react";
-import { unflatten, flatten } from "flat";
+import { unflatten } from "flat";
 import { recreateList } from '../lib/inputParser.ts';
 
 import * as cornerstone from '@cornerstonejs/core';
@@ -12,11 +12,11 @@ import defaultData from "./defaultData.jsx";
 import { cl } from './SupabaseClient.jsx';
 import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 import { resolveSeriesPrefix } from "../lib/seriesLink.js";
-import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert } from "../lib/answerKeyCase.js";
+import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, getPlaylistIdFromSearch } from "../lib/answerKeyCase.js";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
-import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { sameViewerStudy, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
+import { IGNORE_SESSION_UPDATE_KEY } from "../lib/transferSharedSession.js";
 import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
@@ -47,9 +47,6 @@ initialData.userData = null;
 
 initialData.sharingUser = null;
 initialData.sessionMeta = { mode: "TEAM", owner: "", joinCode: "" }
-// Session-wide leaderboard visibility, controlled by the session author and
-// broadcast to every participant. Defaults on until the owner says otherwise.
-initialData.leaderboardEnabled = true;
 // Case identifiers shared by the author so participants can load questions even
 // when they can't resolve the case themselves (RLS / stale URL after transfer).
 initialData.sessionCaseLink = null;
@@ -84,6 +81,7 @@ initialData.caseUrlKey = resolveCaseUrlKey({
   search: window.location.search,
   caseUrlParams: queryParams.toString() || null,
 }) || null;
+initialData.playlistId = getPlaylistIdFromSearch(window.location.search);
 // Toggled on while the user is authoring an answer key so the Annotate tool
 // stays available outside of a share session.
 initialData.answerKeyAuthoring = false;
@@ -103,14 +101,6 @@ export const DataProvider = ({ children }) => {
     const { userData, supabaseClient } = useContext(UserContext).data;
 
     const [updateSession, setUpdateSession] = useState(null);
-
-    // Always reflects this user's own leaderboard preference so the session
-    // effect can broadcast the latest value to late-joining participants
-    // without re-subscribing the realtime channels.
-    const leaderboardPrefRef = useRef(getLeaderboardEnabled(userData));
-    useEffect(() => {
-        leaderboardPrefRef.current = getLeaderboardEnabled(userData);
-    }, [userData, userData?.user_metadata?.show_leaderboard]);
 
     // Tracks whether this user authors the active session. Kept in a ref so
     // realtime channel callbacks always see the latest value (ownership is
@@ -142,24 +132,6 @@ export const DataProvider = ({ children }) => {
         };
     }, [data.studyId, data.dicomSeriesId, data.caseUrlKey]);
 
-    // Whenever we own a live session, publish the current leaderboard setting so
-    // everyone (and our own state) stays in sync — fires when the share channel
-    // comes up, when ownership is established, and when the author flips the
-    // preference. This is what makes the setting persist across transfers.
-    useEffect(() => {
-        if (!data.shareController) return;
-        const presenter = isPresenter({
-            sessionId: data.sessionId,
-            userId: userData?.id,
-            ownerId: data.sessionMeta?.owner,
-        });
-        if (!presenter) return;
-        data.shareController.send({
-            type: 'broadcast', event: 'leaderboard-changed',
-            payload: { enabled: getLeaderboardEnabled(userData) }
-        });
-    }, [data.shareController, data.sessionId, data.sessionMeta?.owner, userData?.id, userData?.user_metadata?.show_leaderboard]);
-
     // As author, publish the resolved case identifiers so participants can load
     // the right questions even when they can't resolve the case themselves
     // (RLS on studies, or a stale URL after a transfer).
@@ -176,9 +148,8 @@ export const DataProvider = ({ children }) => {
         data.shareController.send({ type: 'broadcast', event: 'case-link', payload: cl });
     }, [data.shareController, data.sessionId, data.sessionMeta?.owner, userData?.id, data.studyId, data.dicomSeriesId, data.caseUrlKey]);
 
-    // Load persisted submissions for this session+case so the leaderboard is
-    // authoritative and survives transfers/refreshes (which reload every client)
-    // and is available to clients that join after others have submitted. Scoping
+    // Load persisted submissions for this session+case so answers survive refresh
+    // and are available to clients that join after others have submitted. Scoping
     // by case means a transfer to a new case starts everyone fresh.
     const effectiveCaseLink = data.sessionCaseLink && (
         data.sessionCaseLink.studyId || data.sessionCaseLink.dicomSeriesId || data.sessionCaseLink.caseUrlKey
@@ -242,6 +213,14 @@ export const DataProvider = ({ children }) => {
         }
 
         if (updateSession?.eventType === "UPDATE") {
+            let ignoreOwnSwitch = false;
+            try {
+                ignoreOwnSwitch = sessionStorage.getItem(IGNORE_SESSION_UPDATE_KEY) === "1";
+                if (ignoreOwnSwitch) sessionStorage.removeItem(IGNORE_SESSION_UPDATE_KEY);
+            } catch {
+                ignoreOwnSwitch = false;
+            }
+
             dispatch({ type: 'loading_request' })
             var currentURL = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
             if (!currentURL.vd) {
@@ -254,14 +233,8 @@ export const DataProvider = ({ children }) => {
                     })
                 }
                 dispatch({ type: "update_viewport_data", payload: { ...newData } })
-
-                // Log before reload to help diagnose mobile refresh issues
-                console.warn('SESSION UPDATE RELOAD TRIGGERED - Session transfer detected');
-                console.warn('If you see this on mobile during normal loading, this is the bug!');
-
-                //TODO: Fix buggy tranfering sessions, but reloading works for now.
                 window.location.reload();
-            } else {
+            } else if (!ignoreOwnSwitch) {
                 userDispatch({ type: "clean_up_supabase" });
             }
         }
@@ -346,6 +319,7 @@ export const DataProvider = ({ children }) => {
                             }
                         })
                     }
+                    initialData.playlistId = getPlaylistIdFromSearch(sessionRow.url_params) || initialData.playlistId;
                     // Explicitly pass owner here to ensure it is set even if not previously in state
                     dispatch({
                         type: "update_viewport_data",
@@ -424,14 +398,9 @@ export const DataProvider = ({ children }) => {
                 .eq("user", userData.id)
                 .then(({ data: sessionData, error }) => {
                     if (sessionData && sessionData.length > 0 && !error) {
-                        // This user owns the session - update sessionMeta.owner
-                        console.log('Updating session owner to:', userData.id);
-                        console.log('shareController exists:', !!data.shareController);
                         dispatch({ type: 'update_session_owner', payload: userData.id });
 
-                        // If Supabase not set up yet, set it up now
                         if (!data.shareController) {
-                            console.log('Setting up Supabase after login');
                             dispatch({
                                 type: 'connect_to_sharing_session',
                                 payload: {
@@ -639,10 +608,6 @@ export const DataProvider = ({ children }) => {
                 dispatch({ type: 'apply_share_change', payload });
             })
 
-            share_controller.on('broadcast', { event: 'leaderboard-changed' }, ({ payload }) => {
-                dispatch({ type: 'set_session_leaderboard', payload: payload.enabled });
-            })
-
             share_controller.on('broadcast', { event: 'case-link' }, ({ payload }) => {
                 dispatch({ type: 'set_session_case_link', payload });
             })
@@ -697,13 +662,8 @@ export const DataProvider = ({ children }) => {
                             type: 'broadcast', event: 'roster-announce',
                             payload: { userId: userData.id, name: myName }
                         });
-                        // As author, re-push the leaderboard setting and case
-                        // identifiers so the newcomer matches everyone else.
+                        // As author, re-push case identifiers so the newcomer matches everyone else.
                         if (isSessionOwnerRef.current) {
-                            share_controller.send({
-                                type: 'broadcast', event: 'leaderboard-changed',
-                                payload: { enabled: leaderboardPrefRef.current }
-                            });
                             const cl = caseLinkRef.current;
                             if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
                                 share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
@@ -720,13 +680,8 @@ export const DataProvider = ({ children }) => {
                             type: 'broadcast', event: 'roster-announce',
                             payload: { userId: userData.id, name: myName }
                         });
-                        // As author, make sure the newcomer gets the current
-                        // leaderboard setting and case identifiers too.
+                        // As author, make sure the newcomer gets the current case identifiers too.
                         if (isSessionOwnerRef.current) {
-                            share_controller.send({
-                                type: 'broadcast', event: 'leaderboard-changed',
-                                payload: { enabled: leaderboardPrefRef.current }
-                            });
                             const cl = caseLinkRef.current;
                             if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
                                 share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
@@ -778,8 +733,6 @@ export const DataProvider = ({ children }) => {
                             viewport.setImageIdIndex(localIndex);
                             viewport.setCamera(currentCamera);
                             viewport.render();
-                        } else {
-                            console.log('Shared image not loaded yet:', sharedImageId);
                         }
                     }
                 )
@@ -1063,6 +1016,8 @@ export function dataReducer(data, action) {
             if (action.payload.caseUrlParams) {
                 new_data.caseUrlParams = action.payload.caseUrlParams;
             }
+            const nextPlaylistId = action.payload.p || getPlaylistIdFromSearch(action.payload.caseUrlParams);
+            if (nextPlaylistId) new_data.playlistId = nextPlaylistId;
             break;
         case 'sharing_controller_initialized':
             new_data = { ...data, ...action.payload }
@@ -1131,25 +1086,8 @@ export function dataReducer(data, action) {
             break;
         }
 
-        case 'set_session_leaderboard': {
-            new_data = { ...data, leaderboardEnabled: action.payload !== false };
-            break;
-        }
         case 'set_session_case_link': {
             new_data = { ...data, sessionCaseLink: action.payload || null };
-            break;
-        }
-        case 'broadcast_leaderboard': {
-            // Author toggled the leaderboard: push to everyone in the session
-            // (share controller is self:true, so our own state updates too).
-            const enabled = action.payload !== false;
-            if (data.shareController) {
-                data.shareController.send({
-                    type: 'broadcast', event: 'leaderboard-changed',
-                    payload: { enabled }
-                });
-            }
-            new_data = { ...data, leaderboardEnabled: enabled };
             break;
         }
         case 'roster_updated': {

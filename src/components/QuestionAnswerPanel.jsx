@@ -6,12 +6,11 @@ import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isCaseLinked, applyQuestionCaseFilter, caseKeyFromLink } from "../lib/answerKeyCase.js";
 import { isDemoMode, getDemoQuestions, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
-import { isMcqQuestion, normalizeMcqOptions, QUESTION_TYPES } from "../lib/questionTypes.js";
+import { isMcqQuestion, normalizeMcqOptions, QUESTION_TYPES, formatMcqAnswerLabel } from "../lib/questionTypes.js";
 import {
   participantHasSubmitted,
   submitParticipantResponse,
 } from "../lib/participantSubmit.js";
-import { formatMcqAnswerLabel } from "../lib/leaderboard.js";
 import QuestionSlideCarousel from "./QuestionSlideCarousel.jsx";
 
 import { Button } from "@/components/ui/button";

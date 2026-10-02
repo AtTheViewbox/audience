@@ -1,8 +1,8 @@
 import { mergeProps, useLongPress, usePress } from "react-aria";
 import { Button } from "@/components/ui/button";
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
-import { LocateFixed, LocateOff, LogIn } from "lucide-react";
+import { LocateFixed } from "lucide-react";
 import { UserContext } from "../context/UserContext"
 import { isJoinParticipant } from "../lib/demoCase.js";
 
@@ -63,11 +63,7 @@ function Fab() {
         }}
 
       >
-        {sharingUser == userData.id ? (
-          <LocateFixed strokeWidth={1.5} color="#000000" />
-        ) : (
-          <LocateFixed strokeWidth={1.5} color="#000000" />
-        )}
+        <LocateFixed strokeWidth={1.5} color="#000000" />
       </Button>
 
 

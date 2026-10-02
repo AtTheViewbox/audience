@@ -21,13 +21,12 @@ function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false, 
     async function logOut() {
 
         try {
-            let { error } = await supabaseClient.auth.signOut({ scope: 'global', })
+            const { error } = await supabaseClient.auth.signOut({ scope: 'global' })
             if (error) throw error;
 
-            //log back in as Anonymous user 
-            const { data: { user }, error: signInError } = await supabaseClient.auth.signInAnonymously();
+            await supabaseClient.auth.signInAnonymously();
         } catch (error) {
-            console.log(error)
+            console.error(error);
         }
     }
 

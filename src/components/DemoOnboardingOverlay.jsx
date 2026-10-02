@@ -8,21 +8,18 @@ import {
   ClipboardList,
   Radio,
   QrCode,
-  Copy,
-  Check,
   PlayCircle,
   ArrowDownLeft,
   ArrowUpRight,
-  Smartphone,
   Eye,
 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { DataContext } from "../context/DataContext.jsx";
 import { buildJoinLink } from "../lib/shareSession.js";
 import { isDemoMode, isDemoJoinParticipant } from "../lib/demoCase.js";
 import { fetchDemoStats } from "../lib/demoVisits.js";
 import { UserContext } from "../context/UserContext.jsx";
+import JoinQrCard from "./JoinQrCard.jsx";
 
 function StepDots({ count, current }) {
   return (
@@ -96,7 +93,6 @@ function ArrowIndicator({ direction, phone }) {
 }
 
 function JoinQrStep({ sessionId, joinCode }) {
-  const [copied, setCopied] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [stats, setStats] = useState(null);
   const { supabaseClient } = useContext(UserContext).data;
@@ -121,17 +117,6 @@ function JoinQrStep({ sessionId, joinCode }) {
     };
   }, [supabaseClient, sessionId]);
 
-  const copyLink = async () => {
-    if (!joinLink) return;
-    try {
-      await navigator.clipboard.writeText(joinLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
-
   if (!sessionId) {
     return (
       <div className="flex flex-col items-center text-center gap-3 px-2">
@@ -143,8 +128,8 @@ function JoinQrStep({ sessionId, joinCode }) {
         </h3>
         <p className="text-sm text-white/70 leading-relaxed max-w-xs">
           {timedOut
-            ? "Click the white button in the lower-left corner to open share settings, then reopen this guide."
-            : "Setting you up as host. The join QR will appear here in a moment."}
+            ? "Click the white button in the lower-left to open share settings."
+            : "Setting you up as host. The join QR will appear in a moment."}
         </p>
       </div>
     );
@@ -152,44 +137,16 @@ function JoinQrStep({ sessionId, joinCode }) {
 
   return (
     <div className="flex flex-col items-center text-center gap-3 px-2">
-      <div className="rounded-xl bg-white p-3 shadow-lg">
-        <QRCodeSVG value={joinLink} size={168} />
-      </div>
-      <div className="flex items-center gap-2 text-blue-300">
-        <Smartphone className="h-4 w-4" />
-        <span className="text-[10px] font-bold uppercase tracking-widest">
-          Scan with your phone
-        </span>
-      </div>
-      {joinCode ? (
-        <p className="font-mono text-3xl font-bold tracking-[0.35em] text-white">
-          {joinCode}
-        </p>
-      ) : null}
-      <h3 className="text-lg font-bold text-white">You are the host</h3>
+      <JoinQrCard joinLink={joinLink} joinCode={joinCode} size={168} tone="dark" />
       <p className="text-sm text-white/70 leading-relaxed max-w-xs">
-        Open the camera on your phone and scan this QR, or type the code on the home page.
-        You will stay host on this screen; your phone joins as a participant.
+        Scan the QR, or type the code on the home page. This screen stays host.
       </p>
-      {stats && (
+      {stats ? (
         <p className="text-[11px] text-white/50">
           {stats.visitors} {stats.visitors === 1 ? "person has" : "people have"} tried this demo
           {stats.answers > 0 ? ` · ${stats.answers} answered` : ""}
         </p>
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={copyLink}
-        className="text-white/80 hover:text-white hover:bg-white/10"
-      >
-        {copied ? (
-          <Check className="h-4 w-4 mr-1.5" />
-        ) : (
-          <Copy className="h-4 w-4 mr-1.5" />
-        )}
-        {copied ? "Copied" : "Copy join link"}
-      </Button>
+      ) : null}
     </div>
   );
 }

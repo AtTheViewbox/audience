@@ -19,6 +19,8 @@ import {
 import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
 import AnnotationTab from "./AnnotationTab.jsx";
+import PlaylistTab from "./PlaylistTab.jsx";
+import { DataContext } from "../context/DataContext.jsx";
 
 export const AuthMode = {
   LOGIN: "login",
@@ -28,11 +30,13 @@ export const AuthMode = {
 
 function DialogPage() {
   const { userData } = useContext(UserContext).data;
+  const playlistId = useContext(DataContext)?.data?.playlistId;
   const isAnonymous = !userData || userData.is_anonymous;
   const demoMode = isDemoMode();
   const canShare = !isAnonymous || demoMode;
   const canAnnotate = !isAnonymous || demoMode;
   const showLogin = isAnonymous && !demoMode;
+  const showPlaylist = Boolean(playlistId);
 
   const [authMode, setAuthMode] = useState(AuthMode.LOGIN);
 
@@ -50,7 +54,13 @@ function DialogPage() {
         ? "Reset password"
         : "Login";
 
-  const tabsClass = canShare ? "grid-cols-3" : "grid-cols-2";
+  const tabCount = [canShare, showLogin, canAnnotate, showPlaylist, true].filter(Boolean).length;
+  const tabsClass = {
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-4",
+    5: "grid-cols-5",
+  }[tabCount] || "grid-cols-3";
 
   return (
     <>
@@ -70,6 +80,7 @@ function DialogPage() {
       >
         <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>
           {canShare && <TabsTrigger value="sharing">Share</TabsTrigger>}
+          {showPlaylist && <TabsTrigger value="playlist">Series</TabsTrigger>}
           {showLogin && <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>}
           {canAnnotate && <TabsTrigger value="annotate">Questions</TabsTrigger>}
           <TabsTrigger value="setting">Setting</TabsTrigger>
@@ -78,6 +89,12 @@ function DialogPage() {
         {canShare && (
           <TabsContent value="sharing" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
             <ShareTab />
+          </TabsContent>
+        )}
+
+        {showPlaylist && (
+          <TabsContent value="playlist" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
+            <PlaylistTab />
           </TabsContent>
         )}
 

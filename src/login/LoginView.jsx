@@ -1,25 +1,11 @@
-// components/Login/LoginView.jsx
-import { useContext } from "react";
-import { UserContext } from "../context/UserContext.jsx";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Card, CardContent, CardDescription,
-  CardFooter, CardHeader, CardTitle,
-} from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, User } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import OAuthButtons from "./OAuthButtons.jsx";
-import {
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 export default function LoginView({ onLogin, loginError, switchToSignUp, switchToReset, onGoogleLogin }) {
-  const { userData } = useContext(UserContext).data;
   return (
 
     <>

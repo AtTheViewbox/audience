@@ -104,15 +104,13 @@ function SettingTab() {
   }
 
   async function logOut() {
-
     try {
-      let { error } = await supabaseClient.auth.signOut({ scope: 'global', })
+      const { error } = await supabaseClient.auth.signOut({ scope: "global" });
       if (error) throw error;
-
-      //log back in as Anonymous user 
-      const { data: { user }, error: signInError } = await supabaseClient.auth.signInAnonymously();
+      const { error: signInError } = await supabaseClient.auth.signInAnonymously();
+      if (signInError) throw signInError;
     } catch (error) {
-      console.log(error)
+      console.error(error);
     }
   }
   // Get initials from user name for avatar fallback

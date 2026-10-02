@@ -7,6 +7,8 @@ import { resolveSeriesPrefix } from "./seriesLink.js";
 
 /** Viewer query param that pins questions to a specific studies row. */
 export const CASE_ID_PARAM = "caseId";
+/** Viewer query param that groups related studies (XR / CT / MR) in one case. */
+export const PLAYLIST_PARAM = "p";
 
 export function extractSearchString(urlOrParams) {
   if (!urlOrParams) return "";
@@ -26,6 +28,11 @@ export function getCaseIdFromSearch(search = typeof window !== "undefined" ? win
   return params.get(CASE_ID_PARAM) || null;
 }
 
+export function getPlaylistIdFromSearch(search = typeof window !== "undefined" ? window.location.search : "") {
+  const params = new URLSearchParams(extractSearchString(search));
+  return params.get(PLAYLIST_PARAM) || null;
+}
+
 /** Image-only URL key: strips session, demo, preview, and case identity. */
 export function normalizeUrlParams(input) {
   if (!input) return "";
@@ -37,6 +44,7 @@ export function normalizeUrlParams(input) {
   params.delete("preview");
   params.delete("demo");
   params.delete(CASE_ID_PARAM);
+  params.delete(PLAYLIST_PARAM);
 
   return [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -44,13 +52,24 @@ export function normalizeUrlParams(input) {
     .join("&");
 }
 
+/** Session / viewer URL: keeps case + playlist ids, drops join/preview flags. */
+export function sessionViewerUrlParams(input = typeof window !== "undefined" ? window.location.search : "") {
+  const params = new URLSearchParams(extractSearchString(input));
+  params.delete("s");
+  params.delete("preview");
+  params.delete("demo");
+  return params.toString();
+}
+
 /** Open this teaching case in the viewer (same images, this case's questions). */
-export function buildCaseViewerHref({ url_params, studyId, preview = false } = {}) {
+export function buildCaseViewerHref({ url_params, studyId, playlistId, preview = false } = {}) {
   const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const params = new URLSearchParams(extractSearchString(url_params));
   params.delete("s");
   if (studyId) params.set(CASE_ID_PARAM, studyId);
   else params.delete(CASE_ID_PARAM);
+  if (playlistId) params.set(PLAYLIST_PARAM, playlistId);
+  else params.delete(PLAYLIST_PARAM);
   if (preview) params.set("preview", "true");
   else params.delete("preview");
   return `${rootUrl}?${params.toString()}`;

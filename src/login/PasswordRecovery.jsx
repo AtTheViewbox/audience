@@ -1,4 +1,3 @@
-// components/Login/PasswordRecovery.jsx
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";

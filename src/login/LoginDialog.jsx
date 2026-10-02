@@ -3,7 +3,7 @@ import { UserContext } from "../context/UserContext.jsx";
 import LoginView from "./LoginView.jsx";
 import SignUpView from "./SignUpView.jsx";
 import PasswordRecovery from "./PasswordRecovery.jsx";
-import { AuthMode } from "../components/DialogPage.jsx"; // <-- adjust path if needed
+import { AuthMode } from "../components/DialogPage.jsx";
 import {
   DialogDescription,
   DialogHeader,

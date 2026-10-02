@@ -36,47 +36,38 @@ export default function JoinSessionForm({ variant = "header", className }) {
     <form
       onSubmit={handleSubmit}
       className={cn(
-        isCard
-          ? "flex w-full flex-col gap-3 sm:flex-row sm:items-center"
-          : "flex items-center gap-1.5",
+        "flex items-center gap-1.5",
+        isCard && "w-full sm:max-w-sm",
         className
       )}
     >
-      {isCard ? (
-        <div className="relative flex-1">
+      <div className={cn("relative", isCard && "flex-1")}>
+        {isCard ? (
           <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <Input
-            value={code}
-            onChange={(event) => setCode(normalizeJoinCode(event.target.value).slice(0, 6))}
-            placeholder="Enter code"
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            maxLength={6}
-            aria-label="Session join code"
-            className="h-9 pl-9 font-mono text-sm uppercase tracking-[0.28em] text-slate-100 placeholder:tracking-normal placeholder:text-slate-500 bg-slate-900/50 border-slate-800 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
-          />
-        </div>
-      ) : (
+        ) : null}
         <Input
           value={code}
           onChange={(event) => setCode(normalizeJoinCode(event.target.value).slice(0, 6))}
-          placeholder="CODE"
+          placeholder={isCard ? "Enter code" : "CODE"}
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
           maxLength={6}
           aria-label="Session join code"
-          className="h-8 w-[6.5rem] px-2 font-mono text-xs uppercase tracking-[0.28em] text-slate-100 placeholder:tracking-widest placeholder:text-slate-500 bg-slate-900/50 border-slate-800"
+          className={cn(
+            "font-mono uppercase text-slate-100 placeholder:text-slate-500 bg-slate-900/50 border-slate-800 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0",
+            isCard
+              ? "h-9 pl-9 text-sm tracking-[0.28em] placeholder:tracking-normal"
+              : "h-8 w-[6.5rem] px-2 text-xs tracking-[0.28em] placeholder:tracking-widest"
+          )}
         />
-      )}
+      </div>
       <Button
         type="submit"
         disabled={busy}
         className={cn(
-          isCard
-            ? "h-9 shrink-0 bg-slate-800 px-4 text-sm text-slate-100 hover:bg-slate-700"
-            : "h-8 bg-slate-800 px-2.5 text-xs text-slate-100 hover:bg-slate-700"
+          "shrink-0 bg-slate-800 text-slate-100 hover:bg-slate-700",
+          isCard ? "h-9 px-4 text-sm" : "h-8 px-2.5 text-xs"
         )}
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Join"}

@@ -34,7 +34,6 @@ export default function UpdatePasswordForm() {
       setIsLoading(false);
       return { success: false, error };
     } else {
-      console.log("Password updated successfully:", data);
       setIsLoading(false);
       navigate("/");
       return { success: true, data };

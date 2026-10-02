@@ -23,7 +23,6 @@ import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudies
 import { toast } from "sonner";
 import { initCornerstone } from "../../../lib/initCornerstone.js";
 
-// We need to export this or move map logic to ensure it's available if needed, but for now we keep it here.
 const mapSeriesToMetaData = (seriesList) => {
     // ... existing implementation ...
     return seriesList.map((series) => {

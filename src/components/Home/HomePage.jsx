@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react"
-import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork } from "lucide-react"
-import { toast } from "sonner"
+import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork, LayoutGrid, List } from "lucide-react"
+import { toast, Toaster } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
 import { extractUploadFolderNames, deleteUnusedCloudSeries } from "../../lib/dicomUploadUtils.js"
@@ -9,26 +9,30 @@ import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import HomeSideBar from "./HomeSideBarComp"
 import HomeHeaderComp from "./HomeHeaderComp"
-import AddCaseDialog from "./AddCaseDialog"
 import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Filter } from "../../lib/constants"
+import { cn } from "@/lib/utils"
 import { unflatten, flatten } from "flat";
 import BuilderPage from "./Builder/BuilderPage";
+import PlaylistsPage from "./PlaylistsPage";
 import DemoHero from "./DemoHero";
 import JoinHero from "./JoinHero";
-import { Toaster } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem
 } from "@/components/ui/dropdown-menu"
+
+function studyDate(series) {
+  const raw = series?.last_accessed || series?.created_at;
+  if (!raw) return "—";
+  return new Date(raw).toISOString().split("T")[0];
+}
 
 export default function HomePage() {
   const [selectedSeries, setSelectedSeries] = useState([])
@@ -57,6 +61,13 @@ export default function HomePage() {
   const [editDescription, setEditDescription] = useState("");
   const [editVisibility, setEditVisibility] = useState("PRIVATE");
   const [isSaving, setIsSaving] = useState(false);
+  const [listView, setListView] = useState(() => {
+    try {
+      return localStorage.getItem("atvb-studies-list") !== "0";
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     if (selectedSeries) {
@@ -147,7 +158,7 @@ export default function HomePage() {
       );
       getSeries();
     } catch (error) {
-      console.log(error);
+      console.error(error);
       toast.error(error?.message || "Failed to delete case");
     }
   };
@@ -163,7 +174,7 @@ export default function HomePage() {
       getSeries()
 
     } catch (error) {
-      console.log(error)
+      console.error(error);
     }
   };
   const getIframeURL = (url_params, preview = false, studyId = null) => {
@@ -233,13 +244,7 @@ export default function HomePage() {
         setPacsbinStudyList(data)
       }
 
-      if (filter === Filter.PUBLIC) {
-        ({ data, error } = await supabaseClient
-          .from("studies")
-          .select("*")
-          .eq("visibility", "PUBLIC"));
-      }
-      else if (filter === Filter.MYSTUDIES) {
+      if (filter === Filter.MYSTUDIES) {
         if (userData) {
           ({ data, error } = await supabaseClient
             .from("studies")
@@ -253,8 +258,8 @@ export default function HomePage() {
         ({ data, error } = await supabaseClient
           .from("dicom_series")
           .select("*"));
-        console.log("Builder Filter - Fetched Data:", data);
-        console.log("Builder Filter - Error:", error);
+      } else if (filter === Filter.PLAYLISTS) {
+        data = [];
       } else if (filter === Filter.ALL) {
         ({ data, error } = await supabaseClient
           .from("studies")
@@ -275,7 +280,7 @@ export default function HomePage() {
       }
 
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   };
 
@@ -322,18 +327,43 @@ export default function HomePage() {
                 filteredSeries={displaySeriesList}
                 onStudySaved={getSeries}
               />
+            ) : filter === Filter.PLAYLISTS ? (
+              <PlaylistsPage search={search} />
             ) : (
               <>
                 <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
                   <DemoHero />
                   <JoinHero />
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center justify-between mb-8 gap-4">
                     <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
-                    <div className="flex items-center gap-4">
-                      {!userData?.is_anonymous ? (
-                        <AddCaseDialog onStudyAdded={getSeries} />
-                      ) : null}
-                    </div>
+                    {filter === Filter.PACSBIN ? null : (
+                      <div className="flex items-center rounded-lg border border-slate-800 p-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${listView ? "text-slate-500" : "bg-slate-800 text-slate-100"}`}
+                          onClick={() => {
+                            setListView(false);
+                            try { localStorage.setItem("atvb-studies-list", "0"); } catch {}
+                          }}
+                          aria-label="Grid view"
+                        >
+                          <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${listView ? "bg-slate-800 text-slate-100" : "text-slate-500"}`}
+                          onClick={() => {
+                            setListView(true);
+                            try { localStorage.setItem("atvb-studies-list", "1"); } catch {}
+                          }}
+                          aria-label="List view"
+                        >
+                          <List className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
@@ -376,7 +406,71 @@ export default function HomePage() {
                         </DropdownMenu>
                       </div>
                     </div>
-                  ))}</div> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                  ))}</div> : listView ? (
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-500">
+                            <th className="text-left font-medium px-3 py-2 w-12">#</th>
+                            <th className="text-left font-medium px-3 py-2">Name</th>
+                            <th className="text-left font-medium px-3 py-2">Description</th>
+                            <th className="text-left font-medium px-3 py-2 w-24">Access</th>
+                            <th className="text-left font-medium px-3 py-2 w-28">Date</th>
+                            {filter === Filter.MYSTUDIES ? <th className="w-10" /> : null}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displaySeriesList.map((series, index) => (
+                            <tr
+                              key={series.id}
+                              className={cn(
+                                "border-b border-slate-800/80 last:border-0 cursor-pointer hover:bg-slate-900/70",
+                                selectedSeries?.id === series.id && "bg-blue-500/10"
+                              )}
+                              onClick={() => setSelectedSeries(series)}
+                            >
+                              <td className="px-3 py-2.5 text-slate-500 tabular-nums">{index + 1}</td>
+                              <td className="px-3 py-2.5 text-slate-100 font-medium max-w-[220px] truncate" title={series.name}>
+                                {series.name}
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-400 max-w-[280px] truncate">
+                                {series.description || "—"}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <span className={cn(
+                                  "text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border",
+                                  series.visibility === "PUBLIC"
+                                    ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                    : "bg-red-500/20 text-red-400 border-red-500/30"
+                                )}>
+                                  {series.visibility === "PUBLIC" ? "Public" : "Private"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-500 tabular-nums whitespace-nowrap">
+                                {studyDate(series)}
+                              </td>
+                              {filter === Filter.MYSTUDIES ? (
+                                <td className="px-1 py-2.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete(series);
+                                    }}
+                                    aria-label="Delete series"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </td>
+                              ) : null}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                     {displaySeriesList.map((series) => (
                       <Card
                         key={series.id}

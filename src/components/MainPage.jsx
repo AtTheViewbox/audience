@@ -100,7 +100,7 @@ function MainPage() {
         <AnswerKeyBoxLoader />
         <AnnotationPanel />
         <HeatmapOverlay />
-        {demoMode ? null : <OnboardingOverlay page="viewer" />}
+        {demoMode ? null : <OnboardingOverlay />}
         <Toaster position="top-right" />
       </>
   )

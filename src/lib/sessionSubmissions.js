@@ -2,8 +2,8 @@
  * Database-backed participant submissions for share sessions.
  *
  * Submissions are still broadcast over realtime for instant updates, but they
- * are also persisted here so the leaderboard is authoritative and survives
- * refreshes, session transfers (which reload every client), and late joins.
+ * are also persisted here so late joins, refreshes, and session transfers still
+ * see submitted answers and heatmap boxes.
  */
 
 const TABLE = "session_submissions";
@@ -34,7 +34,7 @@ export async function persistSubmission({
   if (error) throw error;
 }
 
-/** Load submissions for a session+case as the in-memory leaderboard maps. */
+/** Load submissions for a session+case into in-memory answer and box maps. */
 export async function fetchSessionSubmissions(supabaseClient, sessionId, caseKey) {
   const empty = { submittedQuestionAnswers: {}, submittedAnnotations: {} };
   if (!supabaseClient || !sessionId || !caseKey) return empty;

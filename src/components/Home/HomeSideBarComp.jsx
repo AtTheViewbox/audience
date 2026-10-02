@@ -1,12 +1,11 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Search, Library, User, Settings, Globe, Monitor, FileStack, X, Hammer } from "lucide-react"
-import { Filter, Visibility } from "../../lib/constants"
+import { Home, Settings, Monitor, X, Hammer, Layers } from "lucide-react"
+import { Filter } from "../../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
     Dialog,
     DialogContent,
-    DialogTrigger,
     DialogTitle
 } from "@/components/ui/dialog"
 import SettingTab from "../SettingTab.jsx"
@@ -97,55 +96,42 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                     </div>
 
                     <nav className="space-y-1.5">
-                        {!userData || userData.is_anonymous ? null :
-                            <Button
-                                variant="ghost"
-                                onClick={() => setFilter(Filter.ALL)}
-                                className={cn("w-full justify-start text-xs font-medium transition-all",
-                                    filter === Filter.ALL
-                                        ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                                        : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
-                                )}>
-                                <Home className="mr-2.5 h-4 w-4" />
-                                Home
-                            </Button>}
-
                         <Button
-                            onClick={() => setFilter(Filter.PUBLIC)}
                             variant="ghost"
+                            onClick={() => setFilter(Filter.ALL)}
                             className={cn("w-full justify-start text-xs font-medium transition-all",
-                                filter === Filter.PUBLIC
+                                filter === Filter.ALL
                                     ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
                                     : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
                             )}>
-                            <Globe className="mr-2.5 h-4 w-4" />
-                            Everyone's Viewbox
+                            <Home className="mr-2.5 h-4 w-4 shrink-0" />
+                            Home
                         </Button>
                         {!userData || userData.is_anonymous ? null :
                             <div className="space-y-1.5">
                                 <Button
                                     onClick={() => setFilter(Filter.MYSTUDIES)}
                                     variant="ghost"
-                                    className={cn("w-full justify-start text-xs font-medium transition-all",
+                                    className={cn("w-full justify-start text-xs font-medium transition-all min-w-0",
                                         filter === Filter.MYSTUDIES
                                             ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
                                             : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
                                     )}>
-                                    <Monitor className="mr-2.5 h-4 w-4" />
-                                    Your Viewbox
+                                    <Monitor className="mr-2.5 h-4 w-4 shrink-0" />
+                                    <span className="truncate">Your Viewbox</span>
                                 </Button>
 
-                                {/** 
                                 <Button
-                                    onClick={() => setFilter(Filter.PACSBIN)}
+                                    onClick={() => setFilter(Filter.PLAYLISTS)}
                                     variant="ghost"
-                                    className={cn("w-full justify-start text-xs font-medium transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
-                                        filter === Filter.PACSBIN ? "bg-blue-600/10 text-blue-400 border border-blue-500/20" : ""
+                                    className={cn("w-full justify-start text-xs font-medium transition-all",
+                                        filter === Filter.PLAYLISTS
+                                            ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                            : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
                                     )}>
-                                    <FileStack className="mr-2.5 h-4 w-4" />
-                                    Pacsbin Studies
+                                    <Layers className="mr-2.5 h-4 w-4 shrink-0" />
+                                    Cases
                                 </Button>
-                                */}
 
                                 <Button
                                     onClick={() => setFilter(Filter.BUILDER)}
@@ -155,7 +141,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                             ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
                                             : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
                                     )}>
-                                    <Hammer className="mr-2.5 h-4 w-4" />
+                                    <Hammer className="mr-2.5 h-4 w-4 shrink-0" />
                                     Builder
                                 </Button>
 
@@ -169,7 +155,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                         <Dialog open={open} onOpenChange={setOpen} >
 
                             <Button onClick={() => setOpen(true)} variant="ghost" className="w-full justify-start text-xs font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/50">
-                                <Settings className="mr-2.5 h-4 w-4" />
+                                <Settings className="mr-2.5 h-4 w-4 shrink-0" />
                                 Settings
                             </Button>
                             <DialogTitle className="hidden">Settings</DialogTitle>

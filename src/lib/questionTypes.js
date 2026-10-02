@@ -28,10 +28,14 @@ export function isMcqQuestion(q) {
   return q?.question_type === QUESTION_TYPES.MCQ;
 }
 
-export function formatMcqAnswer(q) {
-  const opts = normalizeMcqOptions(q?.options);
-  const idx = opts.correctIndex;
-  const letter = String.fromCharCode(65 + idx);
-  const text = opts.choices[idx]?.trim();
+export function formatMcqAnswerLabel(question, selectedIndex) {
+  if (selectedIndex == null) return "—";
+  const opts = normalizeMcqOptions(question?.options);
+  const letter = String.fromCharCode(65 + selectedIndex);
+  const text = opts.choices[selectedIndex]?.trim();
   return text ? `${letter}. ${text}` : letter;
+}
+
+export function formatMcqAnswer(q) {
+  return formatMcqAnswerLabel(q, normalizeMcqOptions(q?.options).correctIndex);
 }

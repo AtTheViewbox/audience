@@ -1,5 +1,5 @@
 import { Visibility } from "./constants.js";
-import { normalizeUrlParams } from "./answerKeyCase.js";
+import { normalizeUrlParams, sessionViewerUrlParams } from "./answerKeyCase.js";
 import { isDemoMode, DEMO_QUERY_PARAM, DEMO_SESSION_ID, DEMO_CASE_SEARCH } from "./demoCase.js";
 
 export const ShareMode = {
@@ -14,7 +14,7 @@ const JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const JOIN_CODE_LENGTH = 5;
 
 export function currentViewerUrlParams(search = window.location.search) {
-  return normalizeUrlParams(search);
+  return sessionViewerUrlParams(search);
 }
 
 export function sameViewerStudy(a, b) {
@@ -25,23 +25,23 @@ export function normalizeJoinCode(value) {
   return String(value || "").replace(/[^A-Za-z]/g, "").toUpperCase();
 }
 
-export function isJoinCodeToken(value) {
+function isJoinCodeToken(value) {
   return /^[A-Z]{4,6}$/.test(normalizeJoinCode(value));
 }
 
-export function looksLikeUuid(value) {
+function looksLikeUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     String(value || "").trim()
   );
 }
 
-export function generateJoinCode(length = JOIN_CODE_LENGTH) {
+function generateJoinCode(length = JOIN_CODE_LENGTH) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => JOIN_CODE_ALPHABET[b % JOIN_CODE_ALPHABET.length]).join("");
 }
 
-export function buildJoinHref(token) {
+function buildJoinHref(token) {
   if (!token) return "";
   const params = new URLSearchParams();
   params.set("s", token);
@@ -59,26 +59,18 @@ export async function resolveShareSession(supabaseClient, token) {
   const raw = String(token || "").trim();
   if (!raw || !supabaseClient) return null;
 
+  let query = supabaseClient.from("viewbox").select(VIEWBOX_SESSION_COLS);
   if (looksLikeUuid(raw)) {
-    const { data, error } = await supabaseClient
-      .from("viewbox")
-      .select(VIEWBOX_SESSION_COLS)
-      .eq("session_id", raw)
-      .limit(1);
-    if (error) throw error;
-    return data?.[0] ?? null;
+    query = query.eq("session_id", raw);
+  } else if (isJoinCodeToken(raw)) {
+    query = query.eq("join_code", normalizeJoinCode(raw));
+  } else {
+    return null;
   }
 
-  const code = normalizeJoinCode(raw);
-  if (!isJoinCodeToken(code)) return null;
-
-  const { data, error } = await supabaseClient
-    .from("viewbox")
-    .select(VIEWBOX_SESSION_COLS)
-    .eq("join_code", code)
-    .limit(1);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
-  return data?.[0] ?? null;
+  return data ?? null;
 }
 
 export async function joinSessionByCode(supabaseClient, rawCode) {
@@ -151,8 +143,8 @@ export async function resolvePersistentDemoSession(supabaseClient, userId) {
     .from("viewbox")
     .select(VIEWBOX_SESSION_COLS)
     .eq("session_id", DEMO_SESSION_ID)
-    .limit(1);
-  if (!pinnedError && pinned?.[0]) return pinned[0];
+    .maybeSingle();
+  if (!pinnedError && pinned) return pinned;
 
   const { data: publics } = await supabaseClient
     .from("viewbox")

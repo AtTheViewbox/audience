@@ -2,14 +2,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
-import {
-  Globe,
-  Users,
-  Copy,
-  Check,
-} from "lucide-react";
+import { Globe, Users } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { QRCodeSVG } from "qrcode.react";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -19,12 +13,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { UserContext, UserDispatchContext } from "../context/UserContext"
+import { UserContext, UserDispatchContext } from "../context/UserContext";
 import { Visibility } from "../lib/constants.js";
 import { transferSessionToCurrentUrl } from "../lib/transferSharedSession.js";
 import { isDemoMode } from "../lib/demoCase.js";
@@ -33,17 +25,17 @@ import {
   sameViewerStudy,
   buildJoinLink,
   ShareMode,
+  VIEWBOX_SESSION_COLS,
 } from "../lib/shareSession.js";
+import JoinQrCard from "./JoinQrCard.jsx";
 
 const ShareSessionState = {
-  AUTHENTICATION_ERROR: "authentication error",
   EXISTING_OTHER_SESSION: "existing other session",
   EXISTING_SAME_SESSION: "existing same session",
   NO_EXISTING_SESSION: "no existing session",
   LOADING: "loading",
 };
 
-const Mode = ShareMode;
 function ShareTab() {
   const { data: viewboxData } = useContext(DataContext);
   const { dispatch } = useContext(DataDispatchContext);
@@ -51,81 +43,81 @@ function ShareTab() {
   const { userData, supabaseClient } = useContext(UserContext).data;
 
   const [visibility, setVisibility] = useState(Visibility.PUBLIC);
-  const [qrCodeValue, setQRCodeValue] = useState("");
-  const [copyClicked, setCopyClicked] = useState(false);
   const [presentationModeSwitch, setPresentationModeSwitch] = useState(false);
+  const [shareSessionState, setShareSessionState] = useState(ShareSessionState.LOADING);
+  const [shareLink, setShareLink] = useState("");
+  const [joinCode, setJoinCode] = useState("");
 
   const queryParams = new URLSearchParams(window.location.search);
   const demoMode = isDemoMode(queryParams.toString());
   const canCreateSession = !!userData && (!userData.is_anonymous || demoMode);
+  const liveSameStudy = shareSessionState === ShareSessionState.EXISTING_SAME_SESSION;
 
-  const [shareSessionState, setShareSessionState] = useState(
-    ShareSessionState.LOADING
-  );
-  const [shareLink, setShareLink] = useState(null);
-  const [joinCode, setJoinCode] = useState("");
-  const [copyCodeClicked, setCopyCodeClicked] = useState(false);
+  function showLiveSession(row) {
+    setVisibility(row.visibility);
+    setPresentationModeSwitch(row.mode !== ShareMode.TEAM);
+    setJoinCode(row.join_code || "");
+    setShareLink(buildJoinLink(row.session_id, row.join_code));
+    setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
+  }
+
+  function clearLiveSession() {
+    setJoinCode("");
+    setShareLink("");
+    setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+  }
 
   useEffect(() => {
+    if (!canCreateSession) return;
+
     const checkWhetherUserIsSharing = async () => {
       try {
         const { data, error } = await supabaseClient
           .from("viewbox")
-          .select("user, url_params, session_id,visibility,mode,join_code")
-          .eq("user", userData.id);
+          .select(VIEWBOX_SESSION_COLS)
+          .eq("user", userData.id)
+          .limit(1);
 
         if (error) throw error;
 
-        if (data.length > 1) {
-          console.log("BIG ERROR");
-        }
-
-        if (data.length == 0) {
-          setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+        if (!data?.[0]) {
+          clearLiveSession();
         } else if (sameViewerStudy(data[0].url_params, queryParams.toString())) {
-          setVisibility(data[0].visibility);
-          setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
-          setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
-
-          const shareLink = buildJoinLink(data[0].session_id, data[0].join_code);
-          setJoinCode(data[0].join_code || "");
-          setShareLink(shareLink);
-          setQRCodeValue(shareLink);
+          showLiveSession(data[0]);
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
         }
       } catch (error) {
-        console.log(error)
+        console.error(error);
         if (demoMode) {
-          setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
+          clearLiveSession();
           return;
         }
         userDispatch({ type: "auth_update", payload: { session: null } });
       }
     };
 
-    if (canCreateSession) checkWhetherUserIsSharing();
+    checkWhetherUserIsSharing();
   }, [userData]);
 
   async function stopSharedSession() {
     try {
-      const { _, delete_error } = await supabaseClient
+      const { error } = await supabaseClient
         .from("viewbox")
         .delete()
         .eq("user", userData.id);
 
-      if (delete_error) throw delete_error;
+      if (error) throw error;
       userDispatch({ type: "clean_up_supabase" });
-      setShareSessionState(ShareSessionState.NO_EXISTING_SESSION);
-      setQRCodeValue("")
+      clearLiveSession();
     } catch (error) {
-      console.log(error.code);
+      console.error(error);
     }
   }
 
   async function transferSharedSession() {
     if (!canCreateSession) {
-      toast.error('Please sign in to create a shared session.');
+      toast.error("Please sign in to create a shared session.");
       return;
     }
     try {
@@ -137,13 +129,13 @@ function ShareTab() {
       });
     } catch (error) {
       console.error(error);
-      toast.error('Could not transfer session.');
+      toast.error("Could not transfer session.");
     }
   }
 
   async function generateSharedSession() {
     if (!canCreateSession) {
-      toast.error('Please sign in to create a shared session.');
+      toast.error("Please sign in to create a shared session.");
       return;
     }
     try {
@@ -151,7 +143,7 @@ function ShareTab() {
         supabaseClient,
         userId: userData.id,
         visibility,
-        mode: presentationModeSwitch ? Mode.PRESENTATION : Mode.TEAM,
+        mode: presentationModeSwitch ? ShareMode.PRESENTATION : ShareMode.TEAM,
         chatHistory: viewboxData.chatHistory || [],
       });
 
@@ -164,13 +156,9 @@ function ShareTab() {
           joinCode: data.join_code,
         },
       });
-      const shareLink = buildJoinLink(data.session_id, data.join_code);
-      setJoinCode(data.join_code || "");
-      setShareLink(shareLink);
-      setQRCodeValue(shareLink);
-      setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
+      showLiveSession(data);
     } catch (error) {
-      console.log(error.code);
+      console.error(error);
       if (error.code === "23505") {
         setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
       }
@@ -180,159 +168,77 @@ function ShareTab() {
   function ShareView() {
     return (
       <Card>
-        <ScrollArea className=" h-full flex-grow max-h-[450px] w-full overflow-y-auto">
+        <ScrollArea className="h-full flex-grow max-h-[450px] w-full overflow-y-auto">
           <CardHeader>
             <CardTitle>
-              {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION
-                ? "You already have an active shared session for this study"
-                : "Welcome!"}
+              {liveSameStudy ? "Session is live" : "Share this study"}
             </CardTitle>
             <CardDescription>
-              {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION
-                ? "Share the short code below, or send the link. Anyone can type the code on the home page to join."
-                : "Click the button below to generate a short join code so others can hop into this study with you."}
+              {liveSameStudy
+                ? "Share the code or QR. People can also type it on the home page."
+                : "Generate a short join code so others can follow along."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
-
-
-            {qrCodeValue && (
-              <div className="flex flex-col items-center gap-3 py-2">
-                <QRCodeSVG value={qrCodeValue} size={200} />
-                {joinCode ? (
-                  <p className="font-mono text-4xl font-bold tracking-[0.28em] text-foreground">
-                    {joinCode}
-                  </p>
-                ) : null}
-                <div className="flex items-center gap-1">
-                  {joinCode ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        navigator.clipboard.writeText(joinCode);
-                        setCopyCodeClicked(true);
-                      }}
-                    >
-                      {copyCodeClicked ? (
-                        <Check className="h-4 w-4 mr-1.5" />
-                      ) : (
-                        <Copy className="h-4 w-4 mr-1.5" />
-                      )}
-                      {copyCodeClicked ? "Copied code" : "Copy code"}
-                    </Button>
-                  ) : null}
-                  {shareLink ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        navigator.clipboard.writeText(shareLink);
-                        setCopyClicked(true);
-                      }}
-                    >
-                      {copyClicked ? (
-                        <Check className="h-4 w-4 mr-1.5" />
-                      ) : (
-                        <Copy className="h-4 w-4 mr-1.5" />
-                      )}
-                      {copyClicked ? "Copied link" : "Copy link"}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            )}
-
-            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
-              <Separator className="my-2" />
+            {shareLink ? (
+              <JoinQrCard joinLink={shareLink} joinCode={joinCode} size={200} />
             ) : null}
 
+            {liveSameStudy ? <Separator className="my-2" /> : null}
 
             <RadioGroup
-              defaultValue="public"
               value={visibility}
               onValueChange={setVisibility}
               className="space-y-2 pt-2"
-
             >
               <div className="flex items-center space-x-2 mb-4">
                 <RadioGroupItem value="PUBLIC" id="public" />
-                <Label
-                  htmlFor="public"
-                  className="flex items-center cursor-pointer"
-                >
+                <Label htmlFor="public" className="flex items-center cursor-pointer">
                   <Globe className="h-5 w-5 mr-2 text-blue-500" />
                   <div>
                     <p className="font-medium">Public</p>
-                    <p className="text-sm text-muted-foreground">
-                      Anyone on the internet can see this
-                    </p>
+                    <p className="text-sm text-muted-foreground">Anyone with the code can join</p>
                   </div>
                 </Label>
               </div>
               <div className="flex items-center space-x-2 mb-4">
                 <RadioGroupItem value="AUTHENTICATED" id="auth" />
-                <Label
-                  htmlFor="auth"
-                  className="flex items-center cursor-pointer"
-                >
+                <Label htmlFor="auth" className="flex items-center cursor-pointer">
                   <Users className="h-5 w-5 mr-2 text-green-500" />
                   <div>
-                    <p className="font-medium">Authenticated users</p>
-                    <p className="text-sm text-muted-foreground">
-                      Only users with accounts can access this
-                    </p>
+                    <p className="font-medium">Signed-in users</p>
+                    <p className="text-sm text-muted-foreground">Only people with accounts</p>
                   </div>
                 </Label>
               </div>
             </RadioGroup>
 
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between space-x-2">
-                <div>
-                  <Label
-                    htmlFor="presentation-mode"
-                    className="font-medium"
-                  >
-                    {presentationModeSwitch
-                      ? "Presentation Mode"
-                      : "Team Mode"}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {presentationModeSwitch
-                      ? " Presentation Mode is used when sharing with a large group of people. It allows users to only broadcast to the presenter screen."
-                      : "Team Mode is used when sharing with a small group of people. It allows users to broadcast to all users in the session."}
-                  </p>
-                </div>
-                <Switch
-                  id="presentation-mode"
-                  checked={presentationModeSwitch}
-                  onCheckedChange={setPresentationModeSwitch}
-                />
+            <div className="flex items-center justify-between space-x-2">
+              <div>
+                <Label htmlFor="presentation-mode" className="font-medium">
+                  {presentationModeSwitch ? "Presentation Mode" : "Team Mode"}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {presentationModeSwitch
+                    ? "Viewers broadcast only to the presenter."
+                    : "Everyone can broadcast to the group."}
+                </p>
               </div>
+              <Switch
+                id="presentation-mode"
+                checked={presentationModeSwitch}
+                onCheckedChange={setPresentationModeSwitch}
+              />
             </div>
-            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
-              <div className="space-y-2 pt-2">
-
-
-                <CardDescription>
-                  If you would like to inactivate the previous session and
-                  create a new shared session for this study, click the generate
-                  shared session button below:
-                </CardDescription>
-              </div>
-            ) : null}
           </CardContent>
 
           <CardFooter className="flex justify-between">
             <Button onClick={generateSharedSession}>
-              Generate New Shared Session
+              {liveSameStudy ? "New session" : "Start session"}
             </Button>
-            {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
+            {liveSameStudy ? (
               <Button variant="outline" onClick={stopSharedSession}>
-                Stop Session
+                Stop session
               </Button>
             ) : null}
           </CardFooter>
@@ -345,32 +251,23 @@ function ShareTab() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            You have an active shared session open for a different study
-          </CardTitle>
+          <CardTitle>You already have a session on another study</CardTitle>
           <CardDescription>
-            You can only have one shared session open at a time. If you would
-            like to inactivate the other share session and create a new one for
-            this study, click the button below.
+            You can only host one session at a time. Transfer it here, start a new one, or stop it.
           </CardDescription>
         </CardHeader>
-
         <CardFooter className="flex justify-between">
-          <Button onClick={transferSharedSession}>Transfer Session</Button>
-
+          <Button onClick={transferSharedSession}>Transfer session</Button>
           <Button onClick={generateSharedSession} variant="secondary">
-            New Session
+            New session
           </Button>
-
           <Button onClick={stopSharedSession} variant="outline">
-            Stop Session
+            Stop session
           </Button>
         </CardFooter>
       </Card>
     );
   }
-
-
 
   if (!canCreateSession) {
     return (
@@ -378,7 +275,7 @@ function ShareTab() {
         <CardHeader>
           <CardTitle>Sign in to share</CardTitle>
           <CardDescription>
-            You need a verified account to create a shared session. Please sign in and try again.
+            You need an account to host a session.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -397,4 +294,3 @@ function ShareTab() {
 }
 
 export default ShareTab;
-

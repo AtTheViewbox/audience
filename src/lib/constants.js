@@ -2,27 +2,25 @@ export const Visibility = {
     AUTHENTICATED: "AUTHENTICATED",
     PUBLIC: "PUBLIC",
     PRIVATE: "PRIVATE",
-    Organization: "ORGANIZATION",
   };
 
    
 export const Filter = {
   ALL: "ALL",
-  PUBLIC: "PUBLIC",
   MYSTUDIES: "MYSTUDIES",
-  FAVORITE: "FAVORITE",
+  PLAYLISTS: "PLAYLISTS",
   PACSBIN:"PACSBIN",
   BUILDER: "BUILDER",
 }
 
 
-export const adjectives = [
+const adjectives = [
   "Clever","Jolly","Swift","Bold","Curious","Radiant","Witty","Daring","Noble",
   "Breezy","Mighty","Silly","Brave","Sneaky","Glowing","Zany","Chill","Fierce",
   "Giggly","Lively","Sly","Cheery","Cosmic","Sunny","Swift"
 ];
 
-export const specialties = [
+const specialties = [
   "Cardiologist","Neurologist","Dermatologist","Pediatrician","Oncologist",
   "Psychiatrist","Surgeon","Radiologist","Dentist","Anesthesiologist",
   "Endocrinologist","Immunologist","Nephrologist","Ophthalmologist","Orthopedist",

@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { caseKeyFromLink } from "../lib/answerKeyCase.js";
 import { isDemoMode } from "../lib/demoCase.js";
 import { fetchCaseSubmissions, clearCaseSubmissions } from "../lib/sessionSubmissions.js";
-import { isMcqQuestion, formatMcqAnswer } from "../lib/questionTypes.js";
-import { formatMcqAnswerLabel } from "../lib/leaderboard.js";
+import { isMcqQuestion, formatMcqAnswer, formatMcqAnswerLabel } from "../lib/questionTypes.js";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
