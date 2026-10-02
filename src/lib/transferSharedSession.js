@@ -25,7 +25,7 @@ export async function transferSessionToCurrentUrl({
   if (dispatch) {
     dispatch({
       type: 'connect_to_sharing_session',
-      payload: { sessionId: data[0].session_id },
+      payload: { sessionId: data[0].session_id, joinCode: data[0].join_code },
     });
   }
 

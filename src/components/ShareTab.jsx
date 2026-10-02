@@ -22,7 +22,6 @@ import {
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { UserContext, UserDispatchContext } from "../context/UserContext"
@@ -64,13 +63,15 @@ function ShareTab() {
     ShareSessionState.LOADING
   );
   const [shareLink, setShareLink] = useState(null);
+  const [joinCode, setJoinCode] = useState("");
+  const [copyCodeClicked, setCopyCodeClicked] = useState(false);
 
   useEffect(() => {
     const checkWhetherUserIsSharing = async () => {
       try {
         const { data, error } = await supabaseClient
           .from("viewbox")
-          .select("user, url_params, session_id,visibility,mode")
+          .select("user, url_params, session_id,visibility,mode,join_code")
           .eq("user", userData.id);
 
         if (error) throw error;
@@ -86,7 +87,8 @@ function ShareTab() {
           setPresentationModeSwitch(data[0].mode == Mode.TEAM ? false : true);
           setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
 
-          const shareLink = buildJoinLink(data[0].session_id);
+          const shareLink = buildJoinLink(data[0].session_id, data[0].join_code);
+          setJoinCode(data[0].join_code || "");
           setShareLink(shareLink);
           setQRCodeValue(shareLink);
         } else {
@@ -159,9 +161,11 @@ function ShareTab() {
           sessionId: data.session_id,
           mode: data.mode,
           owner: userData.id,
+          joinCode: data.join_code,
         },
       });
-      const shareLink = buildJoinLink(data.session_id);
+      const shareLink = buildJoinLink(data.session_id, data.join_code);
+      setJoinCode(data.join_code || "");
       setShareLink(shareLink);
       setQRCodeValue(shareLink);
       setShareSessionState(ShareSessionState.EXISTING_SAME_SESSION);
@@ -185,42 +189,64 @@ function ShareTab() {
             </CardTitle>
             <CardDescription>
               {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION
-                ? "Here is the link to the existing shared session if you would like to share it with more people."
-                : "Click the button below to generate a link to a shared session where you and others can interact with the dicom together!"}
+                ? "Share the short code below, or send the link. Anyone can type the code on the home page to join."
+                : "Click the button below to generate a short join code so others can hop into this study with you."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
 
 
             {qrCodeValue && (
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center gap-3 py-2">
                 <QRCodeSVG value={qrCodeValue} size={200} />
+                {joinCode ? (
+                  <p className="font-mono text-4xl font-bold tracking-[0.28em] text-foreground">
+                    {joinCode}
+                  </p>
+                ) : null}
+                <div className="flex items-center gap-1">
+                  {joinCode ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        navigator.clipboard.writeText(joinCode);
+                        setCopyCodeClicked(true);
+                      }}
+                    >
+                      {copyCodeClicked ? (
+                        <Check className="h-4 w-4 mr-1.5" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1.5" />
+                      )}
+                      {copyCodeClicked ? "Copied code" : "Copy code"}
+                    </Button>
+                  ) : null}
+                  {shareLink ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        navigator.clipboard.writeText(shareLink);
+                        setCopyClicked(true);
+                      }}
+                    >
+                      {copyClicked ? (
+                        <Check className="h-4 w-4 mr-1.5" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1.5" />
+                      )}
+                      {copyClicked ? "Copied link" : "Copy link"}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             )}
 
             {shareSessionState == ShareSessionState.EXISTING_SAME_SESSION ? (
-              <>
-                <div className="flex w-full max-w-sm items-center space-x-2 p-2">
-
-                  {/**<Input disabled placeholder={shareLink} />*/}
-                  <Input value={shareLink} readOnly />
-                  <Button
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(shareLink)
-                      setCopyClicked(true)
-                    }}
-                  >
-                    {copyClicked ? (
-                      <Check className="h-4" />
-                    ) : (
-                      <Copy className="h-4" />
-                    )}
-                  </Button>
-
-                </div>
-                <Separator className="my-2" />
-              </>
+              <Separator className="my-2" />
             ) : null}
 
 

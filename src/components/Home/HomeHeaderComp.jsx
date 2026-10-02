@@ -5,6 +5,7 @@ import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
 import { getDemoCaseHref } from "../../lib/demoCase"
 import { cn } from "@/lib/utils"
+import JoinSessionForm from "./JoinSessionForm"
 
 import {
     Dialog,
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import DialogPage from "../DialogPage.jsx";
 
-function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false }) {
+function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false, showJoin = false }) {
     const { userData, supabaseClient } = useContext(UserContext).data;
     const [isOpen, setIsOpen] = useState(false)
     let [dialogIsOpen, setDialogIsOpen] = useState(false);
@@ -83,6 +84,7 @@ function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false }
 
 
             <div className="flex items-center gap-2 shrink-0">
+                {showJoin ? <JoinSessionForm variant="header" /> : null}
                 <Button
                     asChild
                     className="h-8 bg-white text-slate-950 hover:bg-blue-50 text-xs font-semibold px-3"

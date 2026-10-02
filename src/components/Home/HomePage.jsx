@@ -19,6 +19,7 @@ import { Filter } from "../../lib/constants"
 import { unflatten, flatten } from "flat";
 import BuilderPage from "./Builder/BuilderPage";
 import DemoHero from "./DemoHero";
+import JoinHero from "./JoinHero";
 import { Toaster } from "sonner"
 import {
   DropdownMenu,
@@ -311,6 +312,7 @@ export default function HomePage() {
             setSearch={setSearch}
             setMobileMenuOpen={setMobileMenuOpen}
             showMenuButton={filter === Filter.BUILDER}
+            showJoin={filter === Filter.BUILDER}
           />
 
           <div className="flex-1 flex overflow-hidden relative">
@@ -324,6 +326,7 @@ export default function HomePage() {
               <>
                 <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
                   <DemoHero />
+                  <JoinHero />
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
                     <div className="flex items-center gap-4">

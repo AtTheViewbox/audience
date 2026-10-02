@@ -7,6 +7,12 @@ export const ShareMode = {
   TEAM: "TEAM",
 };
 
+export const VIEWBOX_SESSION_COLS =
+  "user, url_params, session_id, mode, chat_history, join_code, visibility";
+
+const JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const JOIN_CODE_LENGTH = 5;
+
 export function currentViewerUrlParams(search = window.location.search) {
   return normalizeUrlParams(search);
 }
@@ -15,12 +21,84 @@ export function sameViewerStudy(a, b) {
   return normalizeUrlParams(a) === normalizeUrlParams(b);
 }
 
-export function buildJoinLink(sessionId) {
-  if (!sessionId) return "";
+export function normalizeJoinCode(value) {
+  return String(value || "").replace(/[^A-Za-z]/g, "").toUpperCase();
+}
+
+export function isJoinCodeToken(value) {
+  return /^[A-Z]{4,6}$/.test(normalizeJoinCode(value));
+}
+
+export function looksLikeUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim()
+  );
+}
+
+export function generateJoinCode(length = JOIN_CODE_LENGTH) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => JOIN_CODE_ALPHABET[b % JOIN_CODE_ALPHABET.length]).join("");
+}
+
+export function buildJoinHref(token) {
+  if (!token) return "";
   const params = new URLSearchParams();
-  params.set("s", sessionId);
+  params.set("s", token);
   if (isDemoMode()) params.set(DEMO_QUERY_PARAM, "1");
-  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  const base = import.meta.env.BASE_URL || "/";
+  const path = base.endsWith("/") ? base : `${base}/`;
+  return `${window.location.origin}${path}?${params.toString()}`;
+}
+
+export function buildJoinLink(sessionId, joinCode) {
+  return buildJoinHref(joinCode || sessionId);
+}
+
+export async function resolveShareSession(supabaseClient, token) {
+  const raw = String(token || "").trim();
+  if (!raw || !supabaseClient) return null;
+
+  if (looksLikeUuid(raw)) {
+    const { data, error } = await supabaseClient
+      .from("viewbox")
+      .select(VIEWBOX_SESSION_COLS)
+      .eq("session_id", raw)
+      .limit(1);
+    if (error) throw error;
+    return data?.[0] ?? null;
+  }
+
+  const code = normalizeJoinCode(raw);
+  if (!isJoinCodeToken(code)) return null;
+
+  const { data, error } = await supabaseClient
+    .from("viewbox")
+    .select(VIEWBOX_SESSION_COLS)
+    .eq("join_code", code)
+    .limit(1);
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+export async function joinSessionByCode(supabaseClient, rawCode) {
+  const raw = String(rawCode || "").trim();
+  const code = normalizeJoinCode(raw);
+
+  if (!isJoinCodeToken(code) && !looksLikeUuid(raw)) {
+    throw new Error("Enter a 4–5 letter session code.");
+  }
+
+  const row = await resolveShareSession(
+    supabaseClient,
+    looksLikeUuid(raw) ? raw : code
+  );
+  if (!row) {
+    throw new Error("No live session found for that code.");
+  }
+
+  window.location.href = buildJoinLink(row.session_id, row.join_code);
+  return row;
 }
 
 /**
@@ -40,22 +118,28 @@ export async function createShareSession({
     .eq("user", userId);
   if (deleteError) throw deleteError;
 
-  const { data, error } = await supabaseClient
-    .from("viewbox")
-    .upsert([
-      {
-        user: userId,
-        url_params: currentViewerUrlParams(),
-        visibility,
-        mode,
-        chat_history: chatHistory || [],
-      },
-    ])
-    .select();
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data, error } = await supabaseClient
+      .from("viewbox")
+      .upsert([
+        {
+          user: userId,
+          url_params: currentViewerUrlParams(),
+          visibility,
+          mode,
+          chat_history: chatHistory || [],
+          join_code: generateJoinCode(),
+        },
+      ])
+      .select();
 
-  if (error) throw error;
-  if (!data?.[0]) throw new Error("createShareSession: no row returned");
-  return data[0];
+    if (!error && data?.[0]) return data[0];
+    lastError = error;
+    if (error?.code !== "23505") throw error;
+  }
+
+  throw lastError || new Error("createShareSession: could not allocate a join code");
 }
 
 /**
@@ -65,14 +149,14 @@ export async function createShareSession({
 export async function resolvePersistentDemoSession(supabaseClient, userId) {
   const { data: pinned, error: pinnedError } = await supabaseClient
     .from("viewbox")
-    .select("user, url_params, session_id, mode, chat_history")
+    .select(VIEWBOX_SESSION_COLS)
     .eq("session_id", DEMO_SESSION_ID)
     .limit(1);
   if (!pinnedError && pinned?.[0]) return pinned[0];
 
   const { data: publics } = await supabaseClient
     .from("viewbox")
-    .select("user, url_params, session_id, mode, chat_history")
+    .select(VIEWBOX_SESSION_COLS)
     .eq("visibility", Visibility.PUBLIC);
 
   const match = (publics || []).find((row) =>

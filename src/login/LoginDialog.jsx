@@ -49,10 +49,10 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
 
   const handleOAuthLogin = async (provider) => {
     const { error } = await supabaseClient.auth.signInWithOAuth({
-      provider: provider,
+      provider,
       options: {
-        redirectTo: window.location.origin + window.location.pathname
-      }
+        redirectTo: window.location.origin + window.location.pathname,
+      },
     });
     if (error) {
       console.error(`OAuth error for ${provider}:`, error);

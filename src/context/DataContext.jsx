@@ -16,7 +16,7 @@ import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseK
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { getLeaderboardEnabled } from "../lib/userPreferences.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
-import { sameViewerStudy, resolvePersistentDemoSession } from "../lib/shareSession.js";
+import { sameViewerStudy, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
 import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
@@ -46,7 +46,7 @@ else if (initialData.s) {
 initialData.userData = null;
 
 initialData.sharingUser = null;
-initialData.sessionMeta = { mode: "TEAM", owner: "" }
+initialData.sessionMeta = { mode: "TEAM", owner: "", joinCode: "" }
 // Session-wide leaderboard visibility, controlled by the session author and
 // broadcast to every participant. Defaults on until the owner says otherwise.
 initialData.leaderboardEnabled = true;
@@ -327,23 +327,18 @@ export const DataProvider = ({ children }) => {
             //if there is a session id in url, get url metadata from session
 
             if (initialData.s) {
+                const sessionRow = await resolveShareSession(cl, initialData.s);
 
-                var { data, errorSession } = await cl
-                    .from("viewbox")
-                    .select("user, url_params, session_id,mode,chat_history")
-                    .eq("session_id", initialData?.s);
-
-                if (errorSession) throw errorSession;
-
-                if (data?.length == 0) {
+                if (!sessionRow) {
                     initialData.s = null
                 }
                 else {
-                    initialData.s = data[0].session_id
-                    initialData.sessionMeta.mode = data[0].mode
-                    initialData.sessionMeta.owner = data[0].user
+                    initialData.s = sessionRow.session_id
+                    initialData.sessionMeta.mode = sessionRow.mode
+                    initialData.sessionMeta.owner = sessionRow.user
+                    initialData.sessionMeta.joinCode = sessionRow.join_code
 
-                    var newData = unflatten(Object.fromEntries(new URLSearchParams(data[0].url_params)));
+                    var newData = unflatten(Object.fromEntries(new URLSearchParams(sessionRow.url_params)));
                     if (newData.vd) {
                         newData.vd.forEach((vdItem) => {
                             if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
@@ -356,10 +351,10 @@ export const DataProvider = ({ children }) => {
                         type: "update_viewport_data",
                         payload: {
                             ...newData,
-                            mode: data[0].mode,
-                            owner: data[0].user,
-                            chatHistory: data[0].chat_history,
-                            caseUrlParams: data[0].url_params,
+                            mode: sessionRow.mode,
+                            owner: sessionRow.user,
+                            chatHistory: sessionRow.chat_history,
+                            caseUrlParams: sessionRow.url_params,
                         },
                     })
                 }
@@ -374,7 +369,7 @@ export const DataProvider = ({ children }) => {
             if (!joiningViaLink && userData && !userData.is_anonymous) {
                 var { data, errorCurrentSession } = await cl
                     .from("viewbox")
-                    .select("user, url_params, session_id,mode,chat_history")
+                    .select(VIEWBOX_SESSION_COLS)
                     .eq("user", userData.id);
                 if (errorCurrentSession) throw errorCurrentSession;
 
@@ -382,6 +377,7 @@ export const DataProvider = ({ children }) => {
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode = data[0].mode
                     initialData.sessionMeta.owner = data[0].user
+                    initialData.sessionMeta.joinCode = data[0].join_code
                 }
             }
 
@@ -393,6 +389,7 @@ export const DataProvider = ({ children }) => {
                     initialData.s = row.session_id;
                     initialData.sessionMeta.mode = row.mode;
                     initialData.sessionMeta.owner = row.user;
+                    initialData.sessionMeta.joinCode = row.join_code;
                 } catch (demoErr) {
                     console.error("Demo session join failed:", demoErr);
                 }
@@ -403,10 +400,10 @@ export const DataProvider = ({ children }) => {
         setupCornerstone()
 
         setupSupabase().then(() => {
-            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
+            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner, joinCode: initialData.sessionMeta.joinCode } })
         }).catch((err) => {
             console.error('setupSupabase failed:', err);
-            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner } })
+            dispatch({ type: 'connect_to_sharing_session', payload: { sessionId: initialData.s, mode: initialData.sessionMeta.mode, owner: initialData.sessionMeta.owner, joinCode: initialData.sessionMeta.joinCode } })
         })
 
         return () => {
@@ -1052,7 +1049,8 @@ export function dataReducer(data, action) {
 
             var sessionMeta = {
                 owner: action.payload.owner ?? data.sessionMeta?.owner,
-                mode: action.payload.mode ?? data.sessionMeta?.mode
+                mode: action.payload.mode ?? data.sessionMeta?.mode,
+                joinCode: action.payload.joinCode ?? data.sessionMeta?.joinCode
             }
             new_data = {
                 ...data, ld: ld, vd: vd, m: m,
@@ -1073,7 +1071,8 @@ export function dataReducer(data, action) {
             var sessionId = action.payload.sessionId;
             var sessionMeta2 = {
                 owner: action.payload.owner ?? data.sessionMeta?.owner,
-                mode: action.payload.mode ?? data.sessionMeta?.mode
+                mode: action.payload.mode ?? data.sessionMeta?.mode,
+                joinCode: action.payload.joinCode ?? data.sessionMeta?.joinCode
             }
             var sessionChanged = data.sessionId !== sessionId;
             new_data = {

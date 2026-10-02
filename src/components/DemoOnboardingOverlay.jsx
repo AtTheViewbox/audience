@@ -95,12 +95,12 @@ function ArrowIndicator({ direction, phone }) {
   );
 }
 
-function JoinQrStep({ sessionId }) {
+function JoinQrStep({ sessionId, joinCode }) {
   const [copied, setCopied] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [stats, setStats] = useState(null);
   const { supabaseClient } = useContext(UserContext).data;
-  const joinLink = buildJoinLink(sessionId);
+  const joinLink = buildJoinLink(sessionId, joinCode);
 
   useEffect(() => {
     if (sessionId) return undefined;
@@ -161,9 +161,14 @@ function JoinQrStep({ sessionId }) {
           Scan with your phone
         </span>
       </div>
+      {joinCode ? (
+        <p className="font-mono text-3xl font-bold tracking-[0.35em] text-white">
+          {joinCode}
+        </p>
+      ) : null}
       <h3 className="text-lg font-bold text-white">You are the host</h3>
       <p className="text-sm text-white/70 leading-relaxed max-w-xs">
-        Open the camera on your phone and scan this QR to join from your device.
+        Open the camera on your phone and scan this QR, or type the code on the home page.
         You will stay host on this screen; your phone joins as a participant.
       </p>
       {stats && (
@@ -239,7 +244,7 @@ const STEPS = [
 ];
 
 export default function DemoOnboardingOverlay() {
-  const { sessionId } = useContext(DataContext).data;
+  const { sessionId, sessionMeta } = useContext(DataContext).data;
   const joining = isDemoJoinParticipant();
   const phone = useIsPhone();
   const steps = STEPS.filter((s) => {
@@ -308,7 +313,7 @@ export default function DemoOnboardingOverlay() {
             </div>
 
             {current?.custom ? (
-              <JoinQrStep sessionId={sessionId} />
+              <JoinQrStep sessionId={sessionId} joinCode={sessionMeta?.joinCode} />
             ) : (
               <div className="flex flex-col items-center text-center gap-4 px-2 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="h-14 w-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white backdrop-blur-sm">

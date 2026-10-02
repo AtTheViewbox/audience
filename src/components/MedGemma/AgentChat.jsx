@@ -555,13 +555,13 @@ export default function AgentChat({
             });
             if (data?.session_id) {
                 const sessionId = data.session_id;
-                const shareLink = buildJoinLink(sessionId);
+                const shareLink = buildJoinLink(sessionId, data.join_code);
                 try {
                     await navigator.clipboard.writeText(shareLink);
                 } catch (_) { }
                 dispatch?.({
                     type: 'connect_to_sharing_session',
-                    payload: { sessionId, mode: 'TEAM', owner: userData.id },
+                    payload: { sessionId, mode: 'TEAM', owner: userData.id, joinCode: data.join_code },
                 });
                 toast.success('Share link copied to clipboard!');
                 return shareLink;
