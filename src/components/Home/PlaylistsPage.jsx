@@ -274,22 +274,22 @@ export default function PlaylistsPage({ search = "" }) {
 
         {visible.length ? (
           listView ? (
-            <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40">
-              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 border-b border-slate-800 px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500">
+            <div>
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500">
                 <span>#</span>
                 <span>Case</span>
                 <span>Access</span>
                 <span />
               </div>
-              <div className="divide-y divide-slate-800/80">
+              <div>
                 {visible.map((playlist, index) => {
                   const items = sortedPlaylistItems(playlist);
                   const open = openIds.has(playlist.id);
                   const active = selected?.id === playlist.id;
                   return (
-                    <div key={playlist.id} className={active ? "bg-blue-500/10" : ""}>
+                    <div key={playlist.id} className={active ? "bg-blue-500/10 rounded-md" : ""}>
                       <div
-                        className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 items-center px-3 py-2.5 cursor-pointer hover:bg-slate-900/70"
+                        className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 items-center px-3 py-2.5 cursor-pointer rounded-md hover:bg-slate-900/50"
                         onClick={() => {
                           setSelectedId(playlist.id);
                           toggleOpen(playlist.id);
@@ -334,7 +334,7 @@ export default function PlaylistsPage({ search = "" }) {
                         </div>
                       </div>
                       {open ? (
-                        <ol className="border-t border-slate-800/80 bg-slate-950/50">
+                        <ol>
                           {items.length ? items.map((item, itemIndex) => (
                             <li key={item.id}>
                               <button

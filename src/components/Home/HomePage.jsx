@@ -407,10 +407,10 @@ export default function HomePage() {
                       </div>
                     </div>
                   ))}</div> : listView ? (
-                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+                    <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-500">
+                          <tr className="text-[11px] uppercase tracking-wider text-slate-500">
                             <th className="text-left font-medium px-3 py-2 w-12">#</th>
                             <th className="text-left font-medium px-3 py-2">Name</th>
                             <th className="text-left font-medium px-3 py-2">Description</th>
@@ -424,7 +424,7 @@ export default function HomePage() {
                             <tr
                               key={series.id}
                               className={cn(
-                                "border-b border-slate-800/80 last:border-0 cursor-pointer hover:bg-slate-900/70",
+                                "cursor-pointer rounded-md hover:bg-slate-900/50",
                                 selectedSeries?.id === series.id && "bg-blue-500/10"
                               )}
                               onClick={() => setSelectedSeries(series)}
