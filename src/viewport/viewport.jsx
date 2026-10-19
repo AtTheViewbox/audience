@@ -575,7 +575,7 @@ export default function Viewport(props) {
         toast.info(exiting ? 'Exited fullscreen' : 'Viewport fullscreen', {
           id: 'viewport-fullscreen-toggle',
           duration: 1200,
-          position: 'bottom-center',
+          position: 'top-center',
         });
       }
     };

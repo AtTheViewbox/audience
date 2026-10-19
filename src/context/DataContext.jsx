@@ -751,6 +751,18 @@ export const DataProvider = ({ children }) => {
 
                 interaction_channel.on(
                     'broadcast',
+                    { event: 'fullscreen-changed' },
+                    (payload) => {
+                        const next = payload.payload?.viewport;
+                        dispatch({
+                            type: 'set_fullscreen_viewport',
+                            payload: Number.isInteger(next) ? next : null,
+                        });
+                    }
+                )
+
+                interaction_channel.on(
+                    'broadcast',
                     { event: 'pointer-changed' },
                     (payload) => {
                         const { coordX, coordY, coordZ, viewport } = payload.payload;
@@ -972,6 +984,16 @@ export const DataProvider = ({ children }) => {
             }
         }
     }, [data.sharingUser, data.renderingEngine, data.interactionChannel, userData, data.sessionId]);
+
+    useEffect(() => {
+        if (!data.interactionChannel || !data.sessionId) return;
+        if (!userData?.id || data.sharingUser !== userData.id) return;
+        data.interactionChannel.send({
+            type: 'broadcast',
+            event: 'fullscreen-changed',
+            payload: { viewport: data.fullscreenViewport ?? null },
+        });
+    }, [data.fullscreenViewport, data.sharingUser, data.interactionChannel, userData?.id, data.sessionId]);
 
     return (
         <DataContext.Provider value={{ data }}>
