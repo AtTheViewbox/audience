@@ -8,9 +8,10 @@ import { isPresenter } from "../lib/demoCase.js";
 import {
   buildCaseViewerHref,
   getCaseIdFromSearch,
+  getPlaylistTokenFromSearch,
   sessionViewerUrlParams,
 } from "../lib/answerKeyCase.js";
-import { fetchPlaylist, playlistItemLabel, sortedPlaylistItems } from "../lib/playlist.js";
+import { fetchPlaylist, fetchSharedPlaylist, playlistItemLabel, sortedPlaylistItems } from "../lib/playlist.js";
 import { sameViewerStudy } from "../lib/shareSession.js";
 import { transferSessionToUrlParams } from "../lib/transferSharedSession.js";
 import { cn } from "@/lib/utils";
@@ -28,18 +29,33 @@ function PlaylistTab() {
     ownerId: sessionMeta?.owner,
   });
 
+  const shareToken = getPlaylistTokenFromSearch();
+
   useEffect(() => {
     if (!supabaseClient || !playlistId) {
       setPlaylist(null);
       return;
     }
-    fetchPlaylist(supabaseClient, playlistId)
-      .then(setPlaylist)
-      .catch((error) => {
+    let cancelled = false;
+    (async () => {
+      let next = null;
+      try {
+        next = await fetchPlaylist(supabaseClient, playlistId);
+      } catch (error) {
         console.error(error);
-        setPlaylist(null);
-      });
-  }, [supabaseClient, playlistId]);
+      }
+      const incomplete =
+        !next?.playlist_items?.length ||
+        next.playlist_items.some((item) => !item.studies?.url_params);
+      if (incomplete && shareToken) {
+        next = (await fetchSharedPlaylist(supabaseClient, playlistId, shareToken)) || next;
+      }
+      if (!cancelled) setPlaylist(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseClient, playlistId, shareToken]);
 
   if (!playlistId) return null;
 
@@ -61,6 +77,7 @@ function PlaylistTab() {
       url_params: study.url_params,
       studyId: study.id,
       playlistId,
+      shareToken,
     });
     const urlParams = sessionViewerUrlParams(href);
 

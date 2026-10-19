@@ -18,7 +18,7 @@ export async function fetchPlaylists(supabaseClient, ownerId) {
   if (!supabaseClient || !ownerId) return [];
   const { data, error } = await supabaseClient
     .from("playlists")
-    .select(`id, name, description, visibility, created_at, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
+    .select(`id, name, description, visibility, created_at, share_token, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
     .eq("owner", ownerId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -34,6 +34,36 @@ export async function fetchPlaylist(supabaseClient, playlistId) {
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
+}
+
+/** Load a case through its secret share link (works for private cases). */
+export async function fetchSharedPlaylist(supabaseClient, playlistId, token) {
+  if (!supabaseClient || !playlistId || !token) return null;
+  const { data, error } = await supabaseClient.functions.invoke("getSharedPlaylist-ts", {
+    body: { playlistId, token },
+  });
+  if (error) return null;
+  return data?.playlist ?? null;
+}
+
+/** Returns the case's share token, creating one if the case has none yet. */
+export async function ensurePlaylistShareToken(supabaseClient, playlist, { rotate = false } = {}) {
+  if (!rotate && playlist?.share_token) return playlist.share_token;
+  const token = crypto.randomUUID();
+  const { error } = await supabaseClient
+    .from("playlists")
+    .update({ share_token: token })
+    .eq("id", playlist.id);
+  if (error) throw error;
+  return token;
+}
+
+export async function disablePlaylistShareToken(supabaseClient, playlistId) {
+  const { error } = await supabaseClient
+    .from("playlists")
+    .update({ share_token: null })
+    .eq("id", playlistId);
+  if (error) throw error;
 }
 
 export async function createPlaylist(supabaseClient, {
@@ -101,12 +131,13 @@ export async function replacePlaylistItems(supabaseClient, playlistId, items) {
   if (error) throw error;
 }
 
-export function playlistLaunchHref(playlist, study) {
+export function playlistLaunchHref(playlist, study, shareToken = null) {
   const item = study || sortedPlaylistItems(playlist)[0]?.studies;
   if (!item?.url_params) return "";
   return buildCaseViewerHref({
     url_params: item.url_params,
     studyId: item.id,
     playlistId: playlist.id,
+    shareToken,
   });
 }

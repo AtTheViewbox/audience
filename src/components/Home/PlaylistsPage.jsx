@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, LayoutGrid, Layers, List, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, GripVertical, LayoutGrid, Layers, Link2Off, List, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,8 @@ import { Visibility } from "../../lib/constants";
 import {
   createPlaylist,
   deletePlaylist,
+  disablePlaylistShareToken,
+  ensurePlaylistShareToken,
   fetchPlaylists,
   playlistItemLabel,
   playlistLaunchHref,
@@ -127,6 +129,8 @@ export default function PlaylistsPage({ search = "" }) {
   });
   const [openIds, setOpenIds] = useState(() => new Set());
   const [studyQuery, setStudyQuery] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const dragIndexRef = useRef(null);
 
@@ -265,6 +269,52 @@ export default function PlaylistsPage({ search = "" }) {
   }
 
   const studyById = useMemo(() => new Map(studies.map((study) => [String(study.id), study])), [studies]);
+
+  function setShareToken(playlistId, token) {
+    const next = playlistsRef.current.map((row) =>
+      row.id === playlistId ? { ...row, share_token: token } : row
+    );
+    playlistsRef.current = next;
+    setPlaylists(next);
+  }
+
+  async function copyShareLink(playlist, { rotate = false } = {}) {
+    if (!playlist || shareBusy) return;
+    if (!sortedPlaylistItems(playlist)[0]?.studies?.url_params) {
+      toast.error("Add a study to this case first.");
+      return;
+    }
+    setShareBusy(true);
+    try {
+      const token = await ensurePlaylistShareToken(supabaseClient, playlist, { rotate });
+      setShareToken(playlist.id, token);
+      await navigator.clipboard.writeText(playlistLaunchHref(playlist, null, token));
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+      toast.success(rotate ? "New link copied. The old link no longer works." : "Share link copied");
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Could not create share link");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function turnOffShareLink(playlist) {
+    if (!playlist?.share_token || shareBusy) return;
+    if (!window.confirm("Turn off the share link? Anyone using it will lose access to this case.")) return;
+    setShareBusy(true);
+    try {
+      await disablePlaylistShareToken(supabaseClient, playlist.id);
+      setShareToken(playlist.id, null);
+      toast.success("Share link turned off");
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Could not turn off share link");
+    } finally {
+      setShareBusy(false);
+    }
+  }
 
   async function saveDraft() {
     if (!draft.name.trim()) {
@@ -591,6 +641,47 @@ export default function PlaylistsPage({ search = "" }) {
             >
               Launch case
             </Button>
+            <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Share link</h4>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Anyone with this link can open every study in the case, even if the case is private.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                className="w-full gap-2"
+                disabled={shareBusy || !selectedItems[0]?.studies?.url_params}
+                onClick={() => copyShareLink(selected)}
+              >
+                {shareCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {selected.share_token ? "Copy share link" : "Create share link"}
+              </Button>
+              {selected.share_token ? (
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs text-slate-400"
+                    disabled={shareBusy}
+                    onClick={() => copyShareLink(selected, { rotate: true })}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    New link
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs text-slate-400"
+                    disabled={shareBusy}
+                    onClick={() => turnOffShareLink(selected)}
+                  >
+                    <Link2Off className="h-3.5 w-3.5" />
+                    Turn off
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-slate-500 p-6">

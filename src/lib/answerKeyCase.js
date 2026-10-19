@@ -9,6 +9,8 @@ import { resolveSeriesPrefix } from "./seriesLink.js";
 export const CASE_ID_PARAM = "caseId";
 /** Viewer query param that groups related studies (XR / CT / MR) in one case. */
 export const PLAYLIST_PARAM = "p";
+/** Secret token that lets anyone with the link open a private case playlist. */
+export const PLAYLIST_TOKEN_PARAM = "pt";
 
 export function extractSearchString(urlOrParams) {
   if (!urlOrParams) return "";
@@ -33,6 +35,11 @@ export function getPlaylistIdFromSearch(search = typeof window !== "undefined" ?
   return params.get(PLAYLIST_PARAM) || null;
 }
 
+export function getPlaylistTokenFromSearch(search = typeof window !== "undefined" ? window.location.search : "") {
+  const params = new URLSearchParams(extractSearchString(search));
+  return params.get(PLAYLIST_TOKEN_PARAM) || null;
+}
+
 /** Image-only URL key: strips session, demo, preview, and case identity. */
 export function normalizeUrlParams(input) {
   if (!input) return "";
@@ -45,6 +52,7 @@ export function normalizeUrlParams(input) {
   params.delete("demo");
   params.delete(CASE_ID_PARAM);
   params.delete(PLAYLIST_PARAM);
+  params.delete(PLAYLIST_TOKEN_PARAM);
 
   return [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -62,7 +70,7 @@ export function sessionViewerUrlParams(input = typeof window !== "undefined" ? w
 }
 
 /** Open this teaching case in the viewer (same images, this case's questions). */
-export function buildCaseViewerHref({ url_params, studyId, playlistId, preview = false } = {}) {
+export function buildCaseViewerHref({ url_params, studyId, playlistId, shareToken, preview = false } = {}) {
   const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const params = new URLSearchParams(extractSearchString(url_params));
   params.delete("s");
@@ -70,6 +78,8 @@ export function buildCaseViewerHref({ url_params, studyId, playlistId, preview =
   else params.delete(CASE_ID_PARAM);
   if (playlistId) params.set(PLAYLIST_PARAM, playlistId);
   else params.delete(PLAYLIST_PARAM);
+  if (playlistId && shareToken) params.set(PLAYLIST_TOKEN_PARAM, shareToken);
+  else params.delete(PLAYLIST_TOKEN_PARAM);
   if (preview) params.set("preview", "true");
   else params.delete("preview");
   return `${rootUrl}?${params.toString()}`;
