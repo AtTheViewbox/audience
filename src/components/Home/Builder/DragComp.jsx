@@ -147,6 +147,14 @@ const DragComp = ({
                     <SliceFilmstrip
                         metadata={metadata}
                         captureRootRef={viewportCaptureRef}
+                        drop={Number(metadata.timelineDrop) || 0}
+                        onDropChange={(value) => {
+                            setMetaDataList((prev) =>
+                                prev.map((item) =>
+                                    item.id === metadata.id ? { ...item, timelineDrop: value } : item
+                                )
+                            );
+                        }}
                         onChange={(range) => {
                             setMetaDataList((prev) =>
                                 prev.map((item) =>

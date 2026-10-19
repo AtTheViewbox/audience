@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,8 @@ const mapSeriesToMetaData = (seriesList) => {
 const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     // metaDataList Tracks ALL items available in the system + their grid state
     const [metaDataList, setMetaDataList] = useState([]);
+    const metaDataListRef = useRef(metaDataList);
+    metaDataListRef.current = metaDataList;
     const [metaDataSelected, setMetaDataSelected] = useState(null);
     const [drawerState, setDrawerState] = useState(false);
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -307,6 +309,26 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             }
 
             setMetaDataList(workingList);
+            const latest = metaDataListRef.current;
+            workingList = workingList.map((item) => {
+                const live = latest.find((row) =>
+                    Array.isArray(row.cord) &&
+                    Array.isArray(item.cord) &&
+                    row.cord[0] === item.cord[0] &&
+                    row.cord[1] === item.cord[1] &&
+                    row.cord[0] !== -1
+                );
+                if (!live) return item;
+                return {
+                    ...item,
+                    z: live.z ?? item.z,
+                    px: live.px ?? item.px,
+                    py: live.py ?? item.py,
+                    ww: live.ww ?? item.ww,
+                    wc: live.wc ?? item.wc,
+                    r: live.r ?? item.r,
+                };
+            });
             const finalUrl = generateGridURL(workingList, rows, cols);
             setSavedUrl(finalUrl);
 

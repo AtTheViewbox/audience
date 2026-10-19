@@ -63,9 +63,31 @@ const ViewportComp = ({
     const renderingEngineId = `preview-engine-${currentMetadata.id}`;
     const includedRef = useRef([]);
     const applyingRangeRef = useRef(false);
+    const cameraRef = useRef({
+        z: Number(currentMetadata.z) > 0 ? Number(currentMetadata.z) : 1,
+        px: Number(currentMetadata.px) || 0,
+        py: Number(currentMetadata.py) || 0,
+    });
     includedRef.current = getIncludedSliceIndices(currentMetadata);
 
+    const rememberCamera = (z, px, py) => {
+        cameraRef.current = {
+            z: Number(z) > 0 ? Number(z) : 1,
+            px: Number(px) || 0,
+            py: Number(py) || 0,
+        };
+    };
+
+    const applyCamera = (viewport, z, px, py) => {
+        if (!viewport) return;
+        rememberCamera(z, px, py);
+        const { z: zoom, px: panX, py: panY } = cameraRef.current;
+        viewport.setZoom(zoom);
+        viewport.setPan([panX, panY]);
+    };
+
     const updateWindowCamera = () => {
+        if (applyingRangeRef.current) return;
         const renderingEngine = renderingEngineRef.current;
         if (!renderingEngine) return;
 
@@ -79,6 +101,7 @@ const ViewportComp = ({
         const { windowWidth, windowCenter } = cornerstone.utilities.windowLevel.toWindowLevel(voiRange.lower, voiRange.upper);
         const [x, y] = vp.getPan();
         const zoom = vp.getZoom();
+        rememberCamera(zoom, x, y);
 
         onUpdate({
             wc: windowCenter,
@@ -217,6 +240,7 @@ const ViewportComp = ({
 
                 if (!renderingEngineRef.current) return;
 
+                applyingRangeRef.current = true;
                 await viewport.setStack(stack, relativeSliceIndex);
 
                 const image = cornerstone.cache.getImage(firstId);
@@ -232,8 +256,9 @@ const ViewportComp = ({
                     }
                 }
 
-                viewport.setZoom(currentMetadata.z || 1);
-                viewport.setPan([Number(currentMetadata.px || 0), Number(currentMetadata.py || 0)]);
+                applyCamera(viewport, currentMetadata.z, currentMetadata.px, currentMetadata.py);
+                const { start_slice, end_slice, excluded_slices } = clampSliceRange(currentMetadata);
+                lastRangeKeyRef.current = `${start_slice}:${end_slice}:${stack.length}:${(excluded_slices || []).join(",")}`;
 
                 voiRef.current = cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc);
                 invertRef.current = false;
@@ -244,6 +269,9 @@ const ViewportComp = ({
                 });
 
                 viewport.render();
+                requestAnimationFrame(() => {
+                    applyingRangeRef.current = false;
+                });
                 if (renderingEngineRef.current) setIsLoading(false);
 
                 loadedSetRef.current = new Set([relativeSliceIndex]);
@@ -349,6 +377,7 @@ const ViewportComp = ({
                     element.removeEventListener(cornerstone.EVENTS.IMAGE_RENDERED, handleImageRendered);
                 };
             } catch (err) {
+                applyingRangeRef.current = false;
                 console.error("Viewport Setup Error", err);
                 setLoadError(err?.message || "Failed to load images");
             }
@@ -408,14 +437,11 @@ const ViewportComp = ({
 
             try {
                 applyingRangeRef.current = true;
-                engine.resize(true, false);
+                engine.resize(true, true);
+                const { z, px, py } = cameraRef.current;
+                viewport.setZoom(z);
+                viewport.setPan([px, py]);
                 viewport.render();
-                const [x, y] = viewport.getPan();
-                onUpdateRef.current?.({
-                    z: viewport.getZoom(),
-                    px: x,
-                    py: y,
-                });
             } catch (err) {
                 console.warn("[ViewportComp] resize failed", err);
             } finally {
@@ -484,8 +510,7 @@ const ViewportComp = ({
                 }
             }
 
-            viewport.setZoom(currentMetadata.z || 1);
-            viewport.setPan([Number(currentMetadata.px || 0), Number(currentMetadata.py || 0)]);
+            applyCamera(viewport, currentMetadata.z, currentMetadata.px, currentMetadata.py);
 
             viewport.setProperties({
                 voiRange: cornerstone.utilities.windowLevel.toLowHighRange(currentMetadata.ww, currentMetadata.wc),

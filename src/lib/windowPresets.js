@@ -38,6 +38,38 @@ export function voiRangeFromSavedWindow(ww, wc, image) {
   return cornerstone?.utilities?.windowLevel?.toLowHighRange(width, center) ?? null;
 }
 
+/** Restore each viewport to the zoom, pan, and window saved with the case. */
+export function resetViewportsToSaved(renderingEngine, viewportData = []) {
+  const cornerstone = typeof window !== "undefined" ? window.cornerstone : null;
+  if (!renderingEngine) return;
+
+  viewportData.forEach((data, index) => {
+    const viewport = renderingEngine.getViewport(`${index}-vp`);
+    if (!viewport || !data) return;
+
+    viewport.resetCamera?.();
+    const zoom = Number(data.z);
+    if (Number.isFinite(zoom) && zoom > 0) viewport.setZoom(zoom);
+    const px = Number(data.px);
+    const py = Number(data.py);
+    if (Number.isFinite(px) && Number.isFinite(py)) viewport.setPan([px, py]);
+
+    const imageId = viewport.getCurrentImageId?.();
+    const image = imageId ? cornerstone?.cache?.getImage(imageId) : null;
+    const voiRange =
+      voiRangeFromSavedWindow(data.ww, data.wc, image) ||
+      cornerstone?.utilities?.windowLevel?.toLowHighRange(Number(data.ww), Number(data.wc));
+    viewport.setProperties({
+      ...(voiRange ? { voiRange } : {}),
+      invert: false,
+      isComputedVOI: false,
+    });
+    viewport.render();
+    // Viewport.jsx caches VOI on mouseup so scroll doesn't revert the reset.
+    viewport.element?.dispatchEvent(new MouseEvent("mouseup"));
+  });
+}
+
 /** Apply a HU window/level preset to every viewport on the rendering engine. */
 export function applyWindowPreset(renderingEngine, wwHU, wcHU) {
   const cornerstone = typeof window !== "undefined" ? window.cornerstone : null;

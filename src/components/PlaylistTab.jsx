@@ -97,7 +97,7 @@ function PlaylistTab() {
       </CardHeader>
       <CardContent className="space-y-2">
         {items.length ? (
-          items.map((item) => {
+          items.map((item, index) => {
             const current = isCurrent(item);
             return (
               <Button
@@ -110,13 +110,16 @@ function PlaylistTab() {
                 disabled={current || busyId === item.id || !item.studies?.url_params}
                 onClick={() => openItem(item)}
               >
-                <span className="text-left min-w-0">
+                <span className="text-left min-w-0 flex items-start gap-2">
+                  <span className="mt-0.5 w-4 shrink-0 text-[11px] tabular-nums text-muted-foreground">{index + 1}</span>
+                  <span className="min-w-0">
                   <span className="block truncate">{playlistItemLabel(item)}</span>
                   {item.label && item.studies?.name ? (
                     <span className="block text-[11px] text-muted-foreground truncate">
                       {item.studies.name}
                     </span>
                   ) : null}
+                  </span>
                 </span>
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground shrink-0 ml-2">
                   {busyId === item.id ? "Switching…" : current ? "Now" : isHost && sessionId ? "Switch" : "Open"}

@@ -11,6 +11,18 @@ import { voiRangeFromSavedWindow } from '../lib/windowPresets.js';
 import { getRemotePointer, subscribeRemotePointer } from '../lib/pointerStore.js';
 import { toast } from "sonner";
 
+function applySavedCamera(viewport, data) {
+  if (!viewport || !data) return;
+  const zoom = Number(data.z);
+  if (Number.isFinite(zoom) && zoom > 0) {
+    viewport.setZoom(zoom);
+  }
+  const px = Number(data.px);
+  const py = Number(data.py);
+  if (Number.isFinite(px) && Number.isFinite(py)) {
+    viewport.setPan([px, py]);
+  }
+}
 
 export default function Viewport(props) {
   const searchParams = new URLSearchParams(location.search);
@@ -292,6 +304,7 @@ export default function Viewport(props) {
       // Cornerstone handles lazy-loading pixels as needed.
       await viewport.setStack(s, initialIndex);
       viewport.resetCamera?.();
+      applySavedCamera(viewport, viewport_data);
 
       const firstImage = cornerstone.cache.getImage(s[initialIndex]);
       voiRef.current =
@@ -730,9 +743,20 @@ export default function Viewport(props) {
       const isStackSame = prev && prevFirstUrl === newFirstUrl;
       const isWindowSame = prev && prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
       const isCiChanged = prev && prev.ci !== viewport_data.ci;
+      const isCameraChanged = prev && (
+        prev.z !== viewport_data.z ||
+        prev.px !== viewport_data.px ||
+        prev.py !== viewport_data.py
+      );
 
       // Guard: If nothing relevant changed, do nothing
       if (prev && isStackSame && isWindowSame && !isCiChanged && viewportReady) {
+        if (isCameraChanged) {
+          const viewportId = `${viewport_idx}-vp`;
+          const viewport = rendering_engine.getViewport(viewportId);
+          applySavedCamera(viewport, viewport_data);
+          viewport?.render();
+        }
         prevDataRef.current = viewport_data;
         return;
       }
@@ -778,8 +802,12 @@ export default function Viewport(props) {
             }
           }
 
+          if (isCameraChanged) {
+            applySavedCamera(viewport, viewport_data);
+          }
+
           // 3. Final render if anything changed
-          if (!isWindowSame || isCiChanged) {
+          if (!isWindowSame || isCiChanged || isCameraChanged) {
             viewport.render();
           }
         }

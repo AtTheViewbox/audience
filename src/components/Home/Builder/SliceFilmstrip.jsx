@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   clampSliceRange,
   getIncludedSliceIndices,
@@ -50,7 +51,9 @@ function panToIndex(index, viewMin, trackW, maxPan, stride) {
   return clamp(center - trackW / 2, 0, maxPan);
 }
 
-export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
+export default function SliceFilmstrip({ metadata, onChange, captureRootRef, drop = 0, onDropChange }) {
+  const lowered = clamp(Number(drop) || 0, 0, 100) / 100;
+  const showThumbs = Math.round(72 * (1 - lowered)) >= 22;
   const cropRef = useRef(null);
   const selectRef = useRef(null);
   const dragRef = useRef(null);
@@ -180,7 +183,7 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [showThumbs]);
 
   useEffect(() => {
     setPan(0);
@@ -461,7 +464,7 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [showThumbs]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -521,12 +524,33 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
   const endPct = pct(end, viewMin, viewMax);
   const ciPct = pct(ci, viewMin, viewMax);
   const handleNudge = start === end ? 6 : 0;
+  const cropH = Math.round(44 - lowered * 20);
+  const thumbH = Math.round(72 * (1 - lowered));
+  const showLabels = lowered < 0.7;
+
+  const isLowered = lowered > 0;
+  const nudgeTimeline = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onDropChange?.(isLowered ? 0 : 100);
+  };
 
   return (
-    <div className="select-none space-y-1.5">
+    <div className="relative select-none space-y-1.5">
+      <button
+        type="button"
+        aria-label={isLowered ? "Raise sequence timeline" : "Lower sequence timeline"}
+        title={isLowered ? "Raise timeline" : "Lower timeline"}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={nudgeTimeline}
+        className="absolute right-1 top-1 z-50 flex h-5 w-5 items-center justify-center rounded-sm border bg-background/90 text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        {isLowered ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
       <div
         ref={cropRef}
-        className="relative h-11 cursor-ew-resize touch-none overflow-hidden rounded-md bg-zinc-950 ring-1 ring-border"
+        className="relative cursor-ew-resize touch-none overflow-hidden rounded-md bg-zinc-950 ring-1 ring-border"
+        style={{ height: cropH }}
         onPointerDown={(e) => {
           if (e.target.closest?.("button")) return;
           const i = indexFromCropX(e.clientX);
@@ -599,11 +623,13 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
         </button>
       </div>
 
+      {showThumbs && (
       <div
         ref={selectRef}
-        className={`relative h-[72px] touch-none overflow-hidden rounded-md bg-zinc-950 ring-1 ring-border ${
+        className={`relative touch-none overflow-hidden rounded-md bg-zinc-950 ring-1 ring-border ${
           shiftPick ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"
         }`}
+        style={{ height: thumbH }}
         onPointerDown={(e) => {
           const i = indexFromSelectX(e.clientX);
           const kept = i >= start && i <= end && !(excluded || []).includes(i);
@@ -663,7 +689,9 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
           })}
         </div>
       </div>
+      )}
 
+      {showLabels && (
       <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground">
         <span>In {start + 1}</span>
         <span className="flex items-center gap-2">
@@ -681,6 +709,7 @@ export default function SliceFilmstrip({ metadata, onChange, captureRootRef }) {
         </span>
         <span>Out {end + 1}</span>
       </div>
+      )}
     </div>
   );
 }

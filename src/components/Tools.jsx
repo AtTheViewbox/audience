@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair, SquareDashedMousePointer, Flame } from "lucide-react";
+import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair, SquareDashedMousePointer, Flame, RotateCcw } from "lucide-react";
 import { DotFilledIcon } from "@radix-ui/react-icons";
 import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
@@ -17,7 +17,7 @@ import {
     DropdownMenuSubContent,
     DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { WINDOW_PRESETS, applyWindowPreset, presetFromDigitKey } from "../lib/windowPresets.js";
+import { WINDOW_PRESETS, applyWindowPreset, presetFromDigitKey, resetViewportsToSaved } from "../lib/windowPresets.js";
 
 
 function Tools() {
@@ -32,6 +32,7 @@ function Tools() {
         hostAnswerContentAvailable,
         persistedAnswerBoxes,
         renderingEngine,
+        vd,
     } = useContext(DataContext).data;
     const { userData } = useContext(UserContext).data;
 
@@ -198,6 +199,18 @@ function Tools() {
                         </DropdownMenuRadioItem>
                     )}
                 </DropdownMenuRadioGroup>
+
+                <DropdownMenuItem
+                    onSelect={(e) => {
+                        e.preventDefault();
+                        resetViewportsToSaved(renderingEngine, vd || []);
+                        closeMobileMenu();
+                    }}
+                    className="relative pl-8"
+                >
+                    <RotateCcw strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                    <span>&nbsp;Reset</span>
+                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

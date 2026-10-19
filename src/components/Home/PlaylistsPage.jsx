@@ -1,9 +1,8 @@
-import { useContext, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, LayoutGrid, Layers, List, Pencil, Plus, Trash2 } from "lucide-react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, GripVertical, LayoutGrid, Layers, List, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UserContext } from "../../context/UserContext";
@@ -28,6 +26,60 @@ import {
   sortedPlaylistItems,
   updatePlaylist,
 } from "../../lib/playlist";
+
+function StudyPicker({ studies, addedIds, query, onQuery, onAdd }) {
+  const q = query.trim().toLowerCase();
+  const rows = studies.filter((study) => {
+    if (addedIds.has(String(study.id))) return false;
+    if (!q) return true;
+    return `${study.name || ""} ${study.description || ""}`.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+        <Input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Search studies to add"
+          className="pl-8 h-8 bg-slate-900/50 border-slate-800 text-sm"
+        />
+      </div>
+      <div className="max-h-48 overflow-y-auto rounded-md border border-slate-800">
+        {studies.length ? (
+          rows.length ? (
+            rows.map((study) => (
+              <div key={study.id} className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-800/80 last:border-0">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-100 truncate">{study.name || "Untitled study"}</p>
+                  {study.description ? (
+                    <p className="text-[11px] text-slate-500 truncate">{study.description}</p>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 shrink-0 gap-1"
+                  onClick={() => onAdd(study.id)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-slate-500 p-3">
+              {q ? "No studies match that search." : "Every study is already in this case."}
+            </p>
+          )
+        ) : (
+          <p className="text-xs text-slate-500 p-3">Save some studies in Your Viewbox first.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function emptyDraft() {
   return {
@@ -59,6 +111,8 @@ function draftFromPlaylist(playlist) {
 export default function PlaylistsPage({ search = "" }) {
   const { supabaseClient, userData } = useContext(UserContext).data;
   const [playlists, setPlaylists] = useState([]);
+  const playlistsRef = useRef([]);
+  playlistsRef.current = playlists;
   const [studies, setStudies] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -72,6 +126,9 @@ export default function PlaylistsPage({ search = "" }) {
     }
   });
   const [openIds, setOpenIds] = useState(() => new Set());
+  const [studyQuery, setStudyQuery] = useState("");
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const dragIndexRef = useRef(null);
 
   const selected = playlists.find((p) => p.id === selectedId) || playlists[0] || null;
 
@@ -83,7 +140,7 @@ export default function PlaylistsPage({ search = "" }) {
     }
     const [list, studyRows] = await Promise.all([
       fetchPlaylists(supabaseClient, userData.id),
-      supabaseClient.from("studies").select("id, name, description, url_params, visibility").eq("owner", userData.id),
+      supabaseClient.from("studies").select("id, name, description, url_params, visibility"),
     ]);
     if (studyRows.error) throw studyRows.error;
     setPlaylists(list);
@@ -133,20 +190,23 @@ export default function PlaylistsPage({ search = "" }) {
   }
 
   function openCreate() {
+    setStudyQuery("");
     setDraft(emptyDraft());
     setEditorOpen(true);
   }
 
   function openEdit(playlist) {
+    setStudyQuery("");
     setDraft(draftFromPlaylist(playlist));
     setEditorOpen(true);
   }
 
   function toggleStudy(studyId, checked) {
     setDraft((prev) => {
+      const has = prev.studyIds.some((id) => String(id) === String(studyId));
       const studyIds = checked
-        ? [...prev.studyIds, studyId]
-        : prev.studyIds.filter((id) => id !== studyId);
+        ? (has ? prev.studyIds : [...prev.studyIds, studyId])
+        : prev.studyIds.filter((id) => String(id) !== String(studyId));
       return { ...prev, studyIds };
     });
   }
@@ -161,6 +221,50 @@ export default function PlaylistsPage({ search = "" }) {
       return { ...prev, studyIds };
     });
   }
+
+  function dropStudy(toIndex) {
+    const fromIndex = dragIndexRef.current;
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+    if (fromIndex == null || fromIndex === toIndex) return;
+    setDraft((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.studyIds.length) return prev;
+      const studyIds = [...prev.studyIds];
+      const [moved] = studyIds.splice(fromIndex, 1);
+      studyIds.splice(toIndex, 0, moved);
+      return { ...prev, studyIds };
+    });
+  }
+
+  async function persistOrder(playlistId, index, delta) {
+    const playlist = playlistsRef.current.find((row) => row.id === playlistId);
+    if (!playlist) return;
+    const items = sortedPlaylistItems(playlist);
+    const next = index + delta;
+    if (next < 0 || next >= items.length) return;
+    const reordered = [...items];
+    [reordered[index], reordered[next]] = [reordered[next], reordered[index]];
+    const withOrder = reordered.map((item, order) => ({ ...item, sort_order: order }));
+    const nextPlaylists = playlistsRef.current.map((row) =>
+      row.id === playlistId ? { ...row, playlist_items: withOrder } : row
+    );
+    playlistsRef.current = nextPlaylists;
+    setPlaylists(nextPlaylists);
+    try {
+      await updatePlaylist(supabaseClient, playlistId, {
+        items: withOrder.map((item) => ({
+          study_id: item.study_id,
+          label: item.label || "",
+        })),
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Could not update order");
+      await load();
+    }
+  }
+
+  const studyById = useMemo(() => new Map(studies.map((study) => [String(study.id), study])), [studies]);
 
   async function saveDraft() {
     if (!draft.name.trim()) {
@@ -334,6 +438,7 @@ export default function PlaylistsPage({ search = "" }) {
                         </div>
                       </div>
                       {open ? (
+                        <>
                         <ol>
                           {items.length ? items.map((item, itemIndex) => (
                             <li key={item.id}>
@@ -359,6 +464,7 @@ export default function PlaylistsPage({ search = "" }) {
                             <li className="px-3 py-2 pl-12 text-xs text-slate-500">No studies in this case</li>
                           )}
                         </ol>
+                        </>
                       ) : null}
                     </div>
                   );
@@ -436,16 +542,44 @@ export default function PlaylistsPage({ search = "" }) {
               {selected.description || "No description provided."}
             </p>
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Series</h4>
-              {selectedItems.map((item, index) => (
-                <div key={item.id} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
-                  <p className="text-sm text-slate-100">{playlistItemLabel(item)}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {index + 1} of {selectedItems.length}
-                    {item.studies?.name && item.label ? ` · ${item.studies.name}` : ""}
-                  </p>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Series order</h4>
+              {selectedItems.length ? selectedItems.map((item, index) => (
+                <div key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-2 py-2">
+                  <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-400">{index + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-100 truncate">{playlistItemLabel(item)}</p>
+                    {item.studies?.name && item.label ? (
+                      <p className="text-[11px] text-slate-500 truncate">{item.studies.name}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={index === 0}
+                      aria-label="Move earlier"
+                      onClick={() => persistOrder(selected.id, index, -1)}
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={index === selectedItems.length - 1}
+                      aria-label="Move later"
+                      onClick={() => persistOrder(selected.id, index, 1)}
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-xs text-slate-500">No studies in this case yet.</p>
+              )}
             </div>
             <Button
               className="w-full"
@@ -466,11 +600,11 @@ export default function PlaylistsPage({ search = "" }) {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="sm:max-w-lg bg-slate-950 border-slate-800 text-slate-100">
+        <DialogContent className="sm:max-w-3xl bg-slate-950 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{draft.id ? "Edit case" : "New case"}</DialogTitle>
             <DialogDescription className="text-slate-400">
-              Pick the studies that belong together. Order is the order they appear in the viewer menu.
+              Search your studies and add them to this case. The list below is the order in the viewer menu.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
@@ -507,71 +641,110 @@ export default function PlaylistsPage({ search = "" }) {
                 }
               />
             </div>
-            <div className="grid gap-2">
-              <Label>Studies</Label>
-              <ScrollArea className="h-56 rounded-md border border-slate-800 p-2">
-                {studies.length ? (
-                  <div className="space-y-2">
-                    {studies.map((study) => {
-                      const checked = draft.studyIds.includes(study.id);
-                      const order = draft.studyIds.indexOf(study.id);
-                      return (
-                        <div key={study.id} className="rounded-md border border-slate-800/80 p-2">
-                          <div className="flex items-start gap-2">
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(value) => toggleStudy(study.id, value === true)}
-                              className="mt-0.5"
-                            />
+            <div className="grid gap-4">
+              <div className="grid gap-2 min-w-0">
+                <Label>Add from your studies</Label>
+                <StudyPicker
+                  studies={studies}
+                  addedIds={new Set(draft.studyIds.map(String))}
+                  query={studyQuery}
+                  onQuery={setStudyQuery}
+                  onAdd={(studyId) => toggleStudy(studyId, true)}
+                />
+              </div>
+              <div className="grid gap-2 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>In this case</Label>
+                  <span className="text-[11px] text-slate-500 tabular-nums">{draft.studyIds.length} added</span>
+                </div>
+                <div className="max-h-72 overflow-y-auto rounded-md border border-slate-800">
+                  {draft.studyIds.length ? (
+                    <ol className="p-2 space-y-2">
+                      {draft.studyIds.map((studyId, index) => {
+                        const study = studyById.get(String(studyId));
+                        return (
+                          <li
+                            key={studyId}
+                            onDragOver={(event) => {
+                              event.preventDefault();
+                              setDragOverIndex(index);
+                            }}
+                            onDrop={() => dropStudy(index)}
+                            className={`flex items-start gap-2 rounded-md border p-2 bg-slate-900/40 ${
+                              dragOverIndex === index ? "border-blue-500/60" : "border-slate-800"
+                            }`}
+                          >
+                            <span
+                              draggable
+                              aria-label="Drag to reorder"
+                              onDragStart={() => {
+                                dragIndexRef.current = index;
+                              }}
+                              onDragEnd={() => setDragOverIndex(null)}
+                              className="mt-0.5 text-slate-500 cursor-grab"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+                            <span className="mt-0.5 w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-400">
+                              {index + 1}
+                            </span>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm text-slate-100 truncate">{study.name}</p>
-                              {checked ? (
-                                <Input
-                                  value={draft.labels[study.id] || ""}
-                                  onChange={(e) =>
-                                    setDraft((prev) => ({
-                                      ...prev,
-                                      labels: { ...prev.labels, [study.id]: e.target.value },
-                                    }))
-                                  }
-                                  placeholder="Label (CT, XR…)"
-                                  className="mt-2 h-8 bg-slate-900 border-slate-800 text-xs"
-                                />
-                              ) : null}
+                              <p className="text-sm text-slate-100 truncate">{study?.name || "Untitled study"}</p>
+                              <Input
+                                value={draft.labels[studyId] || ""}
+                                onChange={(e) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    labels: { ...prev.labels, [studyId]: e.target.value },
+                                  }))
+                                }
+                                placeholder="Label (CT, XR…)"
+                                className="mt-2 h-8 bg-slate-900 border-slate-800 text-xs"
+                              />
                             </div>
-                            {checked ? (
-                              <div className="flex flex-col">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  disabled={order <= 0}
-                                  onClick={() => moveStudy(study.id, -1)}
-                                >
-                                  <ChevronUp className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  disabled={order === draft.studyIds.length - 1}
-                                  onClick={() => moveStudy(study.id, 1)}
-                                >
-                                  <ChevronDown className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 p-2">Save some studies in Your Viewbox first.</p>
-                )}
-              </ScrollArea>
+                            <div className="flex flex-col shrink-0">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={index === 0}
+                                aria-label="Move earlier"
+                                onClick={() => moveStudy(studyId, -1)}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={index === draft.studyIds.length - 1}
+                                aria-label="Move later"
+                                onClick={() => moveStudy(studyId, 1)}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                aria-label="Remove from case"
+                                onClick={() => toggleStudy(studyId, false)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : (
+                    <p className="text-xs text-slate-500 p-3">Nothing added yet. Search above and add a study. This list is the viewer order.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
