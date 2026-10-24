@@ -4,6 +4,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const FOLDER_RE = /^upload_[A-Za-z0-9_]+$/;
 const FILE_RE = /^[A-Za-z0-9._-]+\.(dcm|dcm\.gz)$/i;
+// The bucket's r2.dev URL is disabled; reads must go through the r2-dicom-gate worker.
+const DICOM_CDN = "https://dicom.attheviewbox.dev";
 
 const s3 = new S3Client({
   region: "auto",
@@ -94,7 +96,7 @@ serve(async (req) => {
 
     return json(req, {
       success: true,
-      url: `${Deno.env.get("R2_PUBLIC_URL")}/${fullPath}`,
+      url: `${DICOM_CDN}/${fullPath}`,
       folder: folderPath,
       fileName,
       compressed: isCompressed,
