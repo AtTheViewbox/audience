@@ -1,5 +1,5 @@
-import { useState, useEffect, useContext } from "react"
-import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork, LayoutGrid, List } from "lucide-react"
+import { useState, useEffect, useContext, useMemo } from "react"
+import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
@@ -32,6 +32,36 @@ function studyDate(series) {
   const raw = series?.last_accessed || series?.created_at;
   if (!raw) return "—";
   return new Date(raw).toISOString().split("T")[0];
+}
+
+const SORT_VALUES = {
+  name: (s) => (s?.name || "").toLowerCase(),
+  description: (s) => (s?.description || "").toLowerCase(),
+  visibility: (s) => s?.visibility || "",
+  date: (s) => new Date(s?.last_accessed || s?.created_at || 0).getTime(),
+};
+
+function SortHeader({ label, sortKey, sort, onSort, className }) {
+  const active = sort.key === sortKey;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th
+      className={cn("text-left font-medium px-3 py-2", className)}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 uppercase tracking-wider hover:text-slate-300",
+          active && "text-slate-200"
+        )}
+      >
+        {label}
+        <Icon className={cn("h-3 w-3", !active && "opacity-40")} />
+      </button>
+    </th>
+  );
 }
 
 export default function HomePage() {
@@ -298,6 +328,26 @@ export default function HomePage() {
 
   }, [search, seriesList]);
 
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const handleSort = (key) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "date" ? "desc" : "asc" }
+    );
+  };
+  const sortedSeriesList = useMemo(() => {
+    const getValue = SORT_VALUES[sort.key];
+    if (!getValue) return displaySeriesList;
+    const factor = sort.dir === "asc" ? 1 : -1;
+    return [...displaySeriesList].sort((a, b) => {
+      const va = getValue(a);
+      const vb = getValue(b);
+      if (typeof va === "number") return (va - vb) * factor;
+      return va.localeCompare(vb, undefined, { numeric: true }) * factor;
+    });
+  }, [displaySeriesList, sort]);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile menu when filter changes
@@ -412,15 +462,15 @@ export default function HomePage() {
                         <thead>
                           <tr className="text-[11px] uppercase tracking-wider text-slate-500">
                             <th className="text-left font-medium px-3 py-2 w-12">#</th>
-                            <th className="text-left font-medium px-3 py-2">Name</th>
-                            <th className="text-left font-medium px-3 py-2">Description</th>
-                            <th className="text-left font-medium px-3 py-2 w-24">Access</th>
-                            <th className="text-left font-medium px-3 py-2 w-28">Date</th>
+                            <SortHeader label="Name" sortKey="name" sort={sort} onSort={handleSort} />
+                            <SortHeader label="Description" sortKey="description" sort={sort} onSort={handleSort} />
+                            <SortHeader label="Access" sortKey="visibility" sort={sort} onSort={handleSort} className="w-24" />
+                            <SortHeader label="Date" sortKey="date" sort={sort} onSort={handleSort} className="w-28" />
                             {filter === Filter.MYSTUDIES ? <th className="w-10" /> : null}
                           </tr>
                         </thead>
                         <tbody>
-                          {displaySeriesList.map((series, index) => (
+                          {sortedSeriesList.map((series, index) => (
                             <tr
                               key={series.id}
                               className={cn(
@@ -471,7 +521,7 @@ export default function HomePage() {
                       </table>
                     </div>
                   ) : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {displaySeriesList.map((series) => (
+                    {sortedSeriesList.map((series) => (
                       <Card
                         key={series.id}
                         className={`relative group cursor-pointer min-w-0 overflow-hidden bg-slate-900/40 border-slate-800 hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-200 ${selectedSeries?.id === series.id ? "ring-1 ring-blue-500/50 border-blue-500/50" : ""
