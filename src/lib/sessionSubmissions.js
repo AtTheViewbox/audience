@@ -65,15 +65,6 @@ export async function fetchSessionSubmissions(supabaseClient, sessionId, caseKey
   return { submittedQuestionAnswers, submittedAnnotations };
 }
 
-/** Author-only: remove submissions for the session (optionally a single case). */
-export async function clearSessionSubmissions(supabaseClient, sessionId, caseKey) {
-  if (!supabaseClient || !sessionId) return;
-  let query = supabaseClient.from(TABLE).delete().eq("session_id", sessionId);
-  if (caseKey) query = query.eq("case_key", caseKey);
-  const { error } = await query;
-  if (error) throw error;
-}
-
 /** All persisted answers for a case, across share sessions. */
 export async function fetchCaseSubmissions(supabaseClient, caseKey) {
   if (!supabaseClient || !caseKey) return [];

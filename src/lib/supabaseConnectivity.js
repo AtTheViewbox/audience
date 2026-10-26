@@ -1,36 +1,5 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../context/SupabaseClient.jsx";
 
-const NETWORK_HINTS = [
-  "failed to fetch",
-  "networkerror",
-  "network request failed",
-  "load failed",
-  "err_connection",
-  "err_name_not_resolved",
-  "err_blocked",
-  "err_failed",
-  "err_timed_out",
-  "timed out",
-  "timeout",
-  "abort",
-  "offline",
-];
-
-export function isLikelyBlockedNetworkError(error) {
-  if (!error) return false;
-  const name = String(error.name || "");
-  if (
-    name === "TypeError" ||
-    name === "AbortError" ||
-    name === "TimeoutError" ||
-    name === "AuthRetryableFetchError"
-  ) {
-    return true;
-  }
-  const msg = String(error.message || error.error_description || error).toLowerCase();
-  return NETWORK_HINTS.some((hint) => msg.includes(hint));
-}
-
 export function formatConnectivityError(error) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return "This device looks offline.";

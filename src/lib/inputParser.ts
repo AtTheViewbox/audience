@@ -1,49 +1,16 @@
 import { DICOM_CDN } from "./r2Access.js";
 
-//window.studydata.series.reduce((pS, cS) => [...pS, cS.instances.reduce((pV, cV) => [...pV, cV.url], [])], [])
-
-function longestCommonPrefix(strs) {
-    if (strs.length === 0) return "";
-
-    strs.sort();
-
-    let prefix = "";
-    let first = strs[0];
-    let last = strs[strs.length - 1];
-
-    for (let i = 0; i < first.length; i++) {
-        if (first[i] === last[i]) {
-            prefix += first[i];
-        } else {
-            break;
-        }
-    }
-
-    return prefix;
-}
-
-function longestCommonSuffix(strs) {
-    const reversedStrs = strs.map(str => str.split("").reverse().join(""));
-    const suffix = longestCommonPrefix(reversedStrs);
-    return suffix.split("").reverse().join("");
-}
-
-function variableStringsInTheMiddle(strs, prefix, suffix) {    
-    return strs.map(str => str.slice(prefix.length, str.length - suffix.length));
-}
-
-function recreateVariableStringList(start_str, end_str,delta_str) {
+function recreateVariableStringList(start_str, end_str, delta_str) {
     const start = parseInt(start_str, 10);
     const end = parseInt(end_str, 10);
     const delta = parseInt(delta_str, 10);
     const length = start_str.length;
 
-    // Generate the list programmatically
     const generatedList = [];
-    for (let i = start; i <= end; i+=delta) {
+    for (let i = start; i <= end; i += delta) {
         let numStr = i.toString();
         while (numStr.length < length) {
-            numStr = '0' + numStr;
+            numStr = "0" + numStr;
         }
         generatedList.push(numStr);
     }
@@ -51,70 +18,30 @@ function recreateVariableStringList(start_str, end_str,delta_str) {
     return generatedList;
 }
 
-function recreateUriStringList(prefix, suffix, start_str, end_str,delta_str) {
-    const variableStringList = recreateVariableStringList(start_str, end_str,delta_str);
-    return variableStringList.map(str => prefix + str + suffix);
+/** Expand a compact viewer stack (prefix, suffix, start, end, step) into image URLs. */
+export function recreateList(prefix, suffix, start_str, end_str, delta_str) {
+    return recreateVariableStringList(start_str, end_str, delta_str).map(
+        (str) => prefix + str + suffix
+    );
 }
 
-function decomposeList(strs) {
-    const prefix = longestCommonPrefix(strs);
-    const suffix = longestCommonSuffix(strs);
-    const variableStringList = variableStringsInTheMiddle(strs, prefix, suffix);
-    const start = variableStringList[0];
-    const end = variableStringList[variableStringList.length - 1];
-    return { prefix, suffix, start, end };
-}
-
-export function recreateList(prefix, suffix, start_str, end_str,delta_str) {
-    const generatedList = recreateUriStringList(prefix, suffix, start_str, end_str,delta_str);
-    return generatedList;
-}
-
-function recreateListFromList(strs) {
-    const { prefix, suffix, start, end } = decomposeList(strs);
-    const generatedList = recreateList(prefix, suffix, start, end, delta);
-
-    // Compare the generated list with the input list
-    if (generatedList.length !== strs.length) return false;
-    for (let i = 0; i < generatedList.length; i++) {
-        if (generatedList[i] !== strs[i]) return false;
-    }
-    return true; // The lists match
-}
-
-const S3_BUCKET_PREFIX = 'https://s3.amazonaws.com/elasticbeanstalk-us-east-1-843279806438/';
-// Cloudflare R2 public dev domains (e.g. pub-<hash>.r2.dev). These do NOT send
-// CORS headers, so browser image loaders (Cornerstone wadouri/XHR) are blocked
-// cross-origin. The CDN custom domain mirrors the same bucket (identical object
-// keys) and returns Access-Control-Allow-Origin, so route R2 traffic through it.
+const S3_BUCKET_PREFIX = "https://s3.amazonaws.com/elasticbeanstalk-us-east-1-843279806438/";
 const R2_PUBLIC_HOST_RE = /^https:\/\/pub-[a-z0-9]+\.r2\.dev\//i;
 
+/** Send legacy S3 and public R2 URLs through the CORS-enabled DICOM host. */
 export function rewriteImageUrl(url: string): string {
     const schemeMatch = url.match(/^(dicomweb:|wadouri:)/);
-    const scheme = schemeMatch ? schemeMatch[0] : '';
+    const scheme = schemeMatch ? schemeMatch[0] : "";
     const rawUrl = scheme ? url.slice(scheme.length) : url;
-    let next = url;
 
     if (rawUrl.startsWith(S3_BUCKET_PREFIX)) {
-        const key = rawUrl.slice(S3_BUCKET_PREFIX.length);
-        next = scheme + DICOM_CDN + '/' + key;
-    } else {
-        const r2Match = rawUrl.match(R2_PUBLIC_HOST_RE);
-        if (r2Match) {
-            const key = rawUrl.slice(r2Match[0].length);
-            next = scheme + DICOM_CDN + '/' + key;
-        }
+        return scheme + DICOM_CDN + "/" + rawUrl.slice(S3_BUCKET_PREFIX.length);
     }
 
-    return next;
-}
+    const r2Match = rawUrl.match(R2_PUBLIC_HOST_RE);
+    if (r2Match) {
+        return scheme + DICOM_CDN + "/" + rawUrl.slice(r2Match[0].length);
+    }
 
-export function smallestInStack(s){
-    const numbers = s.map(url => {
-        const match = url.match(/(\d+)\.dcm\.gz/); 
-        return match ? parseInt(match[1], 10) : null; // Convert to integer if matched
-    }).filter(num => num !== null); // Filter out any null values
-    
-    const smallestNumber = Math.min(...numbers);
-    return smallestNumber
+    return url;
 }

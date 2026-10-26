@@ -9,7 +9,6 @@ export const Filter = {
   ALL: "ALL",
   MYSTUDIES: "MYSTUDIES",
   PLAYLISTS: "PLAYLISTS",
-  PACSBIN:"PACSBIN",
   BUILDER: "BUILDER",
 }
 

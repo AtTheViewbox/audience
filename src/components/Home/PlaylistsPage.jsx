@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Copy, GripVertical, LayoutGrid, Layers, Link2Off, List, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, GripVertical, LayoutGrid, Layers, Link2Off, List, Pencil, Plus, RefreshCw, Search, Share2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UserContext } from "../../context/UserContext";
 import { Visibility } from "../../lib/constants";
+import ShareByEmailDialog from "../ShareByEmailDialog.jsx";
+import { deliverShare } from "../../lib/shareByEmail.js";
 import {
   createPlaylist,
   deletePlaylist,
@@ -131,6 +133,8 @@ export default function PlaylistsPage({ search = "" }) {
   const [studyQuery, setStudyQuery] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [sharePlaylist, setSharePlaylist] = useState(null);
+  const [emailSharing, setEmailSharing] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const dragIndexRef = useRef(null);
 
@@ -300,6 +304,24 @@ export default function PlaylistsPage({ search = "" }) {
     }
   }
 
+  async function handleShareCase(email) {
+    if (!sharePlaylist?.id || emailSharing) return;
+    setEmailSharing(true);
+    try {
+      toast.success(await deliverShare(supabaseClient, {
+        email,
+        name: sharePlaylist.name,
+        playlistId: sharePlaylist.id,
+      }));
+      setSharePlaylist(null);
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Could not share");
+    } finally {
+      setEmailSharing(false);
+    }
+  }
+
   async function turnOffShareLink(playlist) {
     if (!playlist?.share_token || shareBusy) return;
     if (!window.confirm("Turn off the share link? Anyone using it will lose access to this case.")) return;
@@ -429,7 +451,7 @@ export default function PlaylistsPage({ search = "" }) {
         {visible.length ? (
           listView ? (
             <div>
-              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500">
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_6.75rem] gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500">
                 <span>#</span>
                 <span>Case</span>
                 <span>Access</span>
@@ -443,7 +465,7 @@ export default function PlaylistsPage({ search = "" }) {
                   return (
                     <div key={playlist.id} className={active ? "bg-blue-500/10 rounded-md" : ""}>
                       <div
-                        className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_4.5rem] gap-2 items-center px-3 py-2.5 cursor-pointer rounded-md hover:bg-slate-900/50"
+                        className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_6.75rem] gap-2 items-center px-3 py-2.5 cursor-pointer rounded-md hover:bg-slate-900/50"
                         onClick={() => {
                           setSelectedId(playlist.id);
                           toggleOpen(playlist.id);
@@ -475,6 +497,15 @@ export default function PlaylistsPage({ search = "" }) {
                             aria-label="Edit case"
                           >
                             <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setSharePlaylist(playlist)}
+                            aria-label="Share case"
+                          >
+                            <Share2 className="h-3.5 w-3.5 text-slate-400" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -530,20 +561,34 @@ export default function PlaylistsPage({ search = "" }) {
                     }`}
                     onClick={() => setSelectedId(playlist.id)}
                   >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removePlaylist(playlist);
-                      }}
-                      aria-label="Delete case"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="absolute top-2 right-2 z-10 flex opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSharePlaylist(playlist);
+                        }}
+                        aria-label="Share case"
+                      >
+                        <Share2 className="h-4 w-4 text-slate-400" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePlaylist(playlist);
+                        }}
+                        aria-label="Delete case"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate pr-8" title={playlist.name}>
+                      <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate pr-16" title={playlist.name}>
                         {playlist.name}
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-400 line-clamp-2">
@@ -840,6 +885,14 @@ export default function PlaylistsPage({ search = "" }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ShareByEmailDialog
+        open={!!sharePlaylist}
+        onOpenChange={(open) => { if (!open) setSharePlaylist(null); }}
+        title="Share this case"
+        description="Enter their account email. Each study is copied into their viewbox, and the case is added to their Cases list."
+        busy={emailSharing}
+        onSubmit={handleShareCase}
+      />
     </div>
   );
 }

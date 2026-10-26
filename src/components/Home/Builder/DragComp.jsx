@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useDrag } from "react-dnd";
-import { X, Pencil, GripVertical, Trash2 } from "lucide-react";
+import { X, Pencil, GripVertical, Trash2, Share2 } from "lucide-react";
 import { getEmptyImage } from "react-dnd-html5-backend";
 import ViewportComp from "./ViewportComp";
 import SliceFilmstrip from "./SliceFilmstrip";
@@ -14,6 +14,7 @@ const DragComp = ({
     setDrawerState,
     setRightPanelOpen,
     onDeleteSeries,
+    onShareSeries,
     propertyEditTick = 0,
     variant = "grid" // "grid" | "list"
 }) => {
@@ -76,6 +77,13 @@ const DragComp = ({
                         onClick={(e) => { e.stopPropagation(); toggleDrawer(metadata); }} 
                         className="hover:bg-accent rounded-sm cursor-pointer text-muted-foreground hover:text-foreground h-4 w-4" 
                     />
+                    {onShareSeries && !metadata.isDraft && metadata.prefix && (
+                        <Share2
+                            onClick={(e) => { e.stopPropagation(); onShareSeries(metadata); }}
+                            className="hover:bg-accent rounded-sm cursor-pointer text-muted-foreground hover:text-foreground h-4 w-4"
+                            title="Share to a viewbox"
+                        />
+                    )}
                     {(metadata.isDraft || metadata.folder_name) && (
                         <Trash2
                             onClick={(e) => { e.stopPropagation(); onDeleteSeries?.(metadata); }}
@@ -105,6 +113,15 @@ const DragComp = ({
                  <div className="bg-background/80 rounded-sm p-1 hover:bg-accent cursor-pointer border" onClick={(e) => { e.stopPropagation(); toggleDrawer(metadata); }} title="Edit properties">
                     <Pencil size={14} className="text-muted-foreground"/>
                  </div>
+                {onShareSeries && !metadata.isDraft && metadata.prefix && (
+                    <div
+                        className="bg-background/80 rounded-sm p-1 hover:bg-accent cursor-pointer border"
+                        onClick={(e) => { e.stopPropagation(); onShareSeries(metadata); }}
+                        title="Share to a viewbox"
+                    >
+                        <Share2 size={14} className="text-muted-foreground"/>
+                    </div>
+                )}
                 {(metadata.isDraft || metadata.folder_name) && (
                     <div
                         className="bg-background/80 rounded-sm p-1 hover:bg-destructive/10 cursor-pointer border"

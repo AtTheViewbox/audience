@@ -9,16 +9,15 @@ import {
   Plus,
   CheckCircle2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { isPresenter } from "../lib/demoCase.js";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import { eventTarget } from "@cornerstonejs/core";
-import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
+import { resolveViewportIndex, newAnnotationUid } from "../lib/answerKeyBoxes.js";
 import { buildAnnotationInsert } from "../lib/answerKeyCase.js";
-import {
-  participantHasSubmitted,
-} from "../lib/participantSubmit.js";
+import { participantHasSubmitted } from "../lib/participantSubmit.js";
 import {
   collectSubmissionHeatmapBoxes,
   collectAnswerKeyBoxes,
@@ -26,15 +25,6 @@ import {
   snapToBoxAtIndex,
   snapToDensityPeak,
 } from "../lib/heatmapNavigation.js";
-
-function newUid() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 function cloneAnnotation(annotation) {
   return {
@@ -362,7 +352,7 @@ function AnnotationPanel() {
       const mgr = cornerstoneTools.annotation.state;
       const restored = {
         ...entry.snapshot,
-        annotationUID: newUid(),
+        annotationUID: newAnnotationUid(),
         answerKeySaved: false,
       };
 
@@ -610,4 +600,3 @@ function AnnotationPanel() {
 }
 
 export default AnnotationPanel;
-export { AnnotationPanel };

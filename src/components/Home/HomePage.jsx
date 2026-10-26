@@ -1,8 +1,10 @@
 import { useState, useEffect, useContext, useMemo } from "react"
-import { Trash2, Copy, Check, MoreHorizontal, ExternalLink, ChevronRight, Pencil, GitFork, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
+import { Trash2, Copy, Check, ChevronRight, Pencil, GitFork, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown, Share2 } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
+import ShareByEmailDialog from "../ShareByEmailDialog.jsx"
+import { deliverShare } from "../../lib/shareByEmail.js"
 import { extractUploadFolderNames, deleteUnusedCloudSeries } from "../../lib/dicomUploadUtils.js"
 
 import { Button } from "@/components/ui/button"
@@ -21,12 +23,6 @@ import BuilderPage from "./Builder/BuilderPage";
 import PlaylistsPage from "./PlaylistsPage";
 import DemoHero from "./DemoHero";
 import JoinHero from "./JoinHero";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
 
 function studyDate(series) {
   const raw = series?.last_accessed || series?.created_at;
@@ -70,7 +66,6 @@ export default function HomePage() {
   const [search, setSearch] = useState("")
   const [seriesList, setSeriesList] = useState([])
   const [displaySeriesList, setdisplaySeriesList] = useState([])
-  const [pacsbinStudyList, setPacsbinStudyList] = useState([])
   const { supabaseClient, userData } = useContext(UserContext).data;
   const [rightPanelWidth, setRightPanelWidth] = useState(400)
   const [isResizingRight, setIsResizingRight] = useState(false)
@@ -83,6 +78,8 @@ export default function HomePage() {
   }, []);
   const [copyClicked, setCopyClicked] = useState(false);
   const [duplicating, setDuplicating] = useState(null);
+  const [shareTarget, setShareTarget] = useState(null);
+  const [sharing, setSharing] = useState(false);
   const minRightWidth = 240
   const maxRightWidth = 500
 
@@ -193,20 +190,6 @@ export default function HomePage() {
     }
   };
 
-  const deleteStudy = async (study_id) => {
-    try {
-      const { data, error } = await supabaseClient
-        .from("pacsbinStudies")
-        .delete()
-        .eq("id", study_id);
-
-      if (error) throw error;
-      getSeries()
-
-    } catch (error) {
-      console.error(error);
-    }
-  };
   const getIframeURL = (url_params, preview = false, studyId = null) => {
     const rootUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
     const searchString = extractSearchString(url_params);
@@ -235,6 +218,26 @@ export default function HomePage() {
     const fullUrl = rootUrl + newSearch;
     return fullUrl;
   }
+
+  const canShare = !!(userData?.id && !userData?.is_anonymous);
+
+  const handleShareStudy = async (email) => {
+    if (!shareTarget?.id || sharing) return;
+    setSharing(true);
+    try {
+      toast.success(await deliverShare(supabaseClient, {
+        email,
+        name: shareTarget.name,
+        studyId: shareTarget.id,
+      }));
+      setShareTarget(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || "Could not share");
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const handleDuplicate = async (mode) => {
     if (!selectedSeries?.id || !userData?.id || duplicating) return;
@@ -265,14 +268,6 @@ export default function HomePage() {
   const getSeries = async () => {
     try {
       let data, error;
-
-      if (filter === Filter.PACSBIN) {
-        ({ data, error } = await supabaseClient
-          .from("pacsbinStudies")
-          .select("*"));
-        if (error) throw error;
-        setPacsbinStudyList(data)
-      }
 
       if (filter === Filter.MYSTUDIES) {
         if (userData) {
@@ -390,8 +385,7 @@ export default function HomePage() {
                   <JoinHero />
                   <div className="flex items-center justify-between mb-8 gap-4">
                     <h2 className="text-2xl font-bold tracking-tight text-slate-100">Studies</h2>
-                    {filter === Filter.PACSBIN ? null : (
-                      <div className="flex items-center rounded-lg border border-slate-800 p-0.5">
+                    <div className="flex items-center rounded-lg border border-slate-800 p-0.5">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -417,50 +411,9 @@ export default function HomePage() {
                           <List className="h-4 w-4" />
                         </Button>
                       </div>
-                    )}
                   </div>
 
-                  {filter == Filter.PACSBIN ? <div>{pacsbinStudyList.map((study) => (
-                    <div
-                      key={study.id}
-                      className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <p className="font-medium">{study.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Created by: {study.userID}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => window.open(study.metadata[0].url)}
-                        >
-                          <ExternalLink className="size-4 text-muted-foreground" />
-                          <span className="sr-only">Open in new tab</span>
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
-                              <MoreHorizontal className="size-4" />
-                              <span className="sr-only">More options</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => deleteStudy(study.id)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))}</div> : listView ? (
+                  {listView ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm table-fixed">
                         <thead>
@@ -470,7 +423,7 @@ export default function HomePage() {
                             <SortHeader label="Description" sortKey="description" sort={sort} onSort={handleSort} />
                             <SortHeader label="Access" sortKey="visibility" sort={sort} onSort={handleSort} className="w-20" />
                             <SortHeader label="Date" sortKey="date" sort={sort} onSort={handleSort} className="w-28" />
-                            {filter === Filter.MYSTUDIES ? <th className="w-10" /> : null}
+                            {filter === Filter.MYSTUDIES ? <th className="w-16" /> : null}
                           </tr>
                         </thead>
                         <tbody>
@@ -505,18 +458,34 @@ export default function HomePage() {
                               </td>
                               {filter === Filter.MYSTUDIES ? (
                                 <td className="px-1 py-2.5">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(series);
-                                    }}
-                                    aria-label="Delete series"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                  </Button>
+                                  <div className="flex items-center justify-end">
+                                    {canShare ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setShareTarget(series);
+                                        }}
+                                        aria-label="Share study"
+                                      >
+                                        <Share2 className="h-3.5 w-3.5 text-slate-400" />
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(series);
+                                      }}
+                                      aria-label="Delete study"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                    </Button>
+                                  </div>
                                 </td>
                               ) : null}
                             </tr>
@@ -533,22 +502,38 @@ export default function HomePage() {
                         onClick={() => setSelectedSeries(series)}
                       >
                         {filter === Filter.MYSTUDIES ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-2 right-2 opacity-60 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(series);
-                            }}
-                            aria-label="Delete series"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <div className="absolute top-2 right-2 z-10 flex opacity-60 group-hover:opacity-100 transition-opacity">
+                            {canShare ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShareTarget(series);
+                                }}
+                                aria-label="Share study"
+                              >
+                                <Share2 className="h-4 w-4 text-slate-400" />
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(series);
+                              }}
+                              aria-label="Delete study"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         ) : null}
                         <CardHeader className="pb-2">
                           <div className="flex items-start gap-3 min-w-0">
-                            <div className="min-w-0 w-full overflow-hidden pr-8">
+                            <div className="min-w-0 w-full overflow-hidden pr-16">
                               <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate" title={series.name}>
                                 {series.name}
                               </CardTitle>
@@ -757,6 +742,14 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+      <ShareByEmailDialog
+        open={!!shareTarget}
+        onOpenChange={(open) => { if (!open) setShareTarget(null); }}
+        title="Share this study"
+        description="Enter their account email. A private copy, including your questions, is added to their viewbox."
+        busy={sharing}
+        onSubmit={handleShareStudy}
+      />
     </>
   );
 }

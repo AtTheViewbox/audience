@@ -1,6 +1,4 @@
 import { createContext, useState, useEffect, useReducer, useContext, useRef } from "react";
-import { unflatten } from "flat";
-import { recreateList } from '../lib/inputParser.ts';
 
 import * as cornerstone from '@cornerstonejs/core';
 import { eventTarget } from '@cornerstonejs/core';
@@ -17,7 +15,7 @@ import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { sameViewerSession, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
 import { IGNORE_SESSION_UPDATE_KEY, viewerHref } from "../lib/transferSharedSession.js";
-import { applyViewerUrl } from "../lib/viewerLocation.js";
+import { applyViewerUrl, parseViewerSearch } from "../lib/viewerLocation.js";
 import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
@@ -26,16 +24,10 @@ import { initCornerstone } from "../lib/initCornerstone.js";
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
 
-const queryParams = new URLSearchParams(window.location.search);
-var initialData = unflatten(Object.fromEntries(queryParams));
-// create initial data object from URL query string
+var initialData = parseViewerSearch(window.location.search);
+const INITIAL_SEARCH = window.location.search;
 
 if (initialData.vd) {
-    initialData.vd.forEach((vdItem) => {
-        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
-            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e, vdItem.s.D);
-        }
-    })
     initialData.isRequestLoading = false
 }
 
@@ -77,10 +69,10 @@ initialData.dicomSeriesId = null;
 initialData.dicomSeriesOwner = null;
 initialData.dicomSeriesName = null;
 initialData.pacsbinStudyName = null;
-initialData.caseUrlParams = queryParams.toString() || null;
+initialData.caseUrlParams = INITIAL_SEARCH ? INITIAL_SEARCH.replace(/^\?/, "") : null;
 initialData.caseUrlKey = resolveCaseUrlKey({
-  search: window.location.search,
-  caseUrlParams: queryParams.toString() || null,
+  search: INITIAL_SEARCH,
+  caseUrlParams: initialData.caseUrlParams,
 }) || null;
 initialData.playlistId = getPlaylistIdFromSearch(window.location.search);
 // Toggled on while the user is authoring an answer key so the Annotate tool
@@ -302,14 +294,7 @@ export const DataProvider = ({ children }) => {
                     initialData.sessionMeta.owner = sessionRow.user
                     initialData.sessionMeta.joinCode = sessionRow.join_code
 
-                    var newData = unflatten(Object.fromEntries(new URLSearchParams(sessionRow.url_params)));
-                    if (newData.vd) {
-                        newData.vd.forEach((vdItem) => {
-                            if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
-                                vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e, vdItem.s.D);
-                            }
-                        })
-                    }
+                    var newData = parseViewerSearch(sessionRow.url_params);
                     initialData.playlistId = getPlaylistIdFromSearch(sessionRow.url_params) || initialData.playlistId;
                     // Explicitly pass owner here to ensure it is set even if not previously in state
                     dispatch({
@@ -327,7 +312,7 @@ export const DataProvider = ({ children }) => {
 
             // QR / copied join links must stay in that session as participants.
             // Do not swap them into a session they already host on the same case.
-            const joiningViaLink = !!queryParams.get("s");
+            const joiningViaLink = new URLSearchParams(INITIAL_SEARCH).has("s");
 
             // Only look for existing sessions for real (non-anonymous) logged-in users
             // Anonymous users cannot create sessions, so this query would never return results
@@ -338,7 +323,7 @@ export const DataProvider = ({ children }) => {
                     .eq("user", userData.id);
                 if (errorCurrentSession) throw errorCurrentSession;
 
-                if (data?.length != 0 && sameViewerSession(data[0].url_params, queryParams.toString())) {
+                if (data?.length != 0 && sameViewerSession(data[0].url_params, INITIAL_SEARCH)) {
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode = data[0].mode
                     initialData.sessionMeta.owner = data[0].user
@@ -348,7 +333,7 @@ export const DataProvider = ({ children }) => {
 
             // Demo launch: join the shared persistent session so answers and
             // visitor counts accumulate. Homepage (no s=) still gets host UI.
-            if (!joiningViaLink && isDemoMode(queryParams.toString()) && userData) {
+            if (!joiningViaLink && isDemoMode(INITIAL_SEARCH) && userData) {
                 try {
                     const row = await resolvePersistentDemoSession(cl, userData.id);
                     initialData.s = row.session_id;
@@ -1018,9 +1003,6 @@ export function dataReducer(data, action) {
         case 'cornerstone_initialized':
             new_data = { ...data, ...action.payload };
             break;
-        case 'loading_request':
-            new_data = { ...data, isRequestLoading: true }
-            break;
         case 'update_viewport_data':
             var vd = action.payload.vd;
             var ld = action.payload.ld;
@@ -1180,13 +1162,6 @@ export function dataReducer(data, action) {
             });
             return data;
         }
-        case 'viewport_ready':
-
-
-            const viewport = (
-                data.renderingEngine.getViewport(`${action.payload.viewportId}-vp`)
-            );
-            break;
         case 'update_session_owner':
             new_data = {
                 ...data,

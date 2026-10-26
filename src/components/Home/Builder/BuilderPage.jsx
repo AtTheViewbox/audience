@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Minus, Copy, Check, Loader2, X, PanelRightOpen, ShieldCheck } from "lucide-react";
+import ShareByEmailDialog from "../../ShareByEmailDialog.jsx";
+import { deliverShare } from "../../../lib/shareByEmail.js";
 
 import DragComp from "./DragComp";
 import DropComp from "./DropComp";
@@ -77,6 +79,8 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
     const [savedUrl, setSavedUrl] = useState(null); // share link shown only after upload
     const [copyClicked, setCopyClicked] = useState(false);
+    const [shareSeries, setShareSeries] = useState(null);
+    const [sharingSeries, setSharingSeries] = useState(false);
 
     // Save Form State
     const [saveForm, setSaveForm] = useState({
@@ -275,6 +279,28 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             id: "builder-upload",
             duration: Infinity,
         });
+    };
+
+    const handleShareSeries = async (email) => {
+        if (!shareSeries?.id || sharingSeries) return;
+        if (!userData?.id || userData.is_anonymous) {
+            toast.error("Sign in to share");
+            return;
+        }
+        setSharingSeries(true);
+        try {
+            toast.success(await deliverShare(supabaseClient, {
+                email,
+                name: shareSeries.label || shareSeries.name,
+                seriesId: shareSeries.id,
+            }));
+            setShareSeries(null);
+        } catch (error) {
+            console.error(error);
+            toast.error(error?.message || "Could not share");
+        } finally {
+            setSharingSeries(false);
+        }
     };
 
     const handleSaveCase = async () => {
@@ -480,6 +506,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
 
 
     return (
+        <>
         <DndProvider backend={HTML5Backend}>
             <CustomDragLayer />
             <div className="flex h-full w-full overflow-hidden">
@@ -513,6 +540,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             setDrawerState={setDrawerState}
                                             setRightPanelOpen={setRightPanelOpen}
                                             onDeleteSeries={handleDeleteSeries}
+                                            onShareSeries={setShareSeries}
                                             variant="list"
                                         />
                                     );
@@ -589,6 +617,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                                             propertyEditTick={propertyEditTick}
                                             setRightPanelOpen={setRightPanelOpen}
                                             onDeleteSeries={handleDeleteSeries}
+                                            onShareSeries={setShareSeries}
                                             onFilesDropped={handleGridFileDrop}
                                         />
                                     </div>
@@ -754,6 +783,15 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                 )}
             </div>
         </DndProvider>
+        <ShareByEmailDialog
+            open={!!shareSeries}
+            onOpenChange={(open) => { if (!open) setShareSeries(null); }}
+            title="Share this series"
+            description="Enter their account email. A copy is added to their viewbox, and the series is added to their builder."
+            busy={sharingSeries}
+            onSubmit={handleShareSeries}
+        />
+        </>
     );
 };
 

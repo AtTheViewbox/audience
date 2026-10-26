@@ -4,11 +4,6 @@ import LoginView from "./LoginView.jsx";
 import SignUpView from "./SignUpView.jsx";
 import PasswordRecovery from "./PasswordRecovery.jsx";
 import { AuthMode } from "../components/DialogPage.jsx";
-import {
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 const LoginState = {
   LOGIN: "login",
@@ -16,7 +11,7 @@ const LoginState = {
   FORGET_PASSWORD: "reset password",
 };
 
-export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
+export function LoginDialog({ authMode, setAuthMode }) {
   const { supabaseClient } = useContext(UserContext).data;
 
   const [loginState, setLoginState] = useState(LoginState.LOGIN);
@@ -110,21 +105,6 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
     setLoginState(LoginState.LOGIN);
   };
 
-  const headerContent = {
-    [LoginState.LOGIN]: {
-      title: "Login",
-      description: "Enter your credentials to access your account."
-    },
-    [LoginState.SIGN_UP]: {
-      title: "Create Account",
-      description: "Sign up for a new account."
-    },
-    [LoginState.FORGET_PASSWORD]: {
-      title: "Reset Password",
-      description: "Enter your email to receive a recovery link."
-    }
-  }[loginState];
-
   const renderView = () => {
     switch (loginState) {
       case LoginState.LOGIN:
@@ -164,15 +144,5 @@ export function LoginDialog({ authMode, setAuthMode, showHeader = false }) {
     }
   };
 
-  return (
-    <>
-      {showHeader && (
-        <DialogHeader className="mb-4">
-          <DialogTitle>{headerContent.title}</DialogTitle>
-          <DialogDescription>{headerContent.description}</DialogDescription>
-        </DialogHeader>
-      )}
-      {renderView()}
-    </>
-  );
+  return renderView();
 }

@@ -254,7 +254,6 @@ export default function Viewport(props) {
 
 
     rendering_engine.enableElement(viewportInput);
-    dispatch({ type: 'viewport_ready', payload: { viewportId: viewport_idx } });
 
     const viewport = rendering_engine.getViewport(viewportId);
     const { s: rawUrls, ww, wc } = viewport_data;

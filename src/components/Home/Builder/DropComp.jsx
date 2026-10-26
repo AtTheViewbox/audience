@@ -13,6 +13,7 @@ const DropComp = ({
   setDrawerState,
   setRightPanelOpen,
   onDeleteSeries,
+  onShareSeries,
   onFilesDropped,
   metaDataSelected,
   propertyEditTick,
@@ -91,6 +92,7 @@ const DropComp = ({
               setDrawerState={setDrawerState}
               setRightPanelOpen={setRightPanelOpen}
               onDeleteSeries={onDeleteSeries}
+              onShareSeries={onShareSeries}
               propertyEditTick={metaDataSelected === data.id ? propertyEditTick : 0}
               variant="grid"
             />

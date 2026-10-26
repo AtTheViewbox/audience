@@ -207,10 +207,6 @@ export function caseKeyFromLink({ studyId, dicomSeriesId, caseUrlKey } = {}) {
   return null;
 }
 
-export function caseDisplayName({ studyName, dicomSeriesName, pacsbinStudyName }) {
-  return studyName || dicomSeriesName || pacsbinStudyName || null;
-}
-
 export function buildAnnotationInsert({ studyId, dicomSeriesId, caseUrlKey, userId, fields }) {
   // series_annotations_case_check requires exactly one of these three.
   const study_id = studyId || null;

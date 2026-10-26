@@ -27,33 +27,6 @@ export const initalValues = {
     excluded_slices: [],
 };
 
-export function generateURL(data) {
-    const URL_genereated = new URL(
-        window.location.protocol + '//' + window.location.host + window.location.pathname
-    );
-
-    URL_genereated.searchParams.append("m", "true");
-    URL_genereated.searchParams.append("ld.r", "1");
-    URL_genereated.searchParams.append("ld.c", "1");
-
-    URL_genereated.searchParams.append(
-        "vd.0.s.pf",
-        encodeURI("wadouri:" + data.prefix)
-    );
-    URL_genereated.searchParams.append("vd.0.s.sf", data.suffix);
-    URL_genereated.searchParams.append("vd.0.s.s", data.start_slice.toString());
-    URL_genereated.searchParams.append("vd.0.s.e", data.end_slice.toString());
-    URL_genereated.searchParams.append("vd.0.ww", data.ww.toString());
-    URL_genereated.searchParams.append("vd.0.wc", data.wc.toString());
-
-    URL_genereated.searchParams.append("vd.0.ci", data.ci.toString());
-    URL_genereated.searchParams.append("vd.1.z", data.z.toString());
-    URL_genereated.searchParams.append("vd.1.px", data.px.toString());
-    URL_genereated.searchParams.append("vd.1.py", data.py.toString());
-    URL_genereated.searchParams.append("vd.1.r", data.r.toString());
-    return URL_genereated.href;
-}
-
 export function generateGridURL(
     metaDataList,
     row,
@@ -120,42 +93,6 @@ export function generateGridURL(
         }
     });
     return URL_genereated.href;
-}
-
-export function recreateVariableStringList(start_str, end_str, step) {
-    const start = parseInt(start_str, 10);
-    const end = parseInt(end_str, 10);
-    const length = start_str.length;
-
-    // Generate the list programmatically
-    const generatedList = [];
-
-    for (let i = start; i <= end; i += step) {
-
-        let numStr = i.toString();
-        while (numStr.length < length) {
-            numStr = "0" + numStr;
-        }
-        generatedList.push(numStr);
-    }
-
-    return generatedList;
-}
-
-export function recreateUriStringList(
-    prefix,
-    suffix,
-    start_str,
-    end_str,
-    pad,
-    step
-) {
-    const variableStringList = recreateVariableStringList(
-        String(start_str).padStart(pad, "0"),
-        String(end_str).padStart(pad, "0"),
-        step
-    );
-    return variableStringList.map((str) => "wadouri:" + prefix + str + suffix);
 }
 
 /** Inclusive 0-based index range available for this series. */
@@ -251,13 +188,6 @@ export function stackIndexForSlice(metadata, sliceIndex) {
     return idx >= 0 ? idx : 0;
 }
 
-export function sliceIndexForStack(metadata, stackIndex) {
-    const included = getIncludedSliceIndices(metadata);
-    if (!included.length) return 0;
-    const i = Math.max(0, Math.min(included.length - 1, Number(stackIndex) || 0));
-    return included[i];
-}
-
 export function clampSliceRange(metadata, bounds = getSliceBounds(metadata)) {
     const { minIndex, maxIndex } = bounds;
     let start = Number(metadata?.start_slice);
@@ -329,15 +259,6 @@ export function findFirstEmptyCell(metaDataList, cols, rows) {
 
 export function hasDraftPlacedOnGrid(metaDataList) {
     return metaDataList.some((item) => item.isDraft && isPlacedOnGrid(item));
-}
-
-export function checkUrlQuery(object, search) {
-    const urlParams = new URLSearchParams(object.url.split("?")[1]);
-
-    if (urlParams.get("s") == String(object.id) && urlParams.has(search)) {
-        return Number(urlParams.get(search));
-    }
-    return 0;
 }
 
 export function getAdjustedWC(

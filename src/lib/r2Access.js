@@ -89,8 +89,3 @@ export async function ensureR2AccessToken() {
   }
   return inflight;
 }
-
-export function isDicomCdnUrl(url) {
-  const raw = String(url || "").replace(/^(dicomweb:|wadouri:)/, "");
-  return raw.startsWith(DICOM_CDN);
-}
