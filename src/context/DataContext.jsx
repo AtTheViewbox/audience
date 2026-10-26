@@ -24,6 +24,113 @@ import { initCornerstone } from "../lib/initCornerstone.js";
 export const DataContext = createContext({});
 export const DataDispatchContext = createContext({});
 
+/**
+ * Per-key throttle that sends at most once per interval and always delivers the
+ * latest value, so followers land on where the presenter actually stopped.
+ */
+function createLatestThrottle(intervalMs) {
+    const state = new Map();
+    const fire = (key) => {
+        const entry = state.get(key);
+        if (!entry?.pending) {
+            state.delete(key);
+            return;
+        }
+        const send = entry.pending;
+        entry.pending = null;
+        entry.last = performance.now();
+        send();
+        entry.timer = setTimeout(() => fire(key), intervalMs);
+    };
+    return {
+        push(key, send) {
+            const entry = state.get(key);
+            if (entry) {
+                entry.pending = send;
+                return;
+            }
+            state.set(key, { pending: send, timer: null, last: 0 });
+            fire(key);
+        },
+        cancel() {
+            state.forEach((entry) => clearTimeout(entry.timer));
+            state.clear();
+        },
+    };
+}
+
+const SYNC_INTERVAL_MS = 150;
+const POINTER_INTERVAL_MS = 100;
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+];
+
+/**
+ * Zoom relative to fit-to-window and pan in world mm along the view axes.
+ * Unlike getPan() (canvas pixels) this matches across different screen sizes.
+ */
+function getSharedCamera(vp) {
+    const initial = vp.initialCamera;
+    if (!initial?.parallelScale) return null;
+    const { focalPoint, viewUp, viewPlaneNormal, parallelScale } = vp.getCamera();
+    const right = cross3(viewUp, viewPlaneNormal);
+    const offset = sub3(focalPoint, initial.focalPoint);
+    return {
+        zoom: initial.parallelScale / parallelScale,
+        pan: [dot3(offset, right), dot3(offset, viewUp)],
+    };
+}
+
+function applySharedCamera(vp, { zoom, pan }) {
+    const current = getSharedCamera(vp);
+    if (!current || !(zoom > 0) || !Array.isArray(pan)) return;
+    const { focalPoint, position, viewUp, viewPlaneNormal } = vp.getCamera();
+    const right = cross3(viewUp, viewPlaneNormal);
+    const dx = pan[0] - current.pan[0];
+    const dy = pan[1] - current.pan[1];
+    const move = [0, 1, 2].map((i) => right[i] * dx + viewUp[i] * dy);
+    vp.setCamera({
+        parallelScale: vp.initialCamera.parallelScale / zoom,
+        focalPoint: focalPoint.map((v, i) => v + move[i]),
+        position: position.map((v, i) => v + move[i]),
+    });
+}
+
+function sameSharedCamera(a, b) {
+    return Boolean(a && b) &&
+        Math.abs(a.zoom - b.zoom) < 1e-3 &&
+        Math.abs(a.pan[0] - b.pan[0]) < 0.05 &&
+        Math.abs(a.pan[1] - b.pan[1]) < 0.05;
+}
+
+/** Apply only the newest update per key, once per animation frame. */
+function createFrameCoalescer() {
+    const pending = new Map();
+    let raf = null;
+    const flush = () => {
+        raf = null;
+        const work = [...pending.values()];
+        pending.clear();
+        work.forEach((apply) => apply());
+    };
+    return {
+        push(key, apply) {
+            pending.set(key, apply);
+            if (raf == null) raf = requestAnimationFrame(flush);
+        },
+        cancel() {
+            if (raf != null) cancelAnimationFrame(raf);
+            raf = null;
+            pending.clear();
+        },
+    };
+}
+
 var initialData = parseViewerSearch(window.location.search);
 const INITIAL_SEARCH = window.location.search;
 
@@ -99,10 +206,6 @@ export const DataProvider = ({ children }) => {
     // realtime channel callbacks always see the latest value (ownership is
     // resolved asynchronously after the channels subscribe).
     const isSessionOwnerRef = useRef(false);
-    const lastSendPointerRef = useRef(0);
-    const lastSendCameraRef = useRef(0);
-    const lastSendVOIRef = useRef(0);
-    const cameraDebounceTimeoutRef = useRef(null);
     useEffect(() => {
         isSessionOwnerRef.current = isPresenter({
             sessionId: data.sessionId,
@@ -704,36 +807,56 @@ export const DataProvider = ({ children }) => {
                 }
             })
 
+            const incoming = createFrameCoalescer();
+
             if (data.sessionMeta.mode == "TEAM" || userData.id == data.sessionMeta.owner) {
 
                 interaction_channel.on(
                     'broadcast',
                     { event: 'frame-changed' },
-                    (payload) => {
-                        const viewport = data.renderingEngine.getViewport(payload.payload.viewport);
-                        const sharedImageId = payload.payload.imageId;
-
-                        const localStack = viewport.getImageIds();
-                        const localIndex = localStack.indexOf(sharedImageId);
-
-                        if (localIndex !== -1) {
-                            const currentCamera = viewport.getCamera();
+                    ({ payload }) => {
+                        incoming.push(`frame:${payload.viewport}`, () => {
+                            const viewport = data.renderingEngine?.getViewport(payload.viewport);
+                            if (!viewport) return;
+                            const localIndex = viewport.getImageIds().indexOf(payload.imageId);
+                            const shownIndex = Number.isInteger(viewport.targetImageIdIndex)
+                                ? viewport.targetImageIdIndex
+                                : viewport.getCurrentImageIdIndex();
+                            if (localIndex === -1 || localIndex === shownIndex) return;
                             viewport.setImageIdIndex(localIndex);
-                            viewport.setCamera(currentCamera);
+                        });
+                    }
+                )
+
+                interaction_channel.on(
+                    'broadcast',
+                    { event: 'camera-changed' },
+                    ({ payload }) => {
+                        incoming.push(`camera:${payload.viewport}`, () => {
+                            const viewport = data.renderingEngine?.getViewport(payload.viewport);
+                            if (!viewport) return;
+                            applySharedCamera(viewport, payload);
                             viewport.render();
-                        }
+                        });
                     }
                 )
 
                 interaction_channel.on(
                     'broadcast',
                     { event: 'voi-changed' },
-                    (payload) => {
-                        data.renderingEngine.getViewport(payload.payload.viewport).setProperties({
-                            voiRange: cornerstone.utilities.windowLevel.toLowHighRange(payload.payload.ww, payload.payload.wc),
-                            isComputedVOI: false,
+                    ({ payload }) => {
+                        incoming.push(`voi:${payload.viewport}`, () => {
+                            const viewport = data.renderingEngine?.getViewport(payload.viewport);
+                            if (!viewport) return;
+                            viewport.setProperties({
+                                voiRange: cornerstone.utilities.windowLevel.toLowHighRange(payload.ww, payload.wc),
+                                isComputedVOI: false,
+                            });
+                            viewport.render();
+                            // Viewport.jsx re-applies its cached VOI on every slice change;
+                            // mouseup makes it adopt the presenter's window instead.
+                            viewport.element?.dispatchEvent(new MouseEvent("mouseup"));
                         });
-                        data.renderingEngine.getViewport(payload.payload.viewport).render()
                     }
                 )
 
@@ -789,6 +912,7 @@ export const DataProvider = ({ children }) => {
             dispatch({ type: 'sharing_controller_initialized', payload: { shareController: share_controller, interactionChannel: interaction_channel, rosterChannel: roster_channel } })
 
             return () => {
+                incoming.cancel();
                 supabaseClient.removeChannel(allChanges);
                 if (data.shareController) data.shareController.unsubscribe();
                 if (data.rosterChannel) { data.rosterChannel.untrack?.(); data.rosterChannel.unsubscribe(); }
@@ -796,52 +920,6 @@ export const DataProvider = ({ children }) => {
             }
         }
     }, [data.sessionId, supabaseClient]);
-
-    const sendPointer = (payload) => {
-        if (!data.interactionChannel) return;
-        const now = performance.now();
-        if (now - lastSendPointerRef.current < 50) return; // ~20 Hz
-        lastSendPointerRef.current = now;
-        data.interactionChannel.send({
-            type: 'broadcast',
-            event: 'pointer-changed',
-            payload
-        });
-    };
-
-    const sendCamera = (payload) => {
-        if (!data.interactionChannel) return;
-        const now = performance.now();
-        if (now - lastSendCameraRef.current < 50) return; // ~20 Hz throttle
-
-        // Debounce to prevent sending transient states during scroll
-        if (cameraDebounceTimeoutRef.current) {
-            clearTimeout(cameraDebounceTimeoutRef.current);
-        }
-
-        cameraDebounceTimeoutRef.current = setTimeout(() => {
-            lastSendCameraRef.current = now;
-            if (data.interactionChannel) {
-                data.interactionChannel.send({
-                    type: 'broadcast',
-                    event: 'camera-changed',
-                    payload
-                });
-            }
-        }, 150); // 150ms debounce
-    };
-
-    const sendVOI = (payload) => {
-        if (!data.interactionChannel) return;
-        const now = performance.now();
-        if (now - lastSendVOIRef.current < 100) return; // ~10 Hz
-        lastSendVOIRef.current = now;
-        data.interactionChannel.send({
-            type: 'broadcast',
-            event: 'voi-changed',
-            payload
-        });
-    };
 
     useEffect(() => {
         const canBroadcast =
@@ -854,11 +932,19 @@ export const DataProvider = ({ children }) => {
         if (!canBroadcast) return;
 
         const manager = data.eventListenerManager;
-        if (!manager) return;
+        const channel = data.interactionChannel;
+        if (!manager || !channel) return;
 
         // Drop previous bindings before re-attaching so tool toggles
         // (e.g. long-press pointer) cannot stack duplicate listeners.
         manager.reset();
+
+        const outgoing = createLatestThrottle(SYNC_INTERVAL_MS);
+        const pointerOutgoing = createLatestThrottle(POINTER_INTERVAL_MS);
+        const broadcast = (event, key, payload, throttle = outgoing) =>
+            throttle.push(`${event}:${key}`, () =>
+                channel.send({ type: 'broadcast', event, payload })
+            );
 
         const viewports = data.renderingEngine.getViewports().sort((a, b) => {
             const idA = Number(a.id.split("-")[0]);
@@ -869,28 +955,33 @@ export const DataProvider = ({ children }) => {
         });
 
         viewports.forEach((vp, viewport_idx) => {
+            const viewportKey = `${viewport_idx}-vp`;
+            let lastVoi = null;
+            let lastCamera = getSharedCamera(vp);
+
             manager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', () => {
-                if (!data.interactionChannel) return;
-                const currentImageId = vp.getCurrentImageId();
-                data.interactionChannel.send({
-                    type: 'broadcast',
-                    event: 'frame-changed',
-                    payload: { imageId: currentImageId, viewport: `${viewport_idx}-vp` },
+                broadcast('frame-changed', viewportKey, {
+                    imageId: vp.getCurrentImageId(),
+                    viewport: viewportKey,
                 });
             });
 
+            // Scrolling re-applies the same VOI on every slice; only send real changes.
             manager.addEventListener(vp.element, 'CORNERSTONE_VOI_MODIFIED', (event) => {
-                const window = cornerstone.utilities.windowLevel.toWindowLevel(
+                const { windowWidth: ww, windowCenter: wc } = cornerstone.utilities.windowLevel.toWindowLevel(
                     event.detail.range.lower,
                     event.detail.range.upper
                 );
-                sendVOI({ ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` });
+                if (lastVoi && Math.abs(lastVoi.ww - ww) < 0.5 && Math.abs(lastVoi.wc - wc) < 0.5) return;
+                lastVoi = { ww, wc };
+                broadcast('voi-changed', viewportKey, { ww, wc, viewport: viewportKey });
             });
 
             manager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', () => {
-                // Camera sync intentionally disabled — kept as a no-op hook.
-                // const camera = vp.getCamera();
-                // sendCamera({ camera: camera, viewport: `${viewport_idx}-vp` })
+                const camera = getSharedCamera(vp);
+                if (!camera || sameSharedCamera(camera, lastCamera)) return;
+                lastCamera = camera;
+                broadcast('camera-changed', viewportKey, { ...camera, viewport: viewportKey });
             });
 
             if (data.toolSelected == "pointer") {
@@ -901,20 +992,20 @@ export const DataProvider = ({ children }) => {
                 manager.addEventListener(vp.element, pointerEvent, (event) => {
                     const { currentPoints } = event.detail || {};
                     if (currentPoints?.world) {
-                        sendPointer({
+                        broadcast('pointer-changed', 'pointer', {
                             coordX: currentPoints.world[0],
                             coordY: currentPoints.world[1],
                             coordZ: currentPoints.world[2],
-                            viewport: `${viewport_idx}-vp`,
-                        });
+                            viewport: viewportKey,
+                        }, pointerOutgoing);
                     }
                 });
             }
         });
 
         // Hide remote pointer once when leaving pointer tool (not once per viewport)
-        if (data.toolSelected != "pointer" && data.interactionChannel) {
-            data.interactionChannel.send({
+        if (data.toolSelected != "pointer") {
+            channel.send({
                 type: 'broadcast',
                 event: 'pointer-changed',
                 payload: { coordX: 10000, coordY: 10000, coordZ: 10000 },
@@ -923,10 +1014,8 @@ export const DataProvider = ({ children }) => {
 
         return () => {
             manager.reset();
-            if (cameraDebounceTimeoutRef.current) {
-                clearTimeout(cameraDebounceTimeoutRef.current);
-                cameraDebounceTimeoutRef.current = null;
-            }
+            outgoing.cancel();
+            pointerOutgoing.cancel();
         };
     }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected, data.sessionId, data.sessionMeta.mode, data.sessionMeta.owner]);
 
@@ -966,7 +1055,15 @@ export const DataProvider = ({ children }) => {
                         });
                     }
 
-                    // 3. Explicitly NO Camera/Zoom sync here
+                    // 3. Sync zoom/pan
+                    const camera = getSharedCamera(vp);
+                    if (camera) {
+                        data.interactionChannel.send({
+                            type: 'broadcast',
+                            event: 'camera-changed',
+                            payload: { ...camera, viewport: `${viewport_idx}-vp` }
+                        });
+                    }
                 })
             } catch (error) {
                 console.error("Error syncing initial state:", error);
