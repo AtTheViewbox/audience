@@ -504,9 +504,6 @@ export default function PlaylistsPage({ search = "" }) {
                                 <span className="w-6 text-xs text-slate-500 tabular-nums">{itemIndex + 1}</span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-sm text-slate-200 truncate">{playlistItemLabel(item)}</span>
-                                  {item.label && item.studies?.name ? (
-                                    <span className="block text-[11px] text-slate-500 truncate">{item.studies.name}</span>
-                                  ) : null}
                                 </span>
                               </button>
                             </li>
@@ -598,9 +595,6 @@ export default function PlaylistsPage({ search = "" }) {
                   <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-400">{index + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-slate-100 truncate">{playlistItemLabel(item)}</p>
-                    {item.studies?.name && item.label ? (
-                      <p className="text-[11px] text-slate-500 truncate">{item.studies.name}</p>
-                    ) : null}
                   </div>
                   <div className="flex flex-col shrink-0">
                     <Button

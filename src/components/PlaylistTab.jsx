@@ -131,11 +131,6 @@ function PlaylistTab() {
                   <span className="mt-0.5 w-4 shrink-0 text-[11px] tabular-nums text-muted-foreground">{index + 1}</span>
                   <span className="min-w-0">
                   <span className="block truncate">{playlistItemLabel(item)}</span>
-                  {item.label && item.studies?.name ? (
-                    <span className="block text-[11px] text-muted-foreground truncate">
-                      {item.studies.name}
-                    </span>
-                  ) : null}
                   </span>
                 </span>
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground shrink-0 ml-2">
