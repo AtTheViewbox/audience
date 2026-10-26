@@ -1,5 +1,5 @@
 import { currentViewerUrlParams } from "./shareSession.js";
-import { applyViewerUrl } from "./viewerLocation.js";
+import { applyViewerUrl, closeViewerDialog } from "./viewerLocation.js";
 
 export function viewerHref(urlParams, joinToken) {
   const params = new URLSearchParams(urlParams || "");
@@ -90,5 +90,6 @@ export async function transferSessionToCurrentUrl({
   }
 
   // Already viewing this case. Followers pick up the new url over realtime.
+  closeViewerDialog();
   return data[0];
 }

@@ -1,10 +1,11 @@
 import { mergeProps, useLongPress, usePress } from "react-aria";
 import { Button } from "@/components/ui/button";
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { LocateFixed } from "lucide-react";
 import { UserContext } from "../context/UserContext"
 import { isJoinParticipant } from "../lib/demoCase.js";
+import { VIEWER_DIALOG_CLOSE_EVENT } from "../lib/viewerLocation.js";
 
 import DialogPage from "./DialogPage.jsx";
 import {
@@ -27,6 +28,12 @@ function Fab() {
   });
 
   const openDialog = () => setDialogIsOpen(true);
+
+  useEffect(() => {
+    const close = () => setDialogIsOpen(false);
+    window.addEventListener(VIEWER_DIALOG_CLOSE_EVENT, close);
+    return () => window.removeEventListener(VIEWER_DIALOG_CLOSE_EVENT, close);
+  }, []);
   const toggleSharing = () => {
     dispatch({ type: "toggle_sharing", payload: { userData } });
   };

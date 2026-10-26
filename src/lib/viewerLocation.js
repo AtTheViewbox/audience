@@ -22,6 +22,13 @@ export function parseViewerSearch(search) {
   return data;
 }
 
+export const VIEWER_DIALOG_CLOSE_EVENT = "atvb-close-viewer-dialog";
+
+/** Close the share / series dialog after a transfer or series switch. */
+export function closeViewerDialog() {
+  window.dispatchEvent(new Event(VIEWER_DIALOG_CLOSE_EVENT));
+}
+
 /** Point the address bar at the case without reloading the app. */
 export function replaceViewerUrl(href) {
   const url = new URL(href, window.location.origin);
@@ -64,4 +71,5 @@ export function applyViewerUrl(href, dispatch) {
       caseUrlKey: resolveCaseUrlKey({ search, caseUrlParams }) || null,
     },
   });
+  closeViewerDialog();
 }
