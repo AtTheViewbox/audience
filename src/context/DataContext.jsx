@@ -62,52 +62,6 @@ function createLatestThrottle(intervalMs) {
 const SYNC_INTERVAL_MS = 150;
 const POINTER_INTERVAL_MS = 100;
 
-const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross3 = (a, b) => [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-];
-
-/**
- * Zoom relative to fit-to-window and pan in world mm along the view axes.
- * Unlike getPan() (canvas pixels) this matches across different screen sizes.
- */
-function getSharedCamera(vp) {
-    const initial = vp.initialCamera;
-    if (!initial?.parallelScale) return null;
-    const { focalPoint, viewUp, viewPlaneNormal, parallelScale } = vp.getCamera();
-    const right = cross3(viewUp, viewPlaneNormal);
-    const offset = sub3(focalPoint, initial.focalPoint);
-    return {
-        zoom: initial.parallelScale / parallelScale,
-        pan: [dot3(offset, right), dot3(offset, viewUp)],
-    };
-}
-
-function applySharedCamera(vp, { zoom, pan }) {
-    const current = getSharedCamera(vp);
-    if (!current || !(zoom > 0) || !Array.isArray(pan)) return;
-    const { focalPoint, position, viewUp, viewPlaneNormal } = vp.getCamera();
-    const right = cross3(viewUp, viewPlaneNormal);
-    const dx = pan[0] - current.pan[0];
-    const dy = pan[1] - current.pan[1];
-    const move = [0, 1, 2].map((i) => right[i] * dx + viewUp[i] * dy);
-    vp.setCamera({
-        parallelScale: vp.initialCamera.parallelScale / zoom,
-        focalPoint: focalPoint.map((v, i) => v + move[i]),
-        position: position.map((v, i) => v + move[i]),
-    });
-}
-
-function sameSharedCamera(a, b) {
-    return Boolean(a && b) &&
-        Math.abs(a.zoom - b.zoom) < 1e-3 &&
-        Math.abs(a.pan[0] - b.pan[0]) < 0.05 &&
-        Math.abs(a.pan[1] - b.pan[1]) < 0.05;
-}
-
 /** Apply only the newest update per key, once per animation frame. */
 function createFrameCoalescer() {
     const pending = new Map();
@@ -830,19 +784,6 @@ export const DataProvider = ({ children }) => {
 
                 interaction_channel.on(
                     'broadcast',
-                    { event: 'camera-changed' },
-                    ({ payload }) => {
-                        incoming.push(`camera:${payload.viewport}`, () => {
-                            const viewport = data.renderingEngine?.getViewport(payload.viewport);
-                            if (!viewport) return;
-                            applySharedCamera(viewport, payload);
-                            viewport.render();
-                        });
-                    }
-                )
-
-                interaction_channel.on(
-                    'broadcast',
                     { event: 'voi-changed' },
                     ({ payload }) => {
                         incoming.push(`voi:${payload.viewport}`, () => {
@@ -957,7 +898,6 @@ export const DataProvider = ({ children }) => {
         viewports.forEach((vp, viewport_idx) => {
             const viewportKey = `${viewport_idx}-vp`;
             let lastVoi = null;
-            let lastCamera = getSharedCamera(vp);
 
             manager.addEventListener(vp.element, 'CORNERSTONE_STACK_NEW_IMAGE', () => {
                 broadcast('frame-changed', viewportKey, {
@@ -975,13 +915,6 @@ export const DataProvider = ({ children }) => {
                 if (lastVoi && Math.abs(lastVoi.ww - ww) < 0.5 && Math.abs(lastVoi.wc - wc) < 0.5) return;
                 lastVoi = { ww, wc };
                 broadcast('voi-changed', viewportKey, { ww, wc, viewport: viewportKey });
-            });
-
-            manager.addEventListener(vp.element, 'CORNERSTONE_CAMERA_MODIFIED', () => {
-                const camera = getSharedCamera(vp);
-                if (!camera || sameSharedCamera(camera, lastCamera)) return;
-                lastCamera = camera;
-                broadcast('camera-changed', viewportKey, { ...camera, viewport: viewportKey });
             });
 
             if (data.toolSelected == "pointer") {
@@ -1052,16 +985,6 @@ export const DataProvider = ({ children }) => {
                             type: 'broadcast',
                             event: 'voi-changed',
                             payload: { ww: window.windowWidth, wc: window.windowCenter, viewport: `${viewport_idx}-vp` }
-                        });
-                    }
-
-                    // 3. Sync zoom/pan
-                    const camera = getSharedCamera(vp);
-                    if (camera) {
-                        data.interactionChannel.send({
-                            type: 'broadcast',
-                            event: 'camera-changed',
-                            payload: { ...camera, viewport: `${viewport_idx}-vp` }
                         });
                     }
                 })
