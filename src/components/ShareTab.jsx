@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useState, useContext, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { Globe, Users } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,7 +23,7 @@ import { transferSessionToCurrentUrl } from "../lib/transferSharedSession.js";
 import { isDemoMode } from "../lib/demoCase.js";
 import {
   createShareSession,
-  sameViewerStudy,
+  sameViewerSession,
   buildJoinLink,
   ShareMode,
   VIEWBOX_SESSION_COLS,
@@ -48,7 +49,8 @@ function ShareTab() {
   const [shareLink, setShareLink] = useState("");
   const [joinCode, setJoinCode] = useState("");
 
-  const queryParams = new URLSearchParams(window.location.search);
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
   const demoMode = isDemoMode(queryParams.toString());
   const canCreateSession = !!userData && (!userData.is_anonymous || demoMode);
   const liveSameStudy = shareSessionState === ShareSessionState.EXISTING_SAME_SESSION;
@@ -82,7 +84,7 @@ function ShareTab() {
 
         if (!data?.[0]) {
           clearLiveSession();
-        } else if (sameViewerStudy(data[0].url_params, queryParams.toString())) {
+        } else if (sameViewerSession(data[0].url_params, queryParams.toString())) {
           showLiveSession(data[0]);
         } else {
           setShareSessionState(ShareSessionState.EXISTING_OTHER_SESSION);
@@ -98,7 +100,7 @@ function ShareTab() {
     };
 
     checkWhetherUserIsSharing();
-  }, [userData]);
+  }, [userData, location.search]);
 
   async function stopSharedSession() {
     try {
@@ -121,12 +123,13 @@ function ShareTab() {
       return;
     }
     try {
-      await transferSessionToCurrentUrl({
+      const row = await transferSessionToCurrentUrl({
         supabaseClient,
         userId: userData.id,
         chatHistory: viewboxData.chatHistory || [],
         dispatch,
       });
+      if (row) showLiveSession(row);
     } catch (error) {
       console.error(error);
       toast.error("Could not transfer session.");

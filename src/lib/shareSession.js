@@ -21,6 +21,18 @@ export function sameViewerStudy(a, b) {
   return normalizeUrlParams(a) === normalizeUrlParams(b);
 }
 
+/** Same live session: case and playlist ids count, unlike sameViewerStudy. */
+export function sameViewerSession(a, b) {
+  const canon = (input) => {
+    const params = new URLSearchParams(sessionViewerUrlParams(input));
+    return [...params.entries()]
+      .sort(([x], [y]) => x.localeCompare(y))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
+  };
+  return canon(a) === canon(b);
+}
+
 export function normalizeJoinCode(value) {
   return String(value || "").replace(/[^A-Za-z]/g, "").toUpperCase();
 }

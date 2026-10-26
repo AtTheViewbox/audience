@@ -417,18 +417,44 @@ export default function Viewport(props) {
       };
 
       // ─── Wheel handler ───
-      // Still intercept wheel in capture phase to block voiSynced mode
-      // and to control direction; the monkeypatch handles gating & VOI.
+      // A trackpad sends many small pixel deltas. Treating each one as a whole
+      // slice, from the slice still on screen, cancelled the load before it
+      // could display. Accumulate like click-drag, and step from the slice we
+      // already asked for.
+      let wheelAccum = 0;
       const handleWheel = (event) => {
         event.preventDefault();
-        event.stopImmediatePropagation();
+        event.stopPropagation();
 
         if (el?.dataset.voiSynced) return;
 
-        if (!event.deltaY) return;
-        const delta = event.deltaY > 0 ? 1 : -1;
-        const next = viewport.getCurrentImageIdIndex() + delta;
-        if (next < 0 || next >= s.length) return;
+        const pixelsPerSlice = Math.max(24, (el?.clientHeight || 400) / Math.max(s.length, 8));
+        let dy = event.deltaY;
+        let dx = event.deltaX;
+        if (event.deltaMode === 1) {
+          dy = Math.sign(dy) * pixelsPerSlice;
+          dx = Math.sign(dx) * pixelsPerSlice;
+        } else if (event.deltaMode === 2) {
+          dy = Math.sign(dy) * pixelsPerSlice * 3;
+          dx = Math.sign(dx) * pixelsPerSlice * 3;
+        }
+        const delta = Math.abs(dy) >= Math.abs(dx) ? dy : 0;
+        if (!delta) return;
+
+        wheelAccum += delta;
+        const steps = Math.trunc(wheelAccum / pixelsPerSlice);
+        if (!steps) return;
+        const capped = Math.max(-4, Math.min(4, steps));
+        wheelAccum -= capped * pixelsPerSlice;
+
+        const current = Number.isInteger(viewport.targetImageIdIndex)
+          ? viewport.targetImageIdIndex
+          : viewport.getCurrentImageIdIndex();
+        const next = Math.max(0, Math.min(s.length - 1, current + capped));
+        if (next === current) {
+          wheelAccum = 0;
+          return;
+        }
         viewport.setImageIdIndex(next);
       };
 
@@ -743,7 +769,15 @@ export default function Viewport(props) {
       // Compare stack by first URL string (not reference) — reducer spreads create new array refs
       const prevFirstUrl = prev?.s?.[0];
       const newFirstUrl = viewport_data?.s?.[0];
-      const isStackSame = prev && prevFirstUrl === newFirstUrl;
+      const prevLastUrl = prev?.s?.[prev.s.length - 1];
+      const newLastUrl = viewport_data?.s?.[viewport_data.s.length - 1];
+      const isStackSame = Boolean(
+        prev?.s?.length
+        && viewport_data?.s?.length
+        && prevFirstUrl === newFirstUrl
+        && prev.s.length === viewport_data.s.length
+        && prevLastUrl === newLastUrl
+      );
       const isWindowSame = prev && prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
       const isCiChanged = prev && prev.ci !== viewport_data.ci;
       const isCameraChanged = prev && (
@@ -821,10 +855,10 @@ export default function Viewport(props) {
 
       // Full Reload
       setViewportReady(false);
-      loadImagesAndDisplay().then(c => cleanup = c);
+      loadImagesAndDisplay().then(c => { cleanup = c; });
       prevDataRef.current = viewport_data;
     }
-    return cleanup;
+    return () => cleanup?.();
   }, [viewport_data, rendering_engine, viewport_idx, dispatch]);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

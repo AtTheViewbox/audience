@@ -348,13 +348,36 @@ const ViewportComp = ({
                     }
                 };
 
+                let wheelAccum = 0;
                 const handleWheel = (event) => {
                     event.preventDefault();
-                    event.stopImmediatePropagation();
-                    if (!event.deltaY) return;
-                    const delta = event.deltaY > 0 ? 1 : -1;
-                    const next = viewport.getCurrentImageIdIndex() + delta;
-                    if (next < 0 || next >= stack.length) return;
+                    event.stopPropagation();
+                    const pixelsPerSlice = Math.max(24, (element?.clientHeight || 400) / Math.max(stack.length, 8));
+                    let dy = event.deltaY;
+                    let dx = event.deltaX;
+                    if (event.deltaMode === 1) {
+                        dy = Math.sign(dy) * pixelsPerSlice;
+                        dx = Math.sign(dx) * pixelsPerSlice;
+                    } else if (event.deltaMode === 2) {
+                        dy = Math.sign(dy) * pixelsPerSlice * 3;
+                        dx = Math.sign(dx) * pixelsPerSlice * 3;
+                    }
+                    const delta = Math.abs(dy) >= Math.abs(dx) ? dy : 0;
+                    if (!delta) return;
+                    wheelAccum += delta;
+                    const steps = Math.trunc(wheelAccum / pixelsPerSlice);
+                    if (!steps) return;
+                    const capped = Math.max(-4, Math.min(4, steps));
+                    wheelAccum -= capped * pixelsPerSlice;
+                    const current = Number.isInteger(viewport.targetImageIdIndex)
+                        ? viewport.targetImageIdIndex
+                        : viewport.getCurrentImageIdIndex();
+                    const next = Math.max(0, Math.min(stack.length - 1, current + capped));
+                    if (next === current) {
+                        wheelAccum = 0;
+                        return;
+                    }
+                    viewport.targetImageIdIndex = next;
                     viewport.setImageIdIndex(next);
                 };
                 let correctingVoi = false;

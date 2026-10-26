@@ -14,6 +14,7 @@ import {
 import { fetchPlaylist, fetchSharedPlaylist, playlistItemLabel, sortedPlaylistItems } from "../lib/playlist.js";
 import { sameViewerStudy } from "../lib/shareSession.js";
 import { transferSessionToUrlParams } from "../lib/transferSharedSession.js";
+import { applyViewerUrl } from "../lib/viewerLocation.js";
 import { cn } from "@/lib/utils";
 
 function PlaylistTab() {
@@ -63,7 +64,7 @@ function PlaylistTab() {
   const currentCaseId = getCaseIdFromSearch();
 
   function isCurrent(item) {
-    if (currentCaseId && item.study_id === currentCaseId) return true;
+    if (currentCaseId) return item.study_id === currentCaseId;
     return sameViewerStudy(item.studies?.url_params, window.location.search);
   }
 
@@ -94,12 +95,13 @@ function PlaylistTab() {
       } catch (error) {
         console.error(error);
         toast.error(error?.message || "Could not switch the session.");
+      } finally {
         setBusyId(null);
       }
       return;
     }
 
-    window.location.href = href;
+    applyViewerUrl(href, dispatch);
   }
 
   return (

@@ -15,8 +15,9 @@ import { resolveSeriesPrefix } from "../lib/seriesLink.js";
 import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, getPlaylistIdFromSearch } from "../lib/answerKeyCase.js";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
-import { sameViewerStudy, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
-import { IGNORE_SESSION_UPDATE_KEY } from "../lib/transferSharedSession.js";
+import { sameViewerSession, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
+import { IGNORE_SESSION_UPDATE_KEY, viewerHref } from "../lib/transferSharedSession.js";
+import { applyViewerUrl } from "../lib/viewerLocation.js";
 import { isDemoMode, isDemoPresenter, isDemoJoinParticipant, isPresenter, DEMO_SUBMISSION_CASE_KEY } from "../lib/demoCase.js";
 import { recordDemoVisit } from "../lib/demoVisits.js";
 import { setRemotePointer } from "../lib/pointerStore.js";
@@ -222,21 +223,10 @@ export const DataProvider = ({ children }) => {
                 ignoreOwnSwitch = false;
             }
 
-            dispatch({ type: 'loading_request' })
-            var currentURL = unflatten(Object.fromEntries(new URLSearchParams(window.location.search)));
-            if (!currentURL.vd) {
-                var newData = unflatten(Object.fromEntries(new URLSearchParams(updateSession.new.url_params)));
-                if (newData.vd) {
-                    newData.vd.forEach((vdItem) => {
-                        if (vdItem.s && vdItem.s.pf && vdItem.s.sf && vdItem.s.s && vdItem.s.e && vdItem.s.D) {
-                            vdItem.s = recreateList(vdItem.s.pf, vdItem.s.sf, vdItem.s.s, vdItem.s.e, vdItem.s.D);
-                        }
-                    })
-                }
-                dispatch({ type: "update_viewport_data", payload: { ...newData } })
-                window.location.reload();
-            } else if (!ignoreOwnSwitch) {
-                userDispatch({ type: "clean_up_supabase" });
+            const nextParams = updateSession.new.url_params || "";
+            if (!ignoreOwnSwitch && nextParams && !sameViewerSession(nextParams, window.location.search)) {
+                const token = updateSession.new.join_code || updateSession.new.session_id;
+                applyViewerUrl(viewerHref(nextParams, token), dispatch);
             }
         }
         setUpdateSession(null)
@@ -348,7 +338,7 @@ export const DataProvider = ({ children }) => {
                     .eq("user", userData.id);
                 if (errorCurrentSession) throw errorCurrentSession;
 
-                if (data?.length != 0 && sameViewerStudy(data[0].url_params, queryParams.toString())) {
+                if (data?.length != 0 && sameViewerSession(data[0].url_params, queryParams.toString())) {
                     initialData.s = data[0].session_id
                     initialData.sessionMeta.mode = data[0].mode
                     initialData.sessionMeta.owner = data[0].user
@@ -1327,6 +1317,36 @@ export function dataReducer(data, action) {
         case 'set_host_answer_content':
             new_data = { ...data, hostAnswerContentAvailable: !!action.payload };
             break;
+        case 'switch_viewer': {
+            const next = action.payload || {};
+            new_data = {
+                ...data,
+                vd: next.vd ?? data.vd,
+                ld: next.ld ?? data.ld,
+                m: next.m ?? data.m,
+                caseUrlParams: next.caseUrlParams ?? null,
+                playlistId: next.playlistId ?? null,
+                caseUrlKey: next.caseUrlKey ?? null,
+                studyId: null,
+                studyName: null,
+                dicomSeriesId: null,
+                dicomSeriesOwner: null,
+                dicomSeriesName: null,
+                pacsbinStudyName: null,
+                sessionCaseLink: null,
+                persistedAnswerBoxes: [],
+                submittedAnnotations: {},
+                submittedQuestionAnswers: {},
+                participantAnswerContentAvailable: false,
+                hostAnswerContentAvailable: false,
+                heatmapVisible: false,
+                answerKeyAuthoring: false,
+                compareNormal: null,
+                fullscreenViewport: null,
+                isRequestLoading: false,
+            };
+            break;
+        }
         default:
             throw Error('Unknown action: ' + action.type);
     }

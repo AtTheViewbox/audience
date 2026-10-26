@@ -1,6 +1,7 @@
 import { currentViewerUrlParams } from "./shareSession.js";
+import { applyViewerUrl } from "./viewerLocation.js";
 
-function viewerHref(urlParams, joinToken) {
+export function viewerHref(urlParams, joinToken) {
   const params = new URLSearchParams(urlParams || "");
   if (joinToken) params.set("s", joinToken);
   const base = import.meta.env.BASE_URL || "/";
@@ -47,7 +48,8 @@ export async function transferSessionToUrlParams({
     });
   }
 
-  window.location.href = viewerHref(urlParams, row.join_code || row.session_id);
+  applyViewerUrl(viewerHref(urlParams, row.join_code || row.session_id), dispatch);
+  return row;
 }
 
 /**
@@ -60,13 +62,21 @@ export async function transferSessionToCurrentUrl({
   chatHistory,
   dispatch,
 }) {
+  try {
+    sessionStorage.setItem(IGNORE_SESSION_UPDATE_KEY, "1");
+  } catch {
+    // ignore
+  }
+
+  // Update, don't upsert. PostgREST upsert nulls out columns that aren't sent,
+  // and join_code is NOT NULL with no default.
   const { data, error } = await supabaseClient
     .from("viewbox")
-    .upsert({
-      user: userId,
+    .update({
       url_params: currentViewerUrlParams(),
       chat_history: chatHistory || [],
     })
+    .eq("user", userId)
     .select();
 
   if (error) throw error;
@@ -79,5 +89,6 @@ export async function transferSessionToCurrentUrl({
     });
   }
 
-  window.location.reload();
+  // Already viewing this case. Followers pick up the new url over realtime.
+  return data[0];
 }
