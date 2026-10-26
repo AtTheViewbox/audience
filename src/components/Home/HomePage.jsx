@@ -3,6 +3,7 @@ import { Trash2, Copy, Check, ChevronRight, Pencil, GitFork, LayoutGrid, List, A
 import { toast, Toaster } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
+import { DEMO_STUDY_ID } from "../../lib/demoCase.js"
 import ShareByEmailDialog from "../ShareByEmailDialog.jsx"
 import { deliverShare } from "../../lib/shareByEmail.js"
 import { extractUploadFolderNames, deleteUnusedCloudSeries } from "../../lib/dicomUploadUtils.js"
@@ -297,13 +298,14 @@ export default function HomePage() {
 
       setSeriesList(data);
       setdisplaySeriesList(data)
-      // Only auto-select on desktop; pick the newest so it matches the default sort.
+      // Only auto-select on desktop; prefer the demo case, else the newest.
       if (window.innerWidth >= 1024) {
+        const demo = (data || []).find((s) => s.id === DEMO_STUDY_ID);
         const newest = (data || []).reduce(
           (best, s) => (!best || SORT_VALUES.date(s) > SORT_VALUES.date(best) ? s : best),
           null
         );
-        setSelectedSeries(newest);
+        setSelectedSeries(demo || newest);
       } else {
         setSelectedSeries(null);
       }
