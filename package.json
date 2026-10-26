@@ -19,9 +19,9 @@
     "@cornerstonejs/codec-libjpeg-turbo": "^0.0.4",
     "@cornerstonejs/codec-libjpeg-turbo-8bit": "^1.2.2",
     "@cornerstonejs/codec-openjpeg": "^1.3.0",
-    "@cornerstonejs/core": "^1.66.9",
-    "@cornerstonejs/dicom-image-loader": "^1.66.9",
-    "@cornerstonejs/streaming-image-volume-loader": "^1.66.9",
+    "@cornerstonejs/core": "1.66.12",
+    "@cornerstonejs/dicom-image-loader": "1.66.12",
+    "@cornerstonejs/streaming-image-volume-loader": "1.66.12",
     "@cornerstonejs/tools": "1.66.12",
     "@radix-ui/react-avatar": "^1.1.0",
     "@radix-ui/react-checkbox": "^1.3.3",
@@ -76,5 +76,8 @@
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
     "wrangler": "^3.114.17"
+  },
+  "overrides": {
+    "@swc/core": "1.5.0"
   }
 }
