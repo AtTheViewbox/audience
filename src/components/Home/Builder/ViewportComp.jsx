@@ -308,29 +308,40 @@ const ViewportComp = ({
                 queue.start();
                 queueRef.current = queue;
 
+                // Never skip over unloaded slices: load the requested one at top
+                // priority and show it once ready; newer requests supersede it.
                 let gating = false;
+                let navToken = 0;
                 const origSetImageIdIndex = viewport.setImageIdIndex.bind(viewport);
                 viewport.setImageIdIndex = async (index) => {
                     if (gating) {
                         if (!sliceIsReady(index)) return viewport.getCurrentImageIdIndex();
                         return origSetImageIdIndex(index);
                     }
-                    gating = true;
-                    let target = index;
+                    const id = stack[index];
+                    if (id == null) return viewport.getCurrentImageIdIndex();
+                    const token = ++navToken;
+                    viewport.targetImageIdIndex = index;
                     if (!sliceIsReady(index)) {
-                        const prev = viewport.getCurrentImageIdIndex();
-                        const dir = index >= prev ? 1 : -1;
-                        let nearest = -1;
-                        for (let i = prev + dir; i >= 0 && i < stack.length; i += dir) {
-                            if (sliceIsReady(i)) { nearest = i; break; }
+                        queueRef.current?.updateFocus(index);
+                        try {
+                            await cornerstone.imageLoader.loadAndCacheImage(id, {
+                                priority: 100,
+                                requestType: "interaction",
+                            });
+                        } catch (err) {
+                            console.warn("slice load failed", err);
+                            return viewport.getCurrentImageIdIndex();
                         }
-                        target = nearest === -1 ? prev : nearest;
+                        loadedSetRef.current.add(index);
+                        if (token !== navToken) return viewport.getCurrentImageIdIndex();
                     }
+                    gating = true;
                     try {
-                        const result = await origSetImageIdIndex(target);
+                        const result = await origSetImageIdIndex(index);
                         applyDesiredVoi();
                         viewport.render();
-                        queueRef.current?.updateFocus(target);
+                        queueRef.current?.updateFocus(index);
                         return result;
                     } finally {
                         gating = false;
@@ -340,14 +351,11 @@ const ViewportComp = ({
                 const handleWheel = (event) => {
                     event.preventDefault();
                     event.stopImmediatePropagation();
+                    if (!event.deltaY) return;
                     const delta = event.deltaY > 0 ? 1 : -1;
-                    const current = viewport.getCurrentImageIdIndex();
-                    for (let i = current + delta; i >= 0 && i < stack.length; i += delta) {
-                        if (sliceIsReady(i)) {
-                            viewport.setImageIdIndex(i);
-                            break;
-                        }
-                    }
+                    const next = viewport.getCurrentImageIdIndex() + delta;
+                    if (next < 0 || next >= stack.length) return;
+                    viewport.setImageIdIndex(next);
                 };
                 let correctingVoi = false;
                 const handleImageRendered = () => {

@@ -368,6 +368,10 @@ export default function Viewport(props) {
         return result;
       };
 
+      // Never skip over unloaded slices: if the requested slice isn't decoded
+      // yet, fetch it at top priority and show it once ready. A newer request
+      // supersedes an older one still waiting on its load.
+      let navToken = 0;
       viewport.setImageIdIndex = async (index) => {
         if (_gating) {
           if (!sliceIsReady(index)) {
@@ -377,20 +381,25 @@ export default function Viewport(props) {
           viewport.targetImageIdIndex = index;
           return result;
         }
-        _gating = true;
 
-        let target = index;
+        const id = s[index];
+        if (id == null) return viewport.getCurrentImageIdIndex();
+        const token = ++navToken;
+        viewport.targetImageIdIndex = index;
         if (!sliceIsReady(index)) {
-          const prev = viewport.getCurrentImageIdIndex();
-          const dir = index >= prev ? 1 : -1;
-          let nearest = -1;
-          for (let i = prev + dir; i >= 0 && i < s.length; i += dir) {
-            if (sliceIsReady(i)) { nearest = i; break; }
+          if (queueRef.current) queueRef.current.updateFocus(index);
+          try {
+            await cornerstone.imageLoader.loadAndCacheImage(id, { priority: 100, requestType: 'interaction' });
+          } catch (e) {
+            console.warn("slice load failed", e);
+            return viewport.getCurrentImageIdIndex();
           }
-          if (nearest === -1) nearest = prev;
-          target = nearest;
+          loadedSetRef.current.add(index);
+          if (token !== navToken) return viewport.getCurrentImageIdIndex();
         }
 
+        _gating = true;
+        const target = index;
         try {
           const result = await _origSetImageIdIndex(target);
           viewport.targetImageIdIndex = target;
@@ -416,17 +425,11 @@ export default function Viewport(props) {
 
         if (el?.dataset.voiSynced) return;
 
+        if (!event.deltaY) return;
         const delta = event.deltaY > 0 ? 1 : -1;
-        const currentId = viewport.getCurrentImageId();
-        const current = s.indexOf(currentId);
-
-        // Navigate to next fully decoded image in scroll direction
-        for (let i = current + delta; i >= 0 && i < s.length; i += delta) {
-          if (sliceIsReady(i)) {
-            viewport.setImageIdIndex(i);
-            break;
-          }
-        }
+        const next = viewport.getCurrentImageIdIndex() + delta;
+        if (next < 0 || next >= s.length) return;
+        viewport.setImageIdIndex(next);
       };
 
       let correctingVoi = false;
