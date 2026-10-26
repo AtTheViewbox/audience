@@ -302,9 +302,13 @@ export default function HomePage() {
 
       setSeriesList(data);
       setdisplaySeriesList(data)
-      // Only auto-select first series on desktop
+      // Only auto-select on desktop; pick the newest so it matches the default sort.
       if (window.innerWidth >= 1024) {
-        setSelectedSeries(data[0]);
+        const newest = (data || []).reduce(
+          (best, s) => (!best || SORT_VALUES.date(s) > SORT_VALUES.date(best) ? s : best),
+          null
+        );
+        setSelectedSeries(newest);
       } else {
         setSelectedSeries(null);
       }
@@ -328,7 +332,7 @@ export default function HomePage() {
 
   }, [search, seriesList]);
 
-  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const [sort, setSort] = useState({ key: "date", dir: "desc" });
   const handleSort = (key) => {
     setSort((prev) =>
       prev.key === key
@@ -458,13 +462,13 @@ export default function HomePage() {
                     </div>
                   ))}</div> : listView ? (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-sm table-fixed">
                         <thead>
                           <tr className="text-[11px] uppercase tracking-wider text-slate-500">
-                            <th className="text-left font-medium px-3 py-2 w-12">#</th>
+                            <th className="text-left font-medium px-3 py-2 w-10">#</th>
                             <SortHeader label="Name" sortKey="name" sort={sort} onSort={handleSort} />
                             <SortHeader label="Description" sortKey="description" sort={sort} onSort={handleSort} />
-                            <SortHeader label="Access" sortKey="visibility" sort={sort} onSort={handleSort} className="w-24" />
+                            <SortHeader label="Access" sortKey="visibility" sort={sort} onSort={handleSort} className="w-20" />
                             <SortHeader label="Date" sortKey="date" sort={sort} onSort={handleSort} className="w-28" />
                             {filter === Filter.MYSTUDIES ? <th className="w-10" /> : null}
                           </tr>
@@ -480,10 +484,10 @@ export default function HomePage() {
                               onClick={() => setSelectedSeries(series)}
                             >
                               <td className="px-3 py-2.5 text-slate-500 tabular-nums">{index + 1}</td>
-                              <td className="px-3 py-2.5 text-slate-100 font-medium max-w-[220px] truncate" title={series.name}>
+                              <td className="px-3 py-2.5 text-slate-100 font-medium truncate" title={series.name}>
                                 {series.name}
                               </td>
-                              <td className="px-3 py-2.5 text-slate-400 max-w-[280px] truncate">
+                              <td className="px-3 py-2.5 text-slate-400 truncate" title={series.description || undefined}>
                                 {series.description || "—"}
                               </td>
                               <td className="px-3 py-2.5">
@@ -532,7 +536,7 @@ export default function HomePage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
+                            className="absolute top-2 right-2 opacity-60 group-hover:opacity-100 transition-opacity z-10 h-8 w-8"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDelete(series);

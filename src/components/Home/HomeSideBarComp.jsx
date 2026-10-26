@@ -13,14 +13,14 @@ import { UserContext } from "../../context/UserContext"
 
 
 function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
-    const [leftPanelWidth, setLeftPanelWidth] = useState(256) // 64 * 4 = 256px (w-64)
+    const [leftPanelWidth, setLeftPanelWidth] = useState(200)
     const [open, setOpen] = useState(false)
     const { userData } = useContext(UserContext).data;
 
     const [isResizingLeft, setIsResizingLeft] = useState(false)
     const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024)
 
-    const minLeftWidth = 180
+    const minLeftWidth = 160
     const maxLeftWidth = 400
     const overlayMenu = filter === Filter.BUILDER || !isDesktop
 

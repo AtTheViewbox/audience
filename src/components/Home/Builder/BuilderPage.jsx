@@ -21,6 +21,7 @@ import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
 import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName, collectDicomFilesFromDataTransfer, groupDicomFilesByFolder, prepareLocalDraftSeries, describeSkippedFiles } from "../../../lib/dicomUploadUtils"
 import { toast } from "sonner";
+import { buildCaseViewerHref } from "../../../lib/answerKeyCase.js";
 import { initCornerstone } from "../../../lib/initCornerstone.js";
 
 const mapSeriesToMetaData = (seriesList) => {
@@ -354,7 +355,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             const parsedUrl = new URL(finalUrl);
             const searchParams = parsedUrl.search.substring(1);
 
-            const { error } = await supabaseClient
+            const { data: inserted, error } = await supabaseClient
                 .from("studies")
                 .insert({
                     owner: userData.id,
@@ -362,12 +363,25 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                     description: caseDescription,
                     url_params: searchParams,
                     visibility: caseVisibility,
-                });
+                })
+                .select("id")
+                .single();
 
             if (error) throw error;
 
-            toast.dismiss("builder-upload");
-            toast.success("Study saved and uploaded successfully!", { duration: 2000 });
+            const caseHref = inserted?.id
+                ? buildCaseViewerHref({ url_params: searchParams, studyId: inserted.id })
+                : finalUrl;
+            setSavedUrl(caseHref);
+
+            toast.success("Case saved", {
+                id: "builder-upload",
+                action: {
+                    label: "Open",
+                    onClick: () => window.open(caseHref, "_blank", "noopener,noreferrer"),
+                },
+                duration: 6000,
+            });
             if (onStudySaved) onStudySaved();
 
             setSaveForm({
@@ -482,8 +496,9 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                             <UploaderComp onLocalSeriesReady={handleLocalSeriesReady} />
                         )}
                     </div>
-                    <ScrollArea className="flex-1 p-4">
-                        <div className="grid grid-cols-1 gap-2">
+                    {/* Radix's viewport wrapper is display:table, which lets long labels widen rows past the panel and hide the action icons. */}
+                    <ScrollArea className="flex-1 p-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
+                        <div className="grid grid-cols-1 gap-2 min-w-0">
                             {metaDataList.map((data) => {
                                 const isNotPlaced = data.cord[0] === -1 && data.cord[1] === -1;
                                 const isVisible = filteredSeries ? filteredSeries.some(s => s.id === data.id) : true;
