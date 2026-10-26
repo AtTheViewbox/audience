@@ -349,13 +349,78 @@ async function anonymizeDataset(dict, session) {
   }
 }
 
+/** File meta tags that can identify the sending system. */
+const REMOVE_META_TAGS = ["00020016", "00020017", "00020018", "00020100", "00020102"];
+
+const IMPLICIT_LE = "1.2.840.10008.1.2";
+const EXPLICIT_LE = "1.2.840.10008.1.2.1";
+const PIXEL_DATA_TAG = "7FE00010";
+
+function concatBuffers(chunks) {
+  const parts = (chunks || []).map((c) => new Uint8Array(c instanceof ArrayBuffer ? c : c.buffer, c.byteOffset || 0, c.byteLength));
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.length;
+  }
+  return out;
+}
+
+/** Native (unencapsulated) Pixel Data element as the last element of the dataset. */
+function encodeNativePixelData(pixelElement, transferSyntax, bitsAllocated) {
+  let data = concatBuffers(pixelElement.Value);
+  if (data.length % 2) {
+    const padded = new Uint8Array(data.length + 1);
+    padded.set(data);
+    data = padded;
+  }
+  const implicit = transferSyntax === IMPLICIT_LE;
+  const header = new DataView(new ArrayBuffer(implicit ? 8 : 12));
+  header.setUint16(0, 0x7fe0, true);
+  header.setUint16(2, 0x0010, true);
+  if (implicit) {
+    header.setUint32(4, data.length, true);
+  } else {
+    const vr = pixelElement.vr === "OB" || bitsAllocated <= 8 ? "OB" : "OW";
+    header.setUint8(4, vr.charCodeAt(0));
+    header.setUint8(5, vr.charCodeAt(1));
+    header.setUint16(6, 0, true);
+    header.setUint32(8, data.length, true);
+  }
+  return concatBuffers([header.buffer, data]);
+}
+
 export async function anonymizeDicomArrayBuffer(arrayBuffer, session = createAnonymizerSession()) {
   const dicomData = dcmjs.data.DicomMessage.readFile(arrayBuffer);
   await anonymizeDataset(dicomData.dict, session);
+  // The file meta header may only hold group 0002 (it is always written as
+  // explicit VR). Running the dataset anonymizer on it injects patient tags,
+  // which corrupts implicit-VR files for every reader.
   if (dicomData.meta) {
-    await anonymizeDataset(dicomData.meta, session);
+    for (const tag of REMOVE_META_TAGS) delete dicomData.meta[tag];
     const sop = firstValue(dicomData.dict["00080018"]);
     if (sop) setTag(dicomData.meta, "00020003", "UI", sop);
+  }
+
+  // dcmjs 0.47 writes Pixel Data encapsulated for every transfer syntax (its
+  // unencapsulated lookup is keyed by constant names, not UIDs). Readers parse
+  // that as a sequence under implicit VR, so native pixel data is written here.
+  const transferSyntax = firstValue(dicomData.meta?.["00020010"]);
+  const pixelElement = dicomData.dict[PIXEL_DATA_TAG];
+  const num = (tag, fallback) => Number(firstValue(dicomData.dict[tag])) || fallback;
+  const bitsAllocated = num("00280100", 16);
+  const nativeBytes =
+    num("00280010", 0) * num("00280011", 0) * num("00280002", 1) * num("00280008", 1) * (bitsAllocated / 8);
+  const pixelBytes = (pixelElement?.Value || []).reduce((n, c) => n + (c?.byteLength || 0), 0);
+  // Some files label encapsulated (compressed) data as native; leave those as-is.
+  const isNative = nativeBytes > 0 && (pixelBytes === nativeBytes || pixelBytes === nativeBytes + 1);
+  if (pixelElement && isNative && (transferSyntax === IMPLICIT_LE || transferSyntax === EXPLICIT_LE)) {
+    for (const tag of Object.keys(dicomData.dict)) {
+      if (tag.toUpperCase() >= PIXEL_DATA_TAG) delete dicomData.dict[tag];
+    }
+    const head = new Uint8Array(dicomData.write());
+    return concatBuffers([head, encodeNativePixelData(pixelElement, transferSyntax, bitsAllocated)]).buffer;
   }
   return dicomData.write();
 }
