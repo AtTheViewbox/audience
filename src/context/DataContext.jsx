@@ -198,21 +198,22 @@ export const DataProvider = ({ children }) => {
             return data || [];
         }
 
+        // Realtime DELETEs reach every subscriber (RLS can't filter them) and only
+        // carry the primary key, so only react when it is this session's host
+        // row, and confirm the session is really gone before disconnecting.
         if (updateSession?.eventType === "DELETE") {
-            dispatch({ type: 'loading_request' })
-            if (updateSession.old && updateSession.old.session_id) {
-                getSession(supabaseClient, updateSession.old.session_id).then((payload) => {
+            const deletedUser = updateSession.old?.user;
+            const owner = data.sessionMeta?.owner;
+            if (data.sessionId && (!owner || !deletedUser || deletedUser === owner)) {
+                getSession(supabaseClient, data.sessionId).then((payload) => {
                     if (payload.length == 0) {
                         userDispatch({ type: "clean_up_supabase" });
                     }
                 })
-            } else {
-                // Fallback if we can't identify the session, just cleanup
-                userDispatch({ type: "clean_up_supabase" });
             }
         }
 
-        if (updateSession?.eventType === "UPDATE") {
+        if (updateSession?.eventType === "UPDATE" && updateSession.new?.session_id === data.sessionId) {
             let ignoreOwnSwitch = false;
             try {
                 ignoreOwnSwitch = sessionStorage.getItem(IGNORE_SESSION_UPDATE_KEY) === "1";
@@ -574,13 +575,25 @@ export const DataProvider = ({ children }) => {
         // be null so the if statement just guards against that
         if (data.sessionId && supabaseClient) {
             const allChanges = supabaseClient
-                .channel('schema-db-changes')
+                .channel(`${data.sessionId}-viewbox-changes`)
                 .on(
                     'postgres_changes',
                     {
-                        event: '*',
+                        event: 'UPDATE',
                         schema: 'public',
-                        table: 'viewbox'
+                        table: 'viewbox',
+                        filter: `session_id=eq.${data.sessionId}`,
+                    },
+                    (payload) => {
+                        setUpdateSession(payload)
+                    }
+                )
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'DELETE',
+                        schema: 'public',
+                        table: 'viewbox',
                     },
                     (payload) => {
                         setUpdateSession(payload)
@@ -801,6 +814,7 @@ export const DataProvider = ({ children }) => {
             dispatch({ type: 'sharing_controller_initialized', payload: { shareController: share_controller, interactionChannel: interaction_channel, rosterChannel: roster_channel } })
 
             return () => {
+                supabaseClient.removeChannel(allChanges);
                 if (data.shareController) data.shareController.unsubscribe();
                 if (data.rosterChannel) { data.rosterChannel.untrack?.(); data.rosterChannel.unsubscribe(); }
                 if (data.interactionChannel) data.interactionChannel.unsubscribe();

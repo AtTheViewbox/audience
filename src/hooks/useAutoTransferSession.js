@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { UserContext } from '../context/UserContext';
 import { DataContext, DataDispatchContext } from '../context/DataContext';
 import { transferSessionToCurrentUrl } from '../lib/transferSharedSession';
+import { sessionViewerUrlParams } from '../lib/answerKeyCase';
 
 const URL_SETTLE_MS = 400;
 
@@ -36,7 +37,9 @@ export function useAutoTransferSession(options = {}) {
       (async () => {
         if (busy.current) return;
 
-        const currentQs = new URLSearchParams(location.search).toString();
+        // Following a join link (s=) means viewing a session, not moving ours.
+        if (new URLSearchParams(location.search).get('s')) return;
+        const currentQs = sessionViewerUrlParams(location.search);
 
         const { data: rows, error } = await supabaseClient
           .from('viewbox')
