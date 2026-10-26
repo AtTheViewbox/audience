@@ -38,6 +38,18 @@ const PropertyPanel = ({
         onPropertyEdit?.();
     };
 
+    const applyWindowPreset = (preset) => {
+        setMetaDataList((prev) =>
+            prev.map((item) => (item.id === metadataId ? { ...item, ww: preset.ww, wc: preset.wc } : item))
+        );
+        onPropertyEdit?.();
+    };
+
+    const windowPresets = Array.isArray(metadata.windowPresets) ? metadata.windowPresets : [];
+    const isActivePreset = (preset) =>
+        Math.round(getReveredAdjustedWW(metadata)) === Math.round(getReveredAdjustedWW({ ...metadata, ww: preset.ww })) &&
+        Math.round(getReveredAdjustedWC(metadata)) === Math.round(getReveredAdjustedWC({ ...metadata, wc: preset.wc }));
+
     const handleSliceRange = (range) => {
         setMetaDataList((prev) =>
             prev.map((item) => (item.id === metadataId ? { ...item, ...range } : item))
@@ -64,6 +76,40 @@ const PropertyPanel = ({
                 />
             </div>
             <SliceRangeSlider metadata={metadata} onChange={handleSliceRange} />
+
+            <div className="space-y-2">
+                <Label>DICOM window presets</Label>
+                {windowPresets.length ? (
+                    <div className="flex flex-wrap gap-2">
+                        {windowPresets.map((preset, i) => {
+                            const ww = Math.round(getReveredAdjustedWW({ ...metadata, ww: preset.ww }));
+                            const wc = Math.round(getReveredAdjustedWC({ ...metadata, wc: preset.wc }));
+                            return (
+                                <Button
+                                    key={`${preset.label}-${i}`}
+                                    type="button"
+                                    size="sm"
+                                    variant={isActivePreset(preset) ? "secondary" : "outline"}
+                                    className="h-auto py-1 px-2 flex flex-col items-start"
+                                    onClick={() => applyWindowPreset(preset)}
+                                    title={`Apply WW ${ww} / WC ${wc}`}
+                                >
+                                    <span className="text-xs font-medium">{preset.label}</span>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                                        WW {ww} / WC {wc}
+                                    </span>
+                                </Button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="text-xs text-muted-foreground">
+                        {metadata.isDraft
+                            ? "No window values in the DICOM header."
+                            : "Not recorded for this series (uploaded before presets were saved)."}
+                    </p>
+                )}
+            </div>
 
             <div className="space-y-2">
                 <Label>Window Width (WW)</Label>

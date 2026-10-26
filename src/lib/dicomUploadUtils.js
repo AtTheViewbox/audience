@@ -4,43 +4,70 @@ import { concurrentExecutor } from "./utils";
 
 export { anonymizeDicomFile, createAnonymizerSession };
 
+function asList(value) {
+  if (value == null || value === "") return [];
+  return Array.isArray(value) ? value : String(value).split("\\");
+}
+
+/**
+ * windowPresets holds every WW/WC pair in the header (WindowWidth/WindowCenter
+ * are multi-valued, WindowCenterWidthExplanation names them). Values are in the
+ * same stored-pixel units as windowWidth/windowCenter.
+ */
 export async function extractDicomWindowSettings(file) {
   let windowWidth = 1400;
   let windowCenter = 40;
   let rescaleSlope = 1;
   let rescaleIntercept = 0;
+  const windowPresets = [];
 
   try {
     const arrayBuffer = await file.arrayBuffer();
     const dicomData = dcmjs.data.DicomMessage.readFile(arrayBuffer);
     const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
 
-    if (dataset.RescaleSlope !== undefined) rescaleSlope = dataset.RescaleSlope;
-    if (dataset.RescaleIntercept !== undefined) rescaleIntercept = dataset.RescaleIntercept;
+    if (dataset.RescaleSlope !== undefined) rescaleSlope = Number(dataset.RescaleSlope) || 1;
+    if (dataset.RescaleIntercept !== undefined) rescaleIntercept = Number(dataset.RescaleIntercept) || 0;
 
-    let rawWindowWidth = null;
-    let rawWindowCenter = null;
-
-    if (dataset.WindowWidth) {
-      rawWindowWidth = Array.isArray(dataset.WindowWidth)
-        ? dataset.WindowWidth[0]
-        : dataset.WindowWidth;
+    const widths = asList(dataset.WindowWidth).map(Number);
+    const centers = asList(dataset.WindowCenter).map(Number);
+    const names = asList(dataset.WindowCenterWidthExplanation).map(dicomText);
+    const seen = new Set();
+    for (let i = 0; i < Math.min(widths.length, centers.length); i++) {
+      const rawWW = widths[i];
+      const rawWC = centers[i];
+      if (!Number.isFinite(rawWW) || !Number.isFinite(rawWC) || rawWW <= 0) continue;
+      const key = `${Math.round(rawWW)}/${Math.round(rawWC)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      windowPresets.push({
+        label: names[i] || (i === 0 ? "Default" : `Preset ${i + 1}`),
+        ww: rawWW / rescaleSlope,
+        wc: (rawWC - rescaleIntercept) / rescaleSlope,
+      });
     }
-    if (dataset.WindowCenter) {
-      rawWindowCenter = Array.isArray(dataset.WindowCenter)
-        ? dataset.WindowCenter[0]
-        : dataset.WindowCenter;
+
+    // Color and 8-bit images (secondary captures, maps) often carry no window
+    // tags; their natural default is the full 0-255 range, not a CT window.
+    const photometric = dicomText(dataset.PhotometricInterpretation).toUpperCase();
+    const isColor = /^(RGB|YBR|PALETTE)/.test(photometric);
+    if (!windowPresets.length && (isColor || Number(dataset.BitsStored) <= 8)) {
+      windowPresets.push({
+        label: "Full range (8-bit)",
+        ww: 255 / rescaleSlope,
+        wc: (127 - rescaleIntercept) / rescaleSlope,
+      });
     }
 
-    if (rawWindowWidth !== null) windowWidth = rawWindowWidth / rescaleSlope;
-    if (rawWindowCenter !== null) {
-      windowCenter = (rawWindowCenter - rescaleIntercept) / rescaleSlope;
+    if (windowPresets.length) {
+      windowWidth = windowPresets[0].ww;
+      windowCenter = windowPresets[0].wc;
     }
   } catch (error) {
     console.warn("Could not extract window settings from DICOM, using defaults:", error);
   }
 
-  return { windowWidth, windowCenter, rescaleSlope, rescaleIntercept };
+  return { windowWidth, windowCenter, rescaleSlope, rescaleIntercept, windowPresets };
 }
 
 function dicomText(value) {
@@ -234,7 +261,7 @@ export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
   }
 
   const localBlobUrls = anonymizedFiles.map((file) => URL.createObjectURL(file));
-  const { windowWidth, windowCenter, rescaleSlope, rescaleIntercept } =
+  const { windowWidth, windowCenter, rescaleSlope, rescaleIntercept, windowPresets } =
     await extractDicomWindowSettings(anonymizedFiles[0]);
   const resolvedName = (seriesName || "").trim() || nameFields.seriesName;
 
@@ -253,6 +280,7 @@ export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
     isDraft: true,
     label: resolvedName || `Local upload ${new Date().toLocaleDateString()}`,
     studyName: nameFields.studyDescription || "",
+    windowPresets,
     localFiles: anonymizedFiles,
     localBlobUrls,
     prefix: "",
@@ -389,6 +417,7 @@ export async function uploadDraftSeries(
     step: draft.step,
     rescaleIntercept: draft.rescaleIntercept,
     rescaleSlope: draft.rescaleSlope,
+    windowPresets: draft.windowPresets || [],
   };
 
   if (userId) {
