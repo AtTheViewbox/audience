@@ -1,5 +1,6 @@
 import Layout from '../layout/layout';
 import Fab from './Fab'
+import CaseNextArrow from './CaseNextArrow'
 import Tools from './Tools'
 import SessionUsers from './SessionUsers'
 import MedGemmaButton from './MedGemma/MedGemmaButton'
@@ -82,6 +83,7 @@ function MainPage() {
         <Layout />
         <Tools />
         <Fab />
+        <CaseNextArrow />
         <SessionUsers />
         {/* Right-edge rail: MedGemma + Atlas side by side, same top/right inset */}
         <div

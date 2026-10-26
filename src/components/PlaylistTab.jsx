@@ -5,16 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext";
 import { isPresenter } from "../lib/demoCase.js";
-import {
-  buildCaseViewerHref,
-  getCaseIdFromSearch,
-  getPlaylistTokenFromSearch,
-  sessionViewerUrlParams,
-} from "../lib/answerKeyCase.js";
+import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
 import { fetchPlaylist, fetchSharedPlaylist, playlistItemLabel, sortedPlaylistItems } from "../lib/playlist.js";
 import { sameViewerStudy } from "../lib/shareSession.js";
-import { transferSessionToUrlParams } from "../lib/transferSharedSession.js";
-import { applyViewerUrl } from "../lib/viewerLocation.js";
+import { openPlaylistStudy } from "../lib/openPlaylistStudy.js";
 import { cn } from "@/lib/utils";
 
 function PlaylistTab() {
@@ -74,34 +68,25 @@ function PlaylistTab() {
       toast.error("That study has no images.");
       return;
     }
-    const href = buildCaseViewerHref({
-      url_params: study.url_params,
-      studyId: study.id,
-      playlistId,
-      shareToken,
-    });
-    const urlParams = sessionViewerUrlParams(href);
-
-    if (isHost && sessionId && userData?.id) {
-      setBusyId(item.id);
-      try {
-        await transferSessionToUrlParams({
-          supabaseClient,
-          userId: userData.id,
-          urlParams,
-          chatHistory: chatHistory || [],
-          dispatch,
-        });
-      } catch (error) {
-        console.error(error);
-        toast.error(error?.message || "Could not switch the session.");
-      } finally {
-        setBusyId(null);
-      }
-      return;
+    setBusyId(item.id);
+    try {
+      await openPlaylistStudy({
+        item,
+        playlistId,
+        shareToken,
+        isHost,
+        sessionId,
+        userId: userData?.id,
+        supabaseClient,
+        chatHistory,
+        dispatch,
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || "Could not switch the session.");
+    } finally {
+      setBusyId(null);
     }
-
-    applyViewerUrl(href, dispatch);
   }
 
   return (
