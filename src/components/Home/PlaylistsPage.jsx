@@ -478,7 +478,7 @@ export default function PlaylistsPage({ search = "" }) {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-100 truncate">{playlist.name}</p>
                           <p className="text-xs text-slate-500 truncate">
-                            {items.length} series{playlist.description ? ` · ${playlist.description}` : ""}
+                            {items.length} {items.length === 1 ? "study" : "studies"}{playlist.description ? ` · ${playlist.description}` : ""}
                           </p>
                         </div>
                         <span className={`justify-self-start text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
@@ -634,7 +634,7 @@ export default function PlaylistsPage({ search = "" }) {
               {selected.description || "No description provided."}
             </p>
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Series order</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Study order</h4>
               {selectedItems.length ? selectedItems.map((item, index) => (
                 <div key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-2 py-2">
                   <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-400">{index + 1}</span>

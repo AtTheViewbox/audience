@@ -110,8 +110,8 @@ function PlaylistTab() {
         <CardTitle>{playlist?.name || "Case playlist"}</CardTitle>
         <CardDescription>
           {isHost && sessionId
-            ? "Switch the live session to another series in this case."
-            : "Open another series in this case."}
+            ? "Switch the live session to another study in this case."
+            : "Open another study in this case."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">

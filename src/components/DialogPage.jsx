@@ -80,7 +80,7 @@ function DialogPage() {
       >
         <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>
           {canShare && <TabsTrigger value="sharing">Share</TabsTrigger>}
-          {showPlaylist && <TabsTrigger value="playlist">Series</TabsTrigger>}
+          {showPlaylist && <TabsTrigger value="playlist">Studies</TabsTrigger>}
           {showLogin && <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>}
           {canAnnotate && <TabsTrigger value="annotate">Questions</TabsTrigger>}
           <TabsTrigger value="setting">Setting</TabsTrigger>
