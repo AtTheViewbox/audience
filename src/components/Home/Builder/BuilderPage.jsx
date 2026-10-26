@@ -19,7 +19,7 @@ import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, fi
 
 import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
-import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName, collectDicomFilesFromDataTransfer, groupDicomFilesByFolder, prepareLocalDraftSeries } from "../../../lib/dicomUploadUtils"
+import { uploadDraftSeries, revokeDraftBlobUrls, deleteCloudSeries, countStudiesUsingFolder, extractUploadFolderName, collectDicomFilesFromDataTransfer, groupDicomFilesByFolder, prepareLocalDraftSeries, describeSkippedFiles } from "../../../lib/dicomUploadUtils"
 import { toast } from "sonner";
 import { initCornerstone } from "../../../lib/initCornerstone.js";
 
@@ -175,22 +175,41 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             return [-1, -1];
         };
 
-        try {
-            for (let i = 0; i < groups.length; i++) {
-                toast.loading(`Preparing DICOM… ${i + 1}/${groups.length}`, {
-                    id: "dicom-prep",
-                    duration: Infinity,
-                });
+        const skipped = [];
+        let loaded = 0;
+        for (let i = 0; i < groups.length; i++) {
+            toast.loading(`Preparing DICOM… ${i + 1}/${groups.length}`, {
+                id: "dicom-prep",
+                duration: Infinity,
+            });
+            try {
                 const draft = await prepareLocalDraftSeries(groups[i], "", () => {});
+                skipped.push(...(draft.skippedFiles || []));
                 handleLocalSeriesReady({ ...draft, cord: nextSlot() });
+                loaded += 1;
+            } catch (error) {
+                console.error(error);
+                skipped.push(...(error.skippedFiles || groups[i].map((f) => f.name)));
             }
-            toast.success(
-                groups.length > 1 ? `${groups.length} series loaded into Builder` : "DICOM loaded into Builder",
-                { id: "dicom-prep", duration: 1500 }
-            );
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load dropped DICOM files", { id: "dicom-prep" });
+        }
+
+        if (!loaded) {
+            toast.error("None of the dropped files could be read as DICOM", {
+                id: "dicom-prep",
+                description: describeSkippedFiles(skipped),
+                duration: 6000,
+            });
+            return;
+        }
+        const loadedMsg = loaded > 1 ? `${loaded} series loaded into Builder` : "DICOM loaded into Builder";
+        if (skipped.length) {
+            toast.warning(`${loadedMsg}. Skipped ${skipped.length} unreadable file${skipped.length === 1 ? "" : "s"}`, {
+                id: "dicom-prep",
+                description: describeSkippedFiles(skipped),
+                duration: 6000,
+            });
+        } else {
+            toast.success(loadedMsg, { id: "dicom-prep", duration: 1500 });
         }
     };
 

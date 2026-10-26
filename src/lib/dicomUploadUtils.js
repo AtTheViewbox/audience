@@ -248,17 +248,29 @@ export function groupDicomFilesByFolder(files) {
   return values.length ? values : [files || []];
 }
 
+/** Unreadable files are skipped (listed in skippedFiles); throws only if none can be read. */
 export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
-  const nameFields = files[0]
-    ? await extractDicomNameFields(files[0])
-    : { seriesName: "", studyName: "", seriesDescription: "", studyDescription: "", protocolName: "" };
-
   const session = createAnonymizerSession();
   const anonymizedFiles = [];
+  const skippedFiles = [];
+  let firstReadable = null;
   for (let i = 0; i < files.length; i++) {
-    anonymizedFiles.push(await anonymizeDicomFile(files[i], session, `${i}.dcm`));
+    try {
+      anonymizedFiles.push(await anonymizeDicomFile(files[i], session, `${anonymizedFiles.length}.dcm`));
+      firstReadable ??= files[i];
+    } catch (error) {
+      console.warn(`Skipping unreadable DICOM ${files[i]?.name}:`, error);
+      skippedFiles.push(files[i]?.webkitRelativePath || files[i]?.name || `file ${i + 1}`);
+    }
     onProgress?.(Math.round(((i + 1) / files.length) * 100));
   }
+  if (!anonymizedFiles.length) {
+    const error = new Error(`None of the ${files.length} file${files.length === 1 ? "" : "s"} could be read as DICOM`);
+    error.skippedFiles = skippedFiles;
+    throw error;
+  }
+
+  const nameFields = await extractDicomNameFields(firstReadable);
 
   const localBlobUrls = anonymizedFiles.map((file) => URL.createObjectURL(file));
   const { windowWidth, windowCenter, rescaleSlope, rescaleIntercept, windowPresets } =
@@ -283,10 +295,19 @@ export async function prepareLocalDraftSeries(files, seriesName, onProgress) {
     windowPresets,
     localFiles: anonymizedFiles,
     localBlobUrls,
+    skippedFiles,
     prefix: "",
     suffix: "",
     cord: [-1, -1],
   };
+}
+
+/** Short user-facing summary of skipped file names. */
+export function describeSkippedFiles(names, max = 3) {
+  if (!names?.length) return "";
+  const shown = names.slice(0, max).map((n) => String(n).split("/").pop()).join(", ");
+  const more = names.length > max ? ` and ${names.length - max} more` : "";
+  return `${shown}${more}`;
 }
 
 async function gzipDicomFile(file, fileName) {

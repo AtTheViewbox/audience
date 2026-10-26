@@ -1,7 +1,7 @@
 import { useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { UploadCloudIcon } from "lucide-react"
-import { prepareLocalDraftSeries } from "../../lib/dicomUploadUtils"
+import { prepareLocalDraftSeries, describeSkippedFiles } from "../../lib/dicomUploadUtils"
 import { toast } from "sonner"
 
 export function UploaderComp({ onLocalSeriesReady }) {
@@ -31,10 +31,23 @@ export function UploaderComp({ onLocalSeriesReady }) {
         }
       })
       onLocalSeriesReady?.(draftSeries)
-      toast.success("DICOM loaded into Builder", { id: "dicom-prep", duration: 1500 })
+      const skipped = draftSeries.skippedFiles || []
+      if (skipped.length) {
+        toast.warning(`DICOM loaded into Builder. Skipped ${skipped.length} unreadable file${skipped.length === 1 ? "" : "s"}`, {
+          id: "dicom-prep",
+          description: describeSkippedFiles(skipped),
+          duration: 6000,
+        })
+      } else {
+        toast.success("DICOM loaded into Builder", { id: "dicom-prep", duration: 1500 })
+      }
     } catch (error) {
       console.error("Failed to prepare local DICOM series:", error)
-      toast.error("Failed to load DICOM files", { id: "dicom-prep" })
+      toast.error("None of the selected files could be read as DICOM", {
+        id: "dicom-prep",
+        description: describeSkippedFiles(error.skippedFiles),
+        duration: 6000,
+      })
     } finally {
       processingRef.current = false
     }
