@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext";
@@ -15,6 +15,7 @@ function CaseNextArrow() {
   const { dispatch } = useContext(DataDispatchContext);
   const { userData, supabaseClient } = useContext(UserContext).data;
   const location = useLocation();
+  const navigate = useNavigate();
   const [playlist, setPlaylist] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -65,7 +66,12 @@ function CaseNextArrow() {
   const nextItem = currentIndex >= 0 ? items[currentIndex + 1] : null;
   const canGoBack = Boolean(previousItem?.studies?.url_params);
   const canGoForward = Boolean(nextItem?.studies?.url_params);
-  if (!canGoBack && !canGoForward) return null;
+  const canReturn = !canGoForward && items.length > 0;
+  if (!canGoBack && !canGoForward && !canReturn) return null;
+
+  function backToCases() {
+    navigate({ pathname: "/", search: "", hash: "cases" });
+  }
 
   async function goTo(item) {
     if (busy || !item) return;
@@ -106,17 +112,21 @@ function CaseNextArrow() {
           </span>
         </button>
       )}
-      {canGoForward && (
+      {(canGoForward || canReturn) && (
         <button
           type="button"
-          aria-label="Next study"
-          title="Next study"
+          aria-label={canReturn ? "Back to cases" : "Next study"}
+          title={canReturn ? "Back to cases" : "Next study"}
           disabled={busy}
-          onClick={() => goTo(nextItem)}
+          onClick={() => (canReturn ? backToCases() : goTo(nextItem))}
           className="fixed right-0 top-1/2 z-[80] flex h-28 w-12 -translate-y-1/2 items-center justify-end border-0 bg-transparent p-0"
         >
           <span className="mr-1 flex h-14 w-8 items-center justify-center rounded-md bg-white/90 text-black shadow">
-            <ChevronRight className="h-6 w-6" strokeWidth={1.75} />
+            {canReturn ? (
+              <Layers className="h-5 w-5" strokeWidth={1.75} />
+            ) : (
+              <ChevronRight className="h-6 w-6" strokeWidth={1.75} />
+            )}
           </span>
         </button>
       )}

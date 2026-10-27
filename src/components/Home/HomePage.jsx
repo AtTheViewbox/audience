@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useMemo } from "react"
+import { useLocation } from "react-router-dom"
 import { Trash2, Copy, Check, ChevronRight, Pencil, GitFork, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown, Share2 } from "lucide-react"
 import { toast, Toaster } from "sonner"
 import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
@@ -62,8 +63,9 @@ function SortHeader({ label, sortKey, sort, onSort, className }) {
 }
 
 export default function HomePage() {
+  const location = useLocation();
   const [selectedSeries, setSelectedSeries] = useState([])
-  const [filter, setFilter] = useState(Filter.ALL)
+  const [filter, setFilter] = useState(location.hash === "#cases" ? Filter.PLAYLISTS : Filter.ALL)
   const [search, setSearch] = useState("")
   const [seriesList, setSeriesList] = useState([])
   const [displaySeriesList, setdisplaySeriesList] = useState([])

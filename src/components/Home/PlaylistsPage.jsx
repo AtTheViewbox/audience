@@ -529,7 +529,7 @@ export default function PlaylistsPage({ search = "" }) {
                                 onClick={() => {
                                   setSelectedId(playlist.id);
                                   const href = playlistLaunchHref(playlist, item.studies);
-                                  if (href) window.open(href, "_blank", "noopener,noreferrer");
+                                  if (href) window.location.assign(href);
                                 }}
                               >
                                 <span className="w-6 text-xs text-slate-500 tabular-nums">{itemIndex + 1}</span>
@@ -675,7 +675,7 @@ export default function PlaylistsPage({ search = "" }) {
               disabled={!selectedItems[0]?.studies?.url_params}
               onClick={() => {
                 const href = playlistLaunchHref(selected);
-                if (href) window.open(href, "_blank", "noopener,noreferrer");
+                if (href) window.location.assign(href);
               }}
             >
               Launch case
