@@ -99,9 +99,9 @@ function CaseNextArrow() {
           title="Previous study"
           disabled={busy}
           onClick={() => goTo(previousItem)}
-          className="group fixed left-0 top-1/2 z-[80] flex h-28 w-12 -translate-y-1/2 items-center justify-start border-0 bg-transparent p-0"
+          className="fixed left-0 top-1/2 z-[80] flex h-28 w-12 -translate-y-1/2 items-center justify-start border-0 bg-transparent p-0"
         >
-          <span className="ml-1 flex h-14 w-8 items-center justify-center rounded-md bg-white/90 text-black opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <span className="ml-1 flex h-14 w-8 items-center justify-center rounded-md bg-white/90 text-black shadow">
             <ChevronLeft className="h-6 w-6" strokeWidth={1.75} />
           </span>
         </button>
@@ -113,9 +113,9 @@ function CaseNextArrow() {
           title="Next study"
           disabled={busy}
           onClick={() => goTo(nextItem)}
-          className="group fixed right-0 top-1/2 z-[80] flex h-28 w-12 -translate-y-1/2 items-center justify-end border-0 bg-transparent p-0"
+          className="fixed right-0 top-1/2 z-[80] flex h-28 w-12 -translate-y-1/2 items-center justify-end border-0 bg-transparent p-0"
         >
-          <span className="mr-1 flex h-14 w-8 items-center justify-center rounded-md bg-white/90 text-black opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <span className="mr-1 flex h-14 w-8 items-center justify-center rounded-md bg-white/90 text-black shadow">
             <ChevronRight className="h-6 w-6" strokeWidth={1.75} />
           </span>
         </button>
