@@ -43,7 +43,7 @@ export function replaceViewerUrl(href) {
  * Switch the open viewer to another case. Keeps the session connection and
  * swaps images, questions, and the URL in place.
  */
-export function applyViewerUrl(href, dispatch) {
+export function applyViewerUrl(href, dispatch, { keepDialog = false } = {}) {
   if (!dispatch) {
     window.location.assign(href);
     return;
@@ -71,5 +71,5 @@ export function applyViewerUrl(href, dispatch) {
       caseUrlKey: resolveCaseUrlKey({ search, caseUrlParams }) || null,
     },
   });
-  closeViewerDialog();
+  if (!keepDialog) closeViewerDialog();
 }

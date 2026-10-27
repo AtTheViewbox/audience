@@ -21,6 +21,7 @@ export async function transferSessionToUrlParams({
   urlParams,
   chatHistory,
   dispatch,
+  keepDialog = false,
 }) {
   try {
     sessionStorage.setItem(IGNORE_SESSION_UPDATE_KEY, "1");
@@ -48,7 +49,7 @@ export async function transferSessionToUrlParams({
     });
   }
 
-  applyViewerUrl(viewerHref(urlParams, row.join_code || row.session_id), dispatch);
+  applyViewerUrl(viewerHref(urlParams, row.join_code || row.session_id), dispatch, { keepDialog });
   return row;
 }
 

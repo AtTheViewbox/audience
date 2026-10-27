@@ -1,5 +1,5 @@
 import { Visibility } from "./constants.js";
-import { buildCaseViewerHref } from "./answerKeyCase.js";
+import { buildCaseViewerHref, extractSearchString } from "./answerKeyCase.js";
 
 const PLAYLIST_ITEM_SELECT =
   "id, sort_order, label, study_id, studies ( id, name, description, url_params, visibility )";
@@ -129,6 +129,85 @@ export async function replacePlaylistItems(supabaseClient, playlistId, items) {
 
   const { error } = await supabaseClient.from("playlist_items").insert(rows);
   if (error) throw error;
+}
+
+function stripImageScheme(value) {
+  let text = String(value || "");
+  try {
+    text = decodeURIComponent(text);
+  } catch {
+    // Value was already decoded.
+  }
+  return text.replace(/^(dicomweb:|wadouri:|wadors:)/, "");
+}
+
+/** Stable key for matching a viewer prefix to dicom_series.prefix. */
+export function seriesPrefixKey(value) {
+  return stripImageScheme(value).replace(/\/+$/, "");
+}
+
+function seriesIndexes(params) {
+  const indexes = new Set();
+  for (const key of params.keys()) {
+    const match = /^vd\.(\d+)\./.exec(key);
+    if (match) indexes.add(Number(match[1]));
+  }
+  return [...indexes].sort((a, b) => a - b);
+}
+
+/** A filled grid. Avoids an empty cell, which the viewer cannot render. */
+function gridForCount(count) {
+  const n = Math.max(1, count);
+  let best = { r: 1, c: n };
+  for (let c = 1; c <= Math.min(3, n); c++) {
+    if (n % c !== 0) continue;
+    const r = n / c;
+    if (r <= 3) best = { r, c };
+  }
+  return best;
+}
+
+function copyViewport(params, fromIndex, toIndex, next) {
+  const prefix = `vd.${fromIndex}.`;
+  for (const [key, value] of params.entries()) {
+    if (!key.startsWith(prefix)) continue;
+    next.set(`vd.${toIndex}.${key.slice(prefix.length)}`, value);
+  }
+}
+
+/**
+ * One saved study can hold several series (vd.0, vd.1, …).
+ * Each choice is a 1×1 viewer URL for that series alone.
+ */
+export function seriesChoicesFromStudy(urlParams) {
+  const params = new URLSearchParams(extractSearchString(urlParams));
+  return seriesIndexes(params)
+    .map((index, order) => ({
+      index,
+      label: `Series ${order + 1}`,
+      prefixKey: seriesPrefixKey(params.get(`vd.${index}.s.pf`) || ""),
+      urlParams: viewerUrlForSeries(urlParams, [index]),
+    }))
+    .filter((choice) => choice.prefixKey);
+}
+
+/** Layout URL for the checked series, in their saved order. */
+export function viewerUrlForSeries(urlParams, selectedIndexes) {
+  const params = new URLSearchParams(extractSearchString(urlParams));
+  const indexes = [...selectedIndexes].sort((a, b) => a - b);
+  const { r, c } = gridForCount(indexes.length);
+  const next = new URLSearchParams();
+  next.set("m", "true");
+  next.set("ld.r", String(r));
+  next.set("ld.c", String(c));
+  indexes.forEach((index, slot) => copyViewport(params, index, slot, next));
+  return next.toString();
+}
+
+/** Prefixes of the series currently on screen, in viewport order. */
+export function visibleSeriesPrefixKeys(search = typeof window !== "undefined" ? window.location.search : "") {
+  const params = new URLSearchParams(extractSearchString(search));
+  return seriesIndexes(params).map((index) => seriesPrefixKey(params.get(`vd.${index}.s.pf`) || ""));
 }
 
 export function playlistLaunchHref(playlist, study, shareToken = null) {

@@ -14,6 +14,8 @@ export async function openPlaylistStudy({
   supabaseClient,
   chatHistory,
   dispatch,
+  urlParams: urlParamsOverride,
+  keepDialog = false,
 }) {
   const study = item?.studies;
   if (!study?.url_params) {
@@ -22,7 +24,7 @@ export async function openPlaylistStudy({
   }
 
   const href = buildCaseViewerHref({
-    url_params: study.url_params,
+    url_params: urlParamsOverride || study.url_params,
     studyId: study.id,
     playlistId,
     shareToken,
@@ -35,10 +37,11 @@ export async function openPlaylistStudy({
       urlParams: sessionViewerUrlParams(href),
       chatHistory: chatHistory || [],
       dispatch,
+      keepDialog,
     });
     return true;
   }
 
-  applyViewerUrl(href, dispatch);
+  applyViewerUrl(href, dispatch, { keepDialog });
   return true;
 }

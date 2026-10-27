@@ -74,7 +74,7 @@ function Fab() {
 
 
       <DialogContent className="max-h-[calc(100dvh-2rem)] !flex flex-col overflow-hidden">
-        <DialogPage />
+        <DialogPage open={dialogIsOpen} />
       </DialogContent>
     </Dialog>
   );

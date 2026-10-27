@@ -28,24 +28,28 @@ export const AuthMode = {
   RECOVERY: "recovery",
 };
 
-function DialogPage() {
+function DialogPage({ open = true }) {
   const { userData } = useContext(UserContext).data;
-  const playlistId = useContext(DataContext)?.data?.playlistId;
+  const viewer = useContext(DataContext)?.data;
+  const playlistId = viewer?.playlistId;
+  const sessionId = viewer?.sessionId;
   const isAnonymous = !userData || userData.is_anonymous;
   const demoMode = isDemoMode();
   const canShare = !isAnonymous || demoMode;
   const canAnnotate = !isAnonymous || demoMode;
   const showLogin = isAnonymous && !demoMode;
   const showPlaylist = Boolean(playlistId);
+  const inSession = Boolean(sessionId);
 
   const [authMode, setAuthMode] = useState(AuthMode.LOGIN);
 
-  const defaultTab = canShare ? "sharing" : "login";
-  const [tabValue, setTabValue] = useState(defaultTab);
+  const preferredTab = showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login";
+  const [tabValue, setTabValue] = useState(preferredTab);
 
   useEffect(() => {
-    setTabValue(canShare ? "sharing" : "login");
-  }, [canShare]);
+    if (!open) return;
+    setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
+  }, [open, showPlaylist, inSession, canShare]);
 
   const loginTabLabel =
     authMode === AuthMode.SIGN_UP
