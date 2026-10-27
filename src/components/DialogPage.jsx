@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext, useEffect, useRef } from "react";
 import { UserContext } from "../context/UserContext";
 import { LoginDialog } from "../login/LoginDialog.jsx";
 import { isDemoMode } from "../lib/demoCase.js";
@@ -45,9 +45,16 @@ function DialogPage({ open = true }) {
 
   const preferredTab = showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login";
   const [tabValue, setTabValue] = useState(preferredTab);
+  const dialogWasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      dialogWasOpen.current = false;
+      return;
+    }
+    // Starting a session while this dialog is open should leave Share on screen.
+    if (dialogWasOpen.current) return;
+    dialogWasOpen.current = true;
     setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
   }, [open, showPlaylist, inSession, canShare]);
 
