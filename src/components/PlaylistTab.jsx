@@ -61,9 +61,10 @@ function PlaylistTab() {
   }, [supabaseClient, playlistId, shareToken]);
 
   const canChooseSeries = Boolean(sessionId) && isHost;
+  const userId = userData?.id;
 
   useEffect(() => {
-    if (!supabaseClient || !playlist || !canChooseSeries) return;
+    if (!supabaseClient || !playlist || !canChooseSeries || !userId) return;
     const keys = new Set();
     for (const item of sortedPlaylistItems(playlist)) {
       for (const choice of seriesChoicesFromStudy(item.studies?.url_params)) {
@@ -73,32 +74,35 @@ function PlaylistTab() {
     const folders = [...new Set([...keys].map(seriesFolderKey).filter(Boolean))];
     if (!folders.length) return;
     let cancelled = false;
-    supabaseClient
-      .from("dicom_series")
-      .select("name, folder_name")
-      .in("folder_name", folders)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error(error);
-          return;
-        }
-        const byFolder = new Map();
-        for (const row of data || []) {
-          const name = String(row.name || "").trim();
-          if (row.folder_name && name) byFolder.set(row.folder_name, name);
-        }
-        const next = {};
-        for (const key of keys) {
-          const name = byFolder.get(seriesFolderKey(key));
-          if (name) next[key] = name;
-        }
-        setSeriesNames(next);
-      });
+    supabaseClient.auth.getSession().then(({ data: sessionData }) => {
+      if (cancelled || !sessionData?.session) return;
+      return supabaseClient
+        .from("dicom_series")
+        .select("name, folder_name, metadata")
+        .in("folder_name", folders)
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          if (error) {
+            console.error(error);
+            return;
+          }
+          const byFolder = new Map();
+          for (const row of data || []) {
+            const name = String(row.name || row.metadata?.label || "").trim();
+            if (row.folder_name && name) byFolder.set(row.folder_name, name);
+          }
+          const next = {};
+          for (const key of keys) {
+            const name = byFolder.get(seriesFolderKey(key));
+            if (name) next[key] = name;
+          }
+          setSeriesNames(next);
+        });
+    });
     return () => {
       cancelled = true;
     };
-  }, [supabaseClient, playlist, canChooseSeries]);
+  }, [supabaseClient, playlist, canChooseSeries, userId]);
 
   if (!playlistId) return null;
 
@@ -198,11 +202,11 @@ function PlaylistTab() {
             }
 
             return (
-              <div key={item.id} className="flex w-full">
+              <div key={item.id} className="flex w-full items-stretch gap-1">
                 <Button
                   type="button"
                   variant={fullStudy ? "secondary" : "outline"}
-                  className={cn(rowClass, "flex-1 rounded-r-none")}
+                  className={cn(rowClass, "min-w-0 flex-1")}
                   disabled={fullStudy || busyId === item.id || !item.studies?.url_params}
                   onClick={() => openItem(item)}
                 >
@@ -215,11 +219,9 @@ function PlaylistTab() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
-                      variant={fullStudy ? "secondary" : "outline"}
-                      className={cn(
-                        "h-auto shrink-0 rounded-l-none border-l-0 px-2.5",
-                        current && "border-blue-500/40"
-                      )}
+                      variant="outline"
+                      size="icon"
+                      className={cn("h-auto w-9 shrink-0", current && "border-blue-500/40")}
                       disabled={busyId === item.id || !item.studies?.url_params}
                       aria-label={`Choose series for ${playlistItemLabel(item)}`}
                     >
@@ -228,7 +230,7 @@ function PlaylistTab() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="z-[80] min-w-[16rem] w-max max-w-[min(22rem,calc(100vw-2rem))] border bg-white p-1 text-slate-900 shadow-md"
+                    className="z-[80] w-max min-w-0 max-w-[14rem] border bg-white p-1 text-slate-900 shadow-md"
                     onCloseAutoFocus={(event) => event.preventDefault()}
                   >
                   {choices.map((choice) => {

@@ -148,7 +148,7 @@ export function seriesPrefixKey(value) {
 
 /** upload folder stored on dicom_series.folder_name. */
 export function seriesFolderKey(value) {
-  const match = seriesPrefixKey(value).match(/upload_[^/?#]+/);
+  const match = seriesPrefixKey(value).match(/upload_[A-Za-z0-9_]+/);
   return match ? match[0] : "";
 }
 
