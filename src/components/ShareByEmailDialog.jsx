@@ -51,11 +51,12 @@ export default function ShareByEmailDialog({
   }, [open, supabaseClient, userData?.id, userData?.is_anonymous]);
 
   const query = email.trim().toLowerCase();
-  const shown = people.filter((person) => {
-    if (!query) return true;
-    return person.email.toLowerCase().includes(query)
-      || (person.name || "").toLowerCase().includes(query);
-  });
+  const shown = query
+    ? people.filter((person) =>
+      person.email.toLowerCase().includes(query)
+      || (person.name || "").toLowerCase().includes(query)
+    )
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
@@ -85,7 +86,7 @@ export default function ShareByEmailDialog({
               placeholder="name@hospital.org"
               className="bg-slate-900/50 border-slate-800"
             />
-            {loadingPeople ? (
+            {!query ? null : loadingPeople ? (
               <p className="text-xs text-slate-500">Loading accounts…</p>
             ) : shown.length > 0 ? (
               <div className="max-h-40 overflow-y-auto rounded-md border border-slate-800 bg-slate-900/40">
@@ -109,9 +110,9 @@ export default function ShareByEmailDialog({
                   );
                 })}
               </div>
-            ) : people.length > 0 && query ? (
+            ) : (
               <p className="text-xs text-slate-500">No account matches that.</p>
-            ) : null}
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
