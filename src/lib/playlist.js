@@ -146,6 +146,12 @@ export function seriesPrefixKey(value) {
   return stripImageScheme(value).replace(/\/+$/, "");
 }
 
+/** upload folder stored on dicom_series.folder_name. */
+export function seriesFolderKey(value) {
+  const match = seriesPrefixKey(value).match(/upload_[^/?#]+/);
+  return match ? match[0] : "";
+}
+
 function seriesIndexes(params) {
   const indexes = new Set();
   for (const key of params.keys()) {

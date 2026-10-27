@@ -6,8 +6,7 @@ import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext";
 import { isPresenter } from "../lib/demoCase.js";
 import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
-import { fetchPlaylist, fetchSharedPlaylist, playlistItemLabel, seriesChoicesFromStudy, seriesPrefixKey, sortedPlaylistItems, viewerUrlForSeries, visibleSeriesPrefixKeys } from "../lib/playlist.js";
-import { isPlaceholderSeriesName, loadSeriesDescriptions } from "../lib/seriesLabels.js";
+import { fetchPlaylist, fetchSharedPlaylist, playlistItemLabel, seriesChoicesFromStudy, seriesFolderKey, sortedPlaylistItems, viewerUrlForSeries, visibleSeriesPrefixKeys } from "../lib/playlist.js";
 import { sameViewerStudy } from "../lib/shareSession.js";
 import { openPlaylistStudy } from "../lib/openPlaylistStudy.js";
 import { cn } from "@/lib/utils";
@@ -71,43 +70,35 @@ function PlaylistTab() {
         if (choice.prefixKey) keys.add(choice.prefixKey);
       }
     }
-    if (!keys.size) return;
-    const prefixes = [...keys].flatMap((key) => [key, `${key}/`]);
+    const folders = [...new Set([...keys].map(seriesFolderKey).filter(Boolean))];
+    if (!folders.length) return;
     let cancelled = false;
     supabaseClient
       .from("dicom_series")
-      .select("name, prefix, metadata")
-      .in("prefix", prefixes)
+      .select("name, folder_name")
+      .in("folder_name", folders)
       .then(({ data, error }) => {
-        if (cancelled || error || !data) return;
-        const next = {};
-        for (const row of data) {
-          const key = seriesPrefixKey(row.prefix);
-          const name = [row.metadata?.label, row.name].find((value) => !isPlaceholderSeriesName(value));
-          if (key && name) next[key] = String(name).trim();
+        if (cancelled) return;
+        if (error) {
+          console.error(error);
+          return;
         }
-        if (Object.keys(next).length) setSeriesNames((prev) => ({ ...next, ...prev }));
+        const byFolder = new Map();
+        for (const row of data || []) {
+          const name = String(row.name || "").trim();
+          if (row.folder_name && name) byFolder.set(row.folder_name, name);
+        }
+        const next = {};
+        for (const key of keys) {
+          const name = byFolder.get(seriesFolderKey(key));
+          if (name) next[key] = name;
+        }
+        setSeriesNames(next);
       });
     return () => {
       cancelled = true;
     };
   }, [supabaseClient, playlist, canChooseSeries]);
-
-  useEffect(() => {
-    if (!playlist || !canChooseSeries) return;
-    const urlParamsList = sortedPlaylistItems(playlist)
-      .map((item) => item.studies?.url_params)
-      .filter((urlParams) => seriesChoicesFromStudy(urlParams).length > 1);
-    if (!urlParamsList.length) return;
-    let cancelled = false;
-    loadSeriesDescriptions(urlParamsList).then((names) => {
-      if (cancelled || !Object.keys(names).length) return;
-      setSeriesNames((prev) => ({ ...prev, ...names }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [playlist, canChooseSeries]);
 
   if (!playlistId) return null;
 
@@ -207,32 +198,39 @@ function PlaylistTab() {
             }
 
             return (
-              <DropdownMenu
-                key={item.id}
-                onOpenChange={(open) => {
-                  if (open && !current && item.studies?.url_params) {
-                    openItem(item, undefined, { keepDialog: true });
-                  }
-                }}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant={fullStudy ? "secondary" : "outline"}
-                    className={rowClass}
-                    disabled={busyId === item.id || !item.studies?.url_params}
-                  >
-                    {rowLabel}
-                    <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground shrink-0 ml-2">
-                      {status}
-                      <ChevronDown className="h-3 w-3" />
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="z-[80] min-w-[var(--radix-dropdown-menu-trigger-width)] w-max max-w-[min(22rem,calc(100vw-2rem))] border bg-white p-1 text-slate-900 shadow-md"
-                  onCloseAutoFocus={(event) => event.preventDefault()}
+              <div key={item.id} className="flex w-full">
+                <Button
+                  type="button"
+                  variant={fullStudy ? "secondary" : "outline"}
+                  className={cn(rowClass, "flex-1 rounded-r-none")}
+                  disabled={fullStudy || busyId === item.id || !item.studies?.url_params}
+                  onClick={() => openItem(item)}
                 >
+                  {rowLabel}
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground shrink-0 ml-2">
+                    {status}
+                  </span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={fullStudy ? "secondary" : "outline"}
+                      className={cn(
+                        "h-auto shrink-0 rounded-l-none border-l-0 px-2.5",
+                        current && "border-blue-500/40"
+                      )}
+                      disabled={busyId === item.id || !item.studies?.url_params}
+                      aria-label={`Choose series for ${playlistItemLabel(item)}`}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="z-[80] min-w-[16rem] w-max max-w-[min(22rem,calc(100vw-2rem))] border bg-white p-1 text-slate-900 shadow-md"
+                    onCloseAutoFocus={(event) => event.preventDefault()}
+                  >
                   {choices.map((choice) => {
                     const on = fullStudy || visible.has(choice.prefixKey) || !current;
                     return (
@@ -267,7 +265,8 @@ function PlaylistTab() {
                     );
                   })}
                 </DropdownMenuContent>
-              </DropdownMenu>
+                </DropdownMenu>
+              </div>
             );
           })
         ) : (
