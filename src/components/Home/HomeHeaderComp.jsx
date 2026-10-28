@@ -1,9 +1,8 @@
-import { ChevronRight, Search, X, Menu, PlayCircle } from "lucide-react"
+import { ChevronRight, Search, X, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useContext, useState } from "react"
 import { UserContext } from "../../context/UserContext"
 import { Input } from "@/components/ui/input"
-import { getDemoCaseHref } from "../../lib/demoCase"
 import { cn } from "@/lib/utils"
 import JoinSessionForm from "./JoinSessionForm"
 
@@ -84,20 +83,11 @@ function HomeHeaderComp({ setSearch, setMobileMenuOpen, showMenuButton = false, 
 
             <div className="flex items-center gap-2 shrink-0">
                 {showJoin ? <JoinSessionForm variant="header" /> : null}
-                <Button
-                    asChild
-                    className="h-8 bg-white text-slate-950 hover:bg-blue-50 text-xs font-semibold px-3"
-                >
-                    <a href={getDemoCaseHref()}>
-                        <PlayCircle className="h-4 w-4 mr-1.5" />
-                        Demo
-                    </a>
-                </Button>
                 {!userData?.is_anonymous ?
                     <Button variant="ghost" className="text-xs font-medium text-slate-400 hover:text-slate-100 border border-slate-800" onClick={logOut}>Log Out</Button>
                     :
                     <Dialog open={dialogIsOpen} onOpenChange={setDialogIsOpen}>
-                        <Button variant="ghost" className="text-xs font-medium text-slate-400 hover:text-slate-100 border border-slate-800" onClick={() => setDialogIsOpen(true)}>Login</Button>
+                        <Button className="h-8 bg-white text-slate-950 hover:bg-slate-100 text-xs font-semibold px-3" onClick={() => setDialogIsOpen(true)}>Login</Button>
                         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100">
                             <DialogPage />
                         </DialogContent>
