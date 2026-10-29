@@ -18,6 +18,7 @@ import {
     DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { WINDOW_PRESETS, applyWindowPreset, presetFromDigitKey, resetViewportsToSaved } from "../lib/windowPresets.js";
+import { isMobileViewer } from "./ToolCheatsheet.jsx";
 
 
 function Tools() {
@@ -45,8 +46,7 @@ function Tools() {
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
 
-    const userAgent = typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
-    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const mobile = isMobileViewer();
 
     const closeMobileMenu = () => {
         if (mobile) setModelDropdown(false);

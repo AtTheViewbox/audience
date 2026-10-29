@@ -20,6 +20,7 @@ import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
 import AnnotationTab from "./AnnotationTab.jsx";
 import PlaylistTab from "./PlaylistTab.jsx";
+import ToolCheatsheet from "./ToolCheatsheet.jsx";
 import { DataContext } from "../context/DataContext.jsx";
 
 export const AuthMode = {
@@ -65,12 +66,13 @@ function DialogPage({ open = true }) {
         ? "Reset password"
         : "Login";
 
-  const tabCount = [canShare, showLogin, canAnnotate, showPlaylist, true].filter(Boolean).length;
+  const tabCount = [canShare, showLogin, canAnnotate, showPlaylist, true, true].filter(Boolean).length;
   const tabsClass = {
     2: "grid-cols-2",
     3: "grid-cols-3",
     4: "grid-cols-4",
     5: "grid-cols-5",
+    6: "grid-cols-6",
   }[tabCount] || "grid-cols-3";
 
   return (
@@ -92,6 +94,7 @@ function DialogPage({ open = true }) {
         <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>
           {canShare && <TabsTrigger value="sharing">Share</TabsTrigger>}
           {showPlaylist && <TabsTrigger value="playlist">Studies</TabsTrigger>}
+          <TabsTrigger value="controls">Controls</TabsTrigger>
           {showLogin && <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>}
           {canAnnotate && <TabsTrigger value="annotate">Questions</TabsTrigger>}
           <TabsTrigger value="setting">Setting</TabsTrigger>
@@ -108,6 +111,10 @@ function DialogPage({ open = true }) {
             <PlaylistTab />
           </TabsContent>
         )}
+
+        <TabsContent value="controls" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
+          <ToolCheatsheet />
+        </TabsContent>
 
         {showLogin && (
           <TabsContent value="login" className="mt-4 min-h-0 overflow-y-auto overscroll-contain">

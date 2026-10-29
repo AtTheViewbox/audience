@@ -142,11 +142,17 @@ export default function Viewport(props) {
       Enums: csToolsEnums,
     } = cornerstoneTools;
 
-    const { MouseBindings } = csToolsEnums;
+    const { MouseBindings, KeyboardBindings } = csToolsEnums;
     const toolGroupId = `${viewport_idx}-tl`;
 
     const toolGroup = ToolGroupManager.getToolGroup(toolGroupId);
     if (!toolGroup) return;
+
+    const bindShiftWindow = () => {
+      toolGroup.setToolActive(WindowLevelTool.toolName, {
+        bindings: [{ mouseButton: MouseBindings.Primary, modifierKey: KeyboardBindings.Shift }],
+      });
+    };
 
     const passiveAll = () => {
       toolGroup.setToolPassive(WindowLevelTool.toolName);
@@ -185,6 +191,8 @@ export default function Viewport(props) {
       }
     }
 
+    bindShiftWindow();
+
 
   }, [toolSelected, viewportReady, viewport_idx]);
 
@@ -203,7 +211,7 @@ export default function Viewport(props) {
       Enums: csToolsEnums,
     } = cornerstoneTools;
 
-    const { MouseBindings } = csToolsEnums;
+    const { MouseBindings, KeyboardBindings } = csToolsEnums;
     const toolGroupId = `${viewport_idx}-tl`;
 
     // Only create if it doesn't exist
@@ -230,7 +238,9 @@ export default function Viewport(props) {
         // StackScrollMouseWheelTool intentionally NOT added — we handle
         // wheel events ourselves to gate scrolling to cached-only images
         // and prevent Cornerstone's on-demand loader from triggering.
-        toolGroup.setToolActive(WindowLevelTool.toolName);
+        toolGroup.setToolActive(WindowLevelTool.toolName, {
+          bindings: [{ mouseButton: MouseBindings.Primary, modifierKey: KeyboardBindings.Shift }],
+        });
         toolGroup.setToolActive(PanTool.toolName, { bindings: [{ mouseButton: MouseBindings.Auxiliary }], });
         toolGroup.setToolActive(ZoomTool.toolName, { bindings: [{ mouseButton: MouseBindings.Secondary }], });
         toolGroup.setToolActive(StackScrollTool.toolName);
