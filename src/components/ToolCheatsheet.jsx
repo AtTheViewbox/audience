@@ -30,7 +30,7 @@ const ROWS = [
     { icon: LocateFixed, name: "Share", both: "Lower-left button" },
 ];
 
-export default function ToolCheatsheet() {
+export default function ControlsCard() {
     return (
         <Card>
             <CardHeader className="p-4 pb-2">

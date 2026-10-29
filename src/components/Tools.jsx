@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair, SquareDashedMousePointer, Flame, RotateCcw } from "lucide-react";
+import { ZoomIn, Contrast, Move, ArrowDownUp, Bolt, Crosshair, SquareDashedMousePointer, Flame, RotateCcw, CircleHelp } from "lucide-react";
 import { DotFilledIcon } from "@radix-ui/react-icons";
 import { useEffect, useContext, useState } from "react";
 import { DataDispatchContext, DataContext } from '../context/DataContext.jsx';
@@ -18,7 +18,7 @@ import {
     DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { WINDOW_PRESETS, applyWindowPreset, presetFromDigitKey, resetViewportsToSaved } from "../lib/windowPresets.js";
-import { isMobileViewer } from "./ToolCheatsheet.jsx";
+import ControlsCard, { isMobileViewer } from "./ToolCheatsheet.jsx";
 
 
 function Tools() {
@@ -45,24 +45,23 @@ function Tools() {
 
     const [position, setPosition] = useState("scroll")
     const [modelDropdown, setModelDropdown] = useState(false)
+    const [mobilePanel, setMobilePanel] = useState(null)
 
     const mobile = isMobileViewer();
 
-    const closeMobileMenu = () => {
-        if (mobile) setModelDropdown(false);
-    }
+    const closeMenu = () => setModelDropdown(false);
 
     const selectTool = (value) => {
         setPosition(value)
         dispatch({ type: 'select_tool', payload: value })
-        closeMobileMenu()
+        closeMenu()
     }
 
     const selectPreset = (preset) => {
         setPosition("scroll");
         dispatch({ type: 'select_tool', payload: 'scroll' })
         applyWindowPreset(renderingEngine, preset.ww, preset.wc);
-        closeMobileMenu()
+        closeMenu()
     }
 
     // Sync local position state with global toolSelected state
@@ -96,9 +95,7 @@ function Tools() {
             setPosition("scroll");
             dispatch({ type: "select_tool", payload: "scroll" });
             applyWindowPreset(renderingEngine, preset.ww, preset.wc);
-            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-                setModelDropdown(false);
-            }
+            setModelDropdown(false);
         };
 
         window.addEventListener("keydown", onKeyDown);
@@ -108,10 +105,14 @@ function Tools() {
     const windowSelected = position === "window";
 
     return (
-        <DropdownMenu modal={false} open={mobile ? modelDropdown : true} onOpenChange={setModelDropdown}>
-            <DropdownMenuTrigger asChild style={mobile ? {} : { display: "none" }} >
+        <DropdownMenu modal={false} open={modelDropdown} onOpenChange={(open) => {
+            setModelDropdown(open);
+            if (!open) setMobilePanel(null);
+        }}>
+            <DropdownMenuTrigger asChild>
                 <Button
                     size={"icon"}
+                    aria-label="Tools"
                     style={{
                         backgroundColor: 'transparent',
                         position: 'fixed', left: '10px', top: '10px',
@@ -120,12 +121,51 @@ function Tools() {
                     <Bolt strokeWidth={0.75} />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56">
+            <DropdownMenuContent className={mobile
+                ? `max-h-[calc(100dvh-4rem)] overflow-y-auto ${mobilePanel === "controls" ? "w-[min(28rem,calc(100vw-1rem))]" : "w-56"}`
+                : "w-56"
+            }>
+                {mobile ? (
+                    <>
+                        <DropdownMenuItem
+                            onSelect={(e) => {
+                                e.preventDefault();
+                                setPosition("window");
+                                dispatch({ type: 'select_tool', payload: 'window' });
+                                setMobilePanel((panel) => panel === "window" ? null : "window");
+                            }}
+                            className="relative pl-8"
+                        >
+                            <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                {windowSelected ? <DotFilledIcon className="h-4 w-4 fill-current" /> : null}
+                            </span>
+                            <Contrast strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                            <span>&nbsp;Window/Level</span>
+                        </DropdownMenuItem>
+                        {mobilePanel === "window" && WINDOW_PRESETS.map((preset) => (
+                            <DropdownMenuItem
+                                key={preset.id}
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                    selectPreset(preset);
+                                }}
+                                className="justify-between gap-3 pl-8 focus:bg-accent focus:text-accent-foreground"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <span className="w-3 text-xs tabular-nums opacity-60">{preset.key}</span>
+                                    <span>{preset.label}</span>
+                                </span>
+                                <span className="text-xs tabular-nums opacity-60">
+                                    {preset.ww}/{preset.wc}
+                                </span>
+                            </DropdownMenuItem>
+                        ))}
+                    </>
+                ) : (
                 <DropdownMenuSub>
                     <DropdownMenuSubTrigger
                         className="text-white relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
                         onClick={() => {
-                            // Select Window/Level but keep menu open on mobile so presets stay reachable
                             setPosition("window");
                             dispatch({ type: 'select_tool', payload: 'window' });
                         }}
@@ -157,6 +197,7 @@ function Tools() {
                         ))}
                     </DropdownMenuSubContent>
                 </DropdownMenuSub>
+                )}
 
                 <DropdownMenuRadioGroup value={position} onValueChange={selectTool}>
                     <DropdownMenuRadioItem value="zoom">
@@ -192,7 +233,7 @@ function Tools() {
                         <DropdownMenuRadioItem value="heatmap" onClick={(e) => {
                             e.preventDefault();
                             dispatch({ type: 'toggle_heatmap' });
-                            closeMobileMenu();
+                            closeMenu();
                         }}>
                             <Flame strokeWidth={0.75} className="mr-2 h-4 w-4" />
                             <span>&nbsp;{heatmapVisible ? "Hide" : "Show"} Answer</span>
@@ -204,13 +245,39 @@ function Tools() {
                     onSelect={(e) => {
                         e.preventDefault();
                         resetViewportsToSaved(renderingEngine, vd || []);
-                        closeMobileMenu();
+                        closeMenu();
                     }}
                     className="relative pl-8"
                 >
                     <RotateCcw strokeWidth={0.75} className="mr-2 h-4 w-4" />
                     <span>&nbsp;Reset</span>
                 </DropdownMenuItem>
+
+                {mobile ? (
+                    <>
+                        <DropdownMenuItem
+                            onSelect={(e) => {
+                                e.preventDefault();
+                                setMobilePanel((panel) => panel === "controls" ? null : "controls");
+                            }}
+                            className="relative pl-8"
+                        >
+                            <CircleHelp strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                            <span>&nbsp;Controls</span>
+                        </DropdownMenuItem>
+                        {mobilePanel === "controls" && <ControlsCard />}
+                    </>
+                ) : (
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-white relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
+                        <CircleHelp strokeWidth={0.75} className="mr-2 h-4 w-4" />
+                        <span>&nbsp;Controls</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-[min(28rem,calc(100vw-2rem))] border-0 bg-transparent p-0 shadow-none">
+                        <ControlsCard />
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );
