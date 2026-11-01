@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState, useCallback } from "react";
-import { ClipboardList, X, ChevronDown } from "lucide-react";
+import { Pencil, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
@@ -90,14 +90,14 @@ function ParticipantAnswerOverlay() {
             : "bg-slate-950 border-slate-800 text-blue-400 hover:bg-slate-900"
         )}
       >
-        <ClipboardList className="h-4 w-4" />
+        <Pencil className="h-4 w-4" />
       </button>
 
       {open && (
         <div className={PANEL_SHELL}>
           <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-700">
             <span className="flex items-center gap-2 text-sm font-medium text-slate-100">
-              <ClipboardList className="h-4 w-4 text-blue-400" />
+              <Pencil className="h-4 w-4 text-blue-400" />
               Answer
             </span>
             <div className="flex items-center gap-0.5">

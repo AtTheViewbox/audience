@@ -5,7 +5,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Hand,
-  ClipboardList,
+  Pencil,
   Radio,
   QrCode,
   PlayCircle,
@@ -175,7 +175,7 @@ const STEPS = [
   },
   {
     id: "questions",
-    icon: <ClipboardList className="h-6 w-6" />,
+    icon: <Pencil className="h-6 w-6" />,
     title: "Ask and answer questions",
     description:
       "On your phone, tap the questions control in the top-right. Draw a box on the image when you answer, then submit.",

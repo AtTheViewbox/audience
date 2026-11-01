@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { BarChart3, X, CheckCircle2, MessageSquare, ListChecks } from "lucide-react";
+import { Pencil, X, CheckCircle2, MessageSquare, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { DataContext } from "../context/DataContext.jsx";
@@ -160,7 +160,7 @@ function OwnerResultsOverlay() {
             : "bg-slate-950 border-slate-800 text-emerald-400 hover:bg-slate-900"
         )}
       >
-        <BarChart3 className="h-4 w-4" />
+        <Pencil className="h-4 w-4" />
       </button>
 
       {open &&
@@ -169,7 +169,7 @@ function OwnerResultsOverlay() {
           <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-700">
             <div className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-sm font-medium text-slate-100">
-                <BarChart3 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <Pencil className="h-4 w-4 text-emerald-400 shrink-0" />
                 <span className="truncate">
                   {revealed ? "Answers & distribution" : "Questions"}
                 </span>
