@@ -787,7 +787,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             open={!!shareSeries}
             onOpenChange={(open) => { if (!open) setShareSeries(null); }}
             title="Share this series"
-            description="Enter their account email. A copy is added to their viewbox, and the series is added to their builder."
+            description="Enter their account email. A copy is added to their studies, and the series is added to their builder."
             busy={sharingSeries}
             onSubmit={handleShareSeries}
         />

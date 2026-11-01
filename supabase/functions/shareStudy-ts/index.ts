@@ -114,7 +114,7 @@ async function sendShareEmail({
   const subject = `${sharerEmail} shared a ${kind} with you`;
   const text = [
     `${sharerEmail} shared “${title}” with you on AtTheViewBox.`,
-    "It is in your viewbox.",
+    "It is in your studies.",
     href,
   ].join("\n\n");
 

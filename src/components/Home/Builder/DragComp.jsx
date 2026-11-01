@@ -81,7 +81,7 @@ const DragComp = ({
                         <Share2
                             onClick={(e) => { e.stopPropagation(); onShareSeries(metadata); }}
                             className="hover:bg-accent rounded-sm cursor-pointer text-muted-foreground hover:text-foreground h-4 w-4"
-                            title="Share to a viewbox"
+                            title="Share to their studies"
                         />
                     )}
                     {(metadata.isDraft || metadata.folder_name) && (
@@ -117,7 +117,7 @@ const DragComp = ({
                     <div
                         className="bg-background/80 rounded-sm p-1 hover:bg-accent cursor-pointer border"
                         onClick={(e) => { e.stopPropagation(); onShareSeries(metadata); }}
-                        title="Share to a viewbox"
+                        title="Share to their studies"
                     >
                         <Share2 size={14} className="text-muted-foreground"/>
                     </div>

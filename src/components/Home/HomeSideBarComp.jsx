@@ -118,7 +118,7 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                             : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
                                     )}>
                                     <Monitor className="mr-2.5 h-4 w-4 shrink-0" />
-                                    <span className="truncate">Your Viewbox</span>
+                                    <span className="truncate">Studies</span>
                                 </Button>
 
                                 <Button

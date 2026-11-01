@@ -78,7 +78,7 @@ function StudyPicker({ studies, addedIds, query, onQuery, onAdd }) {
             </p>
           )
         ) : (
-          <p className="text-xs text-slate-500 p-3">Save some studies in Your Viewbox first.</p>
+          <p className="text-xs text-slate-500 p-3">Save some studies first.</p>
         )}
       </div>
     </div>
@@ -889,7 +889,7 @@ export default function PlaylistsPage({ search = "" }) {
         open={!!sharePlaylist}
         onOpenChange={(open) => { if (!open) setSharePlaylist(null); }}
         title="Share this case"
-        description="Enter their account email. Each study is copied into their viewbox, and the case is added to their Cases list."
+        description="Enter their account email. Each study is copied into their studies, and the case is added to their Cases list."
         busy={emailSharing}
         onSubmit={handleShareCase}
       />

@@ -608,14 +608,14 @@ export default function HomePage() {
                                   value={editName}
                                   onChange={e => setEditName(e.target.value)}
                                   className="font-bold text-lg h-9 bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
-                                  placeholder="Viewbox Name"
+                                  placeholder="Study name"
                                 />
                                 <div className="flex items-center space-x-2 mt-2">
                                   <Switch
                                     checked={editVisibility === "PUBLIC"}
                                     onCheckedChange={(checked) => setEditVisibility(checked ? "PUBLIC" : "PRIVATE")}
                                   />
-                                  <Label className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Public Viewbox</Label>
+                                  <Label className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Public study</Label>
                                 </div>
                               </div>
                             ) : (
@@ -750,7 +750,7 @@ export default function HomePage() {
         open={!!shareTarget}
         onOpenChange={(open) => { if (!open) setShareTarget(null); }}
         title="Share this study"
-        description="Enter their account email. A private copy, including your questions, is added to their viewbox."
+        description="Enter their account email. A private copy, including your questions, is added to their studies."
         busy={sharing}
         onSubmit={handleShareStudy}
       />

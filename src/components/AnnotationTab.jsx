@@ -561,7 +561,7 @@ function AnnotationTab() {
       <CardContent className="pt-3 space-y-3">
         {!linked && (
           <p className="text-xs text-muted-foreground">
-            Link this case via the viewer URL (vd.*) or save it in Your Viewbox.
+            Link this case via the viewer URL (vd.*) or save it in Studies.
           </p>
         )}
 
