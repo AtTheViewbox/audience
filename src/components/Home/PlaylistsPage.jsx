@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UserContext } from "../../context/UserContext";
 import { Visibility } from "../../lib/constants";
+import MarkdownText from "../MarkdownText.jsx";
 import ShareByEmailDialog from "../ShareByEmailDialog.jsx";
 import { deliverShare } from "../../lib/shareByEmail.js";
 import {
@@ -641,9 +642,13 @@ export default function PlaylistsPage({ search = "" }) {
                 {selected.indication}
               </p>
             ) : null}
-            <p className="text-sm text-slate-300 whitespace-pre-wrap">
-              {selected.description || "No description provided."}
-            </p>
+            {selected.description ? (
+              <div className="text-slate-300">
+                <MarkdownText text={selected.description} />
+              </div>
+            ) : (
+              <p className="text-sm text-slate-300">No description provided.</p>
+            )}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Study order</h4>
               {selectedItems.length ? selectedItems.map((item, index) => (
@@ -764,9 +769,9 @@ export default function PlaylistsPage({ search = "" }) {
               <Textarea
                 value={draft.description}
                 onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Optional"
-                rows={2}
-                className="h-14 min-h-0 max-h-14 resize-none overflow-y-auto bg-slate-900/50 border-slate-800"
+                placeholder={"Markdown works here.\n**bold**, lists, and headings."}
+                rows={8}
+                className="h-40 max-h-64 min-h-40 resize-y overflow-y-auto bg-slate-900/50 border-slate-800"
               />
             </div>
             <div className="grid gap-2">

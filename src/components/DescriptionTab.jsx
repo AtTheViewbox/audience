@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import MarkdownText from "./MarkdownText.jsx";
 
 function DescriptionTab({ text }) {
   return (
@@ -7,7 +8,7 @@ function DescriptionTab({ text }) {
         <CardTitle>Description / learning point</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+        <MarkdownText text={text} />
       </CardContent>
     </Card>
   );
