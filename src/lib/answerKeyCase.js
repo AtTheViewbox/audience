@@ -11,6 +11,38 @@ export const CASE_ID_PARAM = "caseId";
 export const PLAYLIST_PARAM = "p";
 /** Secret token that lets anyone with the link open a private case playlist. */
 export const PLAYLIST_TOKEN_PARAM = "pt";
+/** Short numeric id in a share link, written as case:123456 so a browser can find it. */
+export const CASE_CODE_ALPHABET = "0123456789";
+export const CASE_CODE_LENGTH = 6;
+const CASE_CODE_PATTERN = `(?:^|&)case(?::|%3A)([${CASE_CODE_ALPHABET}]{${CASE_CODE_LENGTH}})(?=&|$)`;
+
+export function getCaseCodeFromSearch(search = typeof window !== "undefined" ? window.location.search : "") {
+  const match = extractSearchString(search).match(new RegExp(CASE_CODE_PATTERN, "i"));
+  return match ? match[1].toUpperCase() : null;
+}
+
+/** Drop case:XXXXXX so it does not change which study the viewer opens. */
+export function stripCaseCode(input) {
+  return extractSearchString(input)
+    .replace(new RegExp(CASE_CODE_PATTERN, "gi"), "")
+    .replace(/^&+/, "")
+    .replace(/&{2,}/g, "&")
+    .replace(/&$/, "");
+}
+
+export function caseCodeHref(code) {
+  const root = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const base = root.endsWith("/") ? root : `${root}/`;
+  return `${base}?case:${code}`;
+}
+
+export function withCaseCode(href, code) {
+  if (!code || getCaseCodeFromSearch(href)) return href;
+  const url = new URL(href, window.location.origin);
+  const query = url.search.startsWith("?") ? url.search.slice(1) : "";
+  url.search = `?case:${code}${query ? `&${query}` : ""}`;
+  return url.toString();
+}
 
 export function extractSearchString(urlOrParams) {
   if (!urlOrParams) return "";
@@ -46,7 +78,7 @@ export function normalizeUrlParams(input) {
   const raw = extractSearchString(input);
   if (!raw) return "";
 
-  const params = new URLSearchParams(raw);
+  const params = new URLSearchParams(stripCaseCode(raw));
   params.delete("s");
   params.delete("preview");
   params.delete("demo");
@@ -62,7 +94,7 @@ export function normalizeUrlParams(input) {
 
 /** Session / viewer URL: keeps case + playlist ids, drops join/preview flags. */
 export function sessionViewerUrlParams(input = typeof window !== "undefined" ? window.location.search : "") {
-  const params = new URLSearchParams(extractSearchString(input));
+  const params = new URLSearchParams(stripCaseCode(input));
   params.delete("s");
   params.delete("preview");
   params.delete("demo");

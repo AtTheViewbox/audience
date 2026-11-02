@@ -2,15 +2,17 @@ import { unflatten } from "flat";
 import * as cornerstoneTools from "@cornerstonejs/tools";
 import { recreateList } from "./inputParser.ts";
 import {
-  extractSearchString,
+  getCaseCodeFromSearch,
   getPlaylistIdFromSearch,
   resolveCaseUrlKey,
   sessionViewerUrlParams,
+  stripCaseCode,
+  withCaseCode,
 } from "./answerKeyCase.js";
 
 /** Same parse the viewer uses on first load, so a transfer can reuse it. */
 export function parseViewerSearch(search) {
-  const params = new URLSearchParams(extractSearchString(search));
+  const params = new URLSearchParams(stripCaseCode(search));
   const data = unflatten(Object.fromEntries(params));
   if (Array.isArray(data.vd)) {
     data.vd.forEach((vdItem) => {
@@ -44,11 +46,12 @@ export function replaceViewerUrl(href) {
  * swaps images, questions, and the URL in place.
  */
 export function applyViewerUrl(href, dispatch, { keepDialog = false } = {}) {
+  const nextHref = withCaseCode(href, getCaseCodeFromSearch());
   if (!dispatch) {
-    window.location.assign(href);
+    window.location.assign(nextHref);
     return;
   }
-  replaceViewerUrl(href);
+  replaceViewerUrl(nextHref);
   const search = window.location.search;
   const parsed = parseViewerSearch(search);
   if (!Array.isArray(parsed.vd) || parsed.vd.length === 0) return;

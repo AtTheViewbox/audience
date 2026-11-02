@@ -10,8 +10,8 @@ import defaultData from "./defaultData.jsx";
 import { cl } from './SupabaseClient.jsx';
 import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 import { resolveSeriesPrefix } from "../lib/seriesLink.js";
-import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, getPlaylistIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
-import { loadViewerDescription } from "../lib/playlist.js";
+import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, buildCaseViewerHref, getCaseCodeFromSearch, getPlaylistIdFromSearch, getPlaylistTokenFromSearch, stripCaseCode, withCaseCode } from "../lib/answerKeyCase.js";
+import { loadViewerDescription, resolveCaseCode } from "../lib/playlist.js";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { sameViewerSession, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
@@ -157,6 +157,33 @@ export const DataProvider = ({ children }) => {
     const { userData, supabaseClient } = useContext(UserContext).data;
 
     const [updateSession, setUpdateSession] = useState(null);
+
+    // A copied case link is only ?case:CODE. Open the real study and keep the
+    // id in the address bar so the browser can find case:CODE again.
+    useEffect(() => {
+        if (!supabaseClient) return;
+        const code = getCaseCodeFromSearch();
+        if (!code || stripCaseCode(window.location.search).includes("vd.")) return;
+        let cancelled = false;
+        resolveCaseCode(supabaseClient, code).then((row) => {
+            if (cancelled) return;
+            if (!row?.url_params || !row.id) {
+                dispatch({ type: "set_case_link_error", payload: "That case link is not active." });
+                return;
+            }
+            const href = withCaseCode(buildCaseViewerHref({
+                url_params: row.url_params,
+                studyId: row.study_id,
+                playlistId: row.id,
+                shareToken: row.share_token,
+            }), code);
+            window.location.replace(href);
+        }).catch((error) => {
+            console.error(error);
+            if (!cancelled) dispatch({ type: "set_case_link_error", payload: "Could not open that case link." });
+        });
+        return () => { cancelled = true; };
+    }, [supabaseClient]);
 
     // Tracks whether this user authors the active session. Kept in a ref so
     // realtime channel callbacks always see the latest value (ownership is
@@ -1043,7 +1070,7 @@ export const DataProvider = ({ children }) => {
             outgoing.cancel();
             pointerOutgoing.cancel();
         };
-    }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected, data.sessionId, data.sessionMeta.mode, data.sessionMeta.owner]);
+    }, [data.shareController, data.renderingEngine, data.sharingUser, userData, data.toolSelected, data.sessionId, data.sessionMeta.mode, data.sessionMeta.owner, data.ld, data.vd]);
 
 
     useEffect(() => {
@@ -1408,6 +1435,9 @@ export function dataReducer(data, action) {
             break;
         case 'set_host_answer_content':
             new_data = { ...data, hostAnswerContentAvailable: !!action.payload };
+            break;
+        case 'set_case_link_error':
+            new_data = { ...data, caseLinkError: action.payload || "" };
             break;
         case 'switch_viewer': {
             const next = action.payload || {};

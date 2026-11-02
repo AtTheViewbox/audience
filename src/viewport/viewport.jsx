@@ -11,6 +11,13 @@ import { voiRangeFromSavedWindow } from '../lib/windowPresets.js';
 import { getRemotePointer, subscribeRemotePointer } from '../lib/pointerStore.js';
 import { toast } from "sonner";
 
+function sameViewportStack(a, b) {
+  if (!a?.s?.length || !b?.s?.length) return false;
+  return a.s.length === b.s.length
+    && a.s[0] === b.s[0]
+    && a.s[a.s.length - 1] === b.s[b.s.length - 1];
+}
+
 function applySavedCamera(viewport, data) {
   if (!viewport || !data) return;
   const zoom = Number(data.z);
@@ -771,108 +778,82 @@ export default function Viewport(props) {
   }, [viewportReady, dispatch, toolSelected, sharingUser, userData, ld, fullscreenViewport, viewport_idx]);
 
 
-  // Ref to track previous data to prevent unnecessary reloads
+  // Ref to track previous data so window and slice updates skip a reload
   const prevDataRef = useRef(null);
+  const stackKey = viewport_data?.s?.length
+    ? `${viewport_data.s.length}|${viewport_data.s[0]}|${viewport_data.s[viewport_data.s.length - 1]}`
+    : "";
+
+  // Reload only when this viewport's images change. A series added beside it
+  // replaces the viewport data object, and a cleanup tied to that object was
+  // removing the wheel handler from the series that stayed on screen.
+  useEffect(() => {
+    if (!stackKey || !viewport_data) return undefined;
+    let cancelled = false;
+    let detach;
+    setViewportReady(false);
+    loadImagesAndDisplay().then((next) => {
+      if (cancelled) {
+        next?.();
+        return;
+      }
+      detach = next;
+      prevDataRef.current = viewport_data;
+    });
+    return () => {
+      cancelled = true;
+      detach?.();
+    };
+    // stackKey already identifies the image list this load closes over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stackKey, rendering_engine, viewport_idx]);
 
   useEffect(() => {
-    let cleanup;
-    // Only load if data exists
-    if (viewport_data) {
-      const prev = prevDataRef.current;
-      // Compare stack by first URL string (not reference) — reducer spreads create new array refs
-      const prevFirstUrl = prev?.s?.[0];
-      const newFirstUrl = viewport_data?.s?.[0];
-      const prevLastUrl = prev?.s?.[prev.s.length - 1];
-      const newLastUrl = viewport_data?.s?.[viewport_data.s.length - 1];
-      const isStackSame = Boolean(
-        prev?.s?.length
-        && viewport_data?.s?.length
-        && prevFirstUrl === newFirstUrl
-        && prev.s.length === viewport_data.s.length
-        && prevLastUrl === newLastUrl
-      );
-      const isWindowSame = prev && prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
-      const isCiChanged = prev && prev.ci !== viewport_data.ci;
-      const isCameraChanged = prev && (
-        prev.z !== viewport_data.z ||
-        prev.px !== viewport_data.px ||
-        prev.py !== viewport_data.py
-      );
+    if (!viewport_data || !viewportReady) return;
+    const prev = prevDataRef.current;
+    if (!sameViewportStack(prev, viewport_data)) return;
 
-      // Guard: If nothing relevant changed, do nothing
-      if (prev && isStackSame && isWindowSame && !isCiChanged && viewportReady) {
-        if (isCameraChanged) {
-          const viewportId = `${viewport_idx}-vp`;
-          const viewport = rendering_engine.getViewport(viewportId);
-          applySavedCamera(viewport, viewport_data);
-          viewport?.render();
-        }
-        prevDataRef.current = viewport_data;
-        return;
-      }
+    const isWindowSame = prev.ww === viewport_data.ww && prev.wc === viewport_data.wc;
+    const isCiChanged = prev.ci !== viewport_data.ci;
+    const isCameraChanged = prev.z !== viewport_data.z || prev.px !== viewport_data.px || prev.py !== viewport_data.py;
+    if (isWindowSame && !isCiChanged && !isCameraChanged) return;
 
-      // Smart Update: If stack is same, apply slice and/or windowing changes without a full reload
-      if (isStackSame && viewportReady) {
-        const viewportId = `${viewport_idx}-vp`;
-        const viewport = rendering_engine.getViewport(viewportId);
+    const viewport = rendering_engine.getViewport(`${viewport_idx}-vp`);
+    if (!viewport) return;
 
-        if (viewport) {
-          // 1. Handle Windowing Changes
-          if (!isWindowSame) {
-            const { ww, wc } = viewport_data;
-            const imageId = viewport.getCurrentImageId?.();
-            const image = imageId ? cornerstone.cache.getImage(imageId) : null;
-            const newRange =
-              voiRangeFromSavedWindow(ww, wc, image) ||
-              cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
-            viewport.setProperties({
-              voiRange: newRange,
-              isComputedVOI: false,
-            });
-            // Keep voiRef in sync so the IMAGE_RENDERED safety net
-            // doesn't revert shared windowing changes.
-            voiRef.current = newRange;
-          }
-
-          // 2. Handle Slice (CI) Changes
-          if (isCiChanged) {
-            const targetNumber = parseInt(viewport_data.ci, 10);
-            if (!isNaN(targetNumber)) {
-              const getNumber = (str) => {
-                const match = str.match(/(\d+)(?!.*\d)/);
-                return match ? parseInt(match[0], 10) : null;
-              };
-              const foundIndex = viewport_data.s.findIndex(url => getNumber(url) === targetNumber);
-              const currentIndex = viewport.getCurrentImageIdIndex();
-
-              if (foundIndex !== -1 && foundIndex !== currentIndex) {
-                // Monkeypatch on setImageIdIndex handles loaded-image gating
-                viewport.setImageIdIndex(foundIndex);
-              }
-            }
-          }
-
-          if (isCameraChanged) {
-            applySavedCamera(viewport, viewport_data);
-          }
-
-          // 3. Final render if anything changed
-          if (!isWindowSame || isCiChanged || isCameraChanged) {
-            viewport.render();
-          }
-        }
-
-        prevDataRef.current = viewport_data;
-        return;
-      }
-
-      // Full Reload
-      setViewportReady(false);
-      loadImagesAndDisplay().then(c => { cleanup = c; });
-      prevDataRef.current = viewport_data;
+    if (!isWindowSame) {
+      const { ww, wc } = viewport_data;
+      const imageId = viewport.getCurrentImageId?.();
+      const image = imageId ? cornerstone.cache.getImage(imageId) : null;
+      const newRange =
+        voiRangeFromSavedWindow(ww, wc, image) ||
+        cornerstone.utilities.windowLevel.toLowHighRange(ww, wc);
+      viewport.setProperties({
+        voiRange: newRange,
+        isComputedVOI: false,
+      });
+      voiRef.current = newRange;
     }
-    return () => cleanup?.();
-  }, [viewport_data, rendering_engine, viewport_idx, dispatch]);
+
+    if (isCiChanged) {
+      const targetNumber = parseInt(viewport_data.ci, 10);
+      if (!isNaN(targetNumber)) {
+        const getNumber = (str) => {
+          const match = str.match(/(\d+)(?!.*\d)/);
+          return match ? parseInt(match[0], 10) : null;
+        };
+        const foundIndex = viewport_data.s.findIndex((url) => getNumber(url) === targetNumber);
+        const currentIndex = viewport.getCurrentImageIdIndex();
+        if (foundIndex !== -1 && foundIndex !== currentIndex) {
+          viewport.setImageIdIndex(foundIndex);
+        }
+      }
+    }
+
+    if (isCameraChanged) applySavedCamera(viewport, viewport_data);
+    if (!isWindowSame || isCiChanged || isCameraChanged) viewport.render();
+    prevDataRef.current = viewport_data;
+  }, [viewport_data, viewportReady, rendering_engine, viewport_idx]);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Segmented Progress Bar (from Remote Staging) */}

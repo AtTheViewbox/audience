@@ -1,5 +1,10 @@
 import { Visibility } from "./constants.js";
-import { buildCaseViewerHref, extractSearchString } from "./answerKeyCase.js";
+import {
+  buildCaseViewerHref,
+  CASE_CODE_ALPHABET,
+  CASE_CODE_LENGTH,
+  extractSearchString,
+} from "./answerKeyCase.js";
 
 const PLAYLIST_ITEM_SELECT =
   "id, sort_order, label, study_id, studies ( id, name, description, url_params, visibility )";
@@ -18,7 +23,7 @@ export async function fetchPlaylists(supabaseClient, ownerId) {
   if (!supabaseClient || !ownerId) return [];
   const { data, error } = await supabaseClient
     .from("playlists")
-    .select(`id, name, description, indication, visibility, created_at, share_token, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
+    .select(`id, name, description, indication, visibility, created_at, share_token, share_code, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
     .eq("owner", ownerId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -75,6 +80,12 @@ export async function fetchSharedPlaylist(supabaseClient, playlistId, token) {
   return data?.playlist ?? null;
 }
 
+function generateCaseCode() {
+  const bytes = new Uint8Array(CASE_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => CASE_CODE_ALPHABET[byte % CASE_CODE_ALPHABET.length]).join("");
+}
+
 /** Returns the case's share token, creating one if the case has none yet. */
 export async function ensurePlaylistShareToken(supabaseClient, playlist, { rotate = false } = {}) {
   if (!rotate && playlist?.share_token) return playlist.share_token;
@@ -87,10 +98,36 @@ export async function ensurePlaylistShareToken(supabaseClient, playlist, { rotat
   return token;
 }
 
+/** The short case:XXXXXX id. Created with the share link and reused until it is rotated. */
+export async function ensurePlaylistShareCode(supabaseClient, playlist, { rotate = false } = {}) {
+  const token = await ensurePlaylistShareToken(supabaseClient, playlist, { rotate });
+  if (!rotate && playlist?.share_code) return { token, code: playlist.share_code };
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const code = generateCaseCode();
+    const { error } = await supabaseClient
+      .from("playlists")
+      .update({ share_code: code })
+      .eq("id", playlist.id);
+    if (!error) return { token, code };
+    lastError = error;
+    if (error.code !== "23505") throw error;
+  }
+  throw lastError || new Error("Could not create a case id");
+}
+
+export async function resolveCaseCode(supabaseClient, code) {
+  if (!supabaseClient || !code) return null;
+  const { data, error } = await supabaseClient.rpc("resolve_case_code", { code });
+  if (error) throw error;
+  return data ?? null;
+}
+
 export async function disablePlaylistShareToken(supabaseClient, playlistId) {
   const { error } = await supabaseClient
     .from("playlists")
-    .update({ share_token: null })
+    .update({ share_token: null, share_code: null })
     .eq("id", playlistId);
   if (error) throw error;
 }

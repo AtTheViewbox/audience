@@ -95,7 +95,7 @@ function pairedPlacement(count, portrait) {
 }
 
 export default function Layout() {
-  const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport } = useContext(DataContext).data;
+  const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport, caseLinkError } = useContext(DataContext).data;
   const portrait = usePortraitScreen();
 
   useEffect(() => {
@@ -137,6 +137,14 @@ export default function Layout() {
   }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport, portrait]);
 
   // Guard: ld is undefined while session data is being fetched — return early before destructuring
+  if (caseLinkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black px-6 text-center text-white">
+        <p className="text-lg">{caseLinkError}</p>
+      </div>
+    );
+  }
+
   if (isRequestLoading || !ld) {
     return <LoadingPage />;
   }

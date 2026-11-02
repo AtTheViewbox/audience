@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UserContext } from "../../context/UserContext";
 import { Visibility } from "../../lib/constants";
+import { caseCodeHref } from "../../lib/answerKeyCase.js";
 import MarkdownText from "../MarkdownText.jsx";
 import ShareByEmailDialog from "../ShareByEmailDialog.jsx";
 import { deliverShare } from "../../lib/shareByEmail.js";
@@ -24,7 +25,7 @@ import {
   createPlaylist,
   deletePlaylist,
   disablePlaylistShareToken,
-  ensurePlaylistShareToken,
+  ensurePlaylistShareCode,
   fetchPlaylists,
   playlistItemLabel,
   playlistLaunchHref,
@@ -283,9 +284,11 @@ export default function PlaylistsPage({ search = "" }) {
 
   const studyById = useMemo(() => new Map(studies.map((study) => [String(study.id), study])), [studies]);
 
-  function setShareToken(playlistId, token) {
+  function setShareToken(playlistId, token, code = undefined) {
     const next = playlistsRef.current.map((row) =>
-      row.id === playlistId ? { ...row, share_token: token } : row
+      row.id === playlistId
+        ? { ...row, share_token: token, ...(code !== undefined ? { share_code: code } : {}) }
+        : row
     );
     playlistsRef.current = next;
     setPlaylists(next);
@@ -299,9 +302,9 @@ export default function PlaylistsPage({ search = "" }) {
     }
     setShareBusy(true);
     try {
-      const token = await ensurePlaylistShareToken(supabaseClient, playlist, { rotate });
-      setShareToken(playlist.id, token);
-      await navigator.clipboard.writeText(playlistLaunchHref(playlist, null, token));
+      const { token, code } = await ensurePlaylistShareCode(supabaseClient, playlist, { rotate });
+      setShareToken(playlist.id, token, code);
+      await navigator.clipboard.writeText(caseCodeHref(code));
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
       toast.success(rotate ? "New link copied. The old link no longer works." : "Share link copied");
@@ -337,7 +340,7 @@ export default function PlaylistsPage({ search = "" }) {
     setShareBusy(true);
     try {
       await disablePlaylistShareToken(supabaseClient, playlist.id);
-      setShareToken(playlist.id, null);
+      setShareToken(playlist.id, null, null);
       toast.success("Share link turned off");
     } catch (error) {
       console.error(error);
@@ -707,6 +710,9 @@ export default function PlaylistsPage({ search = "" }) {
                 <p className="mt-1 text-[11px] text-slate-500">
                   Anyone with this link can open every study in the case, even if the case is private.
                 </p>
+                {selected.share_code ? (
+                  <p className="mt-2 font-mono text-sm text-slate-200">case:{selected.share_code}</p>
+                ) : null}
               </div>
               <Button
                 variant="secondary"
