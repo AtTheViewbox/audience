@@ -18,7 +18,7 @@ export async function fetchPlaylists(supabaseClient, ownerId) {
   if (!supabaseClient || !ownerId) return [];
   const { data, error } = await supabaseClient
     .from("playlists")
-    .select(`id, name, description, visibility, created_at, share_token, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
+    .select(`id, name, description, indication, visibility, created_at, share_token, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
     .eq("owner", ownerId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -29,11 +29,55 @@ export async function fetchPlaylist(supabaseClient, playlistId) {
   if (!supabaseClient || !playlistId) return null;
   const { data, error } = await supabaseClient
     .from("playlists")
-    .select(`id, name, description, visibility, owner, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
+    .select(`id, name, description, indication, visibility, owner, playlist_items ( ${PLAYLIST_ITEM_SELECT} )`)
     .eq("id", playlistId)
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
+}
+
+/** Case description, or the open study's description when the case has none. */
+export async function loadViewerDescription(supabaseClient, { playlist, playlistId, caseId, token } = {}) {
+  if (!supabaseClient) return { playlist: playlist || null, description: "" };
+  let loaded = playlist || null;
+  if (!loaded && playlistId) {
+    loaded = await loadViewerPlaylist(supabaseClient, playlistId, token);
+  }
+  let description = loaded?.description?.trim() || "";
+  if (!description && loaded) {
+    const current = sortedPlaylistItems(loaded).find(
+      (item) => item.study_id === caseId || item.studies?.id === caseId
+    );
+    description = current?.studies?.description?.trim() || "";
+  }
+  if (!description && caseId) {
+    const { data, error } = await supabaseClient
+      .from("studies")
+      .select("description")
+      .eq("id", caseId)
+      .maybeSingle();
+    if (!error && data) description = data.description?.trim() || "";
+  }
+  return { playlist: loaded, description };
+}
+
+/** Owner read, then the share link when the case or its studies are not visible. */
+export async function loadViewerPlaylist(supabaseClient, playlistId, token) {
+  if (!supabaseClient || !playlistId) return null;
+  let next = null;
+  try {
+    next = await fetchPlaylist(supabaseClient, playlistId);
+  } catch (error) {
+    console.error(error);
+  }
+  const incomplete =
+    !next?.playlist_items?.length ||
+    next.playlist_items.some((item) => !item.studies?.url_params);
+  if ((incomplete || !next?.description) && token) {
+    const shared = await fetchSharedPlaylist(supabaseClient, playlistId, token);
+    if (shared) next = shared;
+  }
+  return next;
 }
 
 /** Load a case through its secret share link (works for private cases). */
@@ -70,6 +114,7 @@ export async function createPlaylist(supabaseClient, {
   ownerId,
   name,
   description = "",
+  indication = "",
   visibility = Visibility.PRIVATE,
   items = [],
 }) {
@@ -79,6 +124,7 @@ export async function createPlaylist(supabaseClient, {
       owner: ownerId,
       name: name.trim(),
       description: description.trim() || null,
+      indication: indication.trim() || null,
       visibility,
     })
     .select("id")
@@ -91,12 +137,14 @@ export async function createPlaylist(supabaseClient, {
 export async function updatePlaylist(supabaseClient, playlistId, {
   name,
   description,
+  indication,
   visibility,
   items,
 }) {
   const patch = {};
   if (name != null) patch.name = name.trim();
   if (description !== undefined) patch.description = description?.trim() || null;
+  if (indication !== undefined) patch.indication = indication?.trim() || null;
   if (visibility) patch.visibility = visibility;
   if (Object.keys(patch).length) {
     const { error } = await supabaseClient.from("playlists").update(patch).eq("id", playlistId);

@@ -392,7 +392,7 @@ async function copyOwnedSeries(userClient, admin, userId: string, recipientId: s
 async function copyOwnedCase(userClient, admin, userId: string, recipientId: string, playlistId: string) {
   const { data: playlist, error } = await userClient
     .from("playlists")
-    .select("name, description, playlist_items ( study_id, sort_order, label )")
+    .select("name, description, indication, playlist_items ( study_id, sort_order, label )")
     .eq("id", playlistId)
     .eq("owner", userId)
     .maybeSingle();
@@ -437,6 +437,7 @@ async function copyOwnedCase(userClient, admin, userId: string, recipientId: str
         owner: recipientId,
         name: playlist.name,
         description: playlist.description ?? null,
+        indication: playlist.indication ?? null,
         visibility: "PRIVATE",
       })
       .select("id")

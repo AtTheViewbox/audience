@@ -1,7 +1,8 @@
 import { useState, useContext, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { UserContext } from "../context/UserContext";
 import { LoginDialog } from "../login/LoginDialog.jsx";
-import { isDemoMode } from "../lib/demoCase.js";
+import { isDemoMode, isJoinParticipant } from "../lib/demoCase.js";
 
 import {
   DialogDescription,
@@ -20,7 +21,10 @@ import ShareTab from "./ShareTab.jsx";
 import SettingTab from "./SettingTab.jsx";
 import AnnotationTab from "./AnnotationTab.jsx";
 import PlaylistTab from "./PlaylistTab.jsx";
+import DescriptionTab from "./DescriptionTab.jsx";
 import { DataContext } from "../context/DataContext.jsx";
+import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
+import { loadViewerDescription, sortedPlaylistItems } from "../lib/playlist.js";
 
 export const AuthMode = {
   LOGIN: "login",
@@ -29,7 +33,7 @@ export const AuthMode = {
 };
 
 function DialogPage({ open = true }) {
-  const { userData } = useContext(UserContext).data;
+  const { userData, supabaseClient } = useContext(UserContext).data;
   const viewer = useContext(DataContext)?.data;
   const playlistId = viewer?.playlistId;
   const sessionId = viewer?.sessionId;
@@ -37,10 +41,44 @@ function DialogPage({ open = true }) {
   const demoMode = isDemoMode();
   const canShare = !isAnonymous || demoMode;
   const canAnnotate = !isAnonymous || demoMode;
+  const location = useLocation();
   const showLogin = isAnonymous && !demoMode;
-  const showPlaylist = Boolean(playlistId) && !showLogin;
   const showSetting = !showLogin;
   const inSession = Boolean(sessionId);
+  const isParticipant = isJoinParticipant({
+    sessionId,
+    userId: userData?.id,
+    ownerId: viewer?.sessionMeta?.owner,
+    search: location.search,
+  });
+  const caseId = viewer?.studyId || getCaseIdFromSearch(location.search);
+  const [studyCount, setStudyCount] = useState(null);
+  const [description, setDescription] = useState(null);
+
+  useEffect(() => {
+    if (!supabaseClient) return;
+    let cancelled = false;
+    setDescription(null);
+    setStudyCount(null);
+    const token = getPlaylistTokenFromSearch(location.search);
+    (async () => {
+      const { playlist, description: text } = await loadViewerDescription(supabaseClient, {
+        playlistId,
+        caseId,
+        token,
+      });
+      if (cancelled) return;
+      setStudyCount(playlistId ? sortedPlaylistItems(playlist || {}).length : null);
+      setDescription(text);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseClient, playlistId, caseId, location.search]);
+
+  const showDescription = Boolean(description);
+
+  const showPlaylist = Boolean(playlistId) && !showLogin && studyCount > 1;
 
   const [authMode, setAuthMode] = useState(AuthMode.LOGIN);
 
@@ -55,9 +93,20 @@ function DialogPage({ open = true }) {
     }
     // Starting a session while this dialog is open should leave Share on screen.
     if (dialogWasOpen.current) return;
+    if (description == null) return;
+    if (playlistId && studyCount == null) return;
     dialogWasOpen.current = true;
-    setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
-  }, [open, showPlaylist, inSession, canShare]);
+    if (isParticipant && description) setTabValue("description");
+    else setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
+  }, [open, showPlaylist, inSession, canShare, playlistId, studyCount, description, isParticipant]);
+
+  useEffect(() => {
+    const playlistHidden = tabValue === "playlist" && !showPlaylist && !(playlistId && studyCount == null);
+    const descriptionHidden = tabValue === "description" && description === "";
+    if (playlistHidden || descriptionHidden) {
+      setTabValue(canShare ? "sharing" : "login");
+    }
+  }, [tabValue, showPlaylist, playlistId, studyCount, canShare, description]);
 
   const loginTabLabel =
     authMode === AuthMode.SIGN_UP
@@ -66,13 +115,15 @@ function DialogPage({ open = true }) {
         ? "Reset password"
         : "Login";
 
-  const tabCount = [canShare, showLogin, canAnnotate, showPlaylist, showSetting].filter(Boolean).length;
+  const tabCount = [canShare, showDescription, showLogin, canAnnotate, showPlaylist, showSetting].filter(Boolean).length;
   const tabsClass = {
     2: "grid-cols-2",
     3: "grid-cols-3",
     4: "grid-cols-4",
     5: "grid-cols-5",
+    6: "grid-cols-6",
   }[tabCount] || "grid-cols-3";
+  const tabTriggerClass = tabCount >= 5 ? "px-1 text-[11px] sm:px-2 sm:text-xs" : undefined;
 
   return (
     <>
@@ -92,11 +143,12 @@ function DialogPage({ open = true }) {
       >
         {tabCount > 1 && (
           <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>
-            {canShare && <TabsTrigger value="sharing">Share</TabsTrigger>}
-            {showPlaylist && <TabsTrigger value="playlist">Studies</TabsTrigger>}
-            {showLogin && <TabsTrigger value="login">{loginTabLabel}</TabsTrigger>}
-            {canAnnotate && <TabsTrigger value="annotate">Questions</TabsTrigger>}
-            {showSetting && <TabsTrigger value="setting">Setting</TabsTrigger>}
+            {canShare && <TabsTrigger value="sharing" className={tabTriggerClass}>Share</TabsTrigger>}
+            {showPlaylist && <TabsTrigger value="playlist" className={tabTriggerClass}>Studies</TabsTrigger>}
+            {showDescription && <TabsTrigger value="description" className={tabTriggerClass}>Description</TabsTrigger>}
+            {showLogin && <TabsTrigger value="login" className={tabTriggerClass}>{loginTabLabel}</TabsTrigger>}
+            {canAnnotate && <TabsTrigger value="annotate" className={tabTriggerClass}>Questions</TabsTrigger>}
+            {showSetting && <TabsTrigger value="setting" className={tabTriggerClass}>Setting</TabsTrigger>}
           </TabsList>
         )}
 
@@ -109,6 +161,12 @@ function DialogPage({ open = true }) {
         {showPlaylist && (
           <TabsContent value="playlist" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
             <PlaylistTab />
+          </TabsContent>
+        )}
+
+        {showDescription && (
+          <TabsContent value="description" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
+            <DescriptionTab text={description} />
           </TabsContent>
         )}
 

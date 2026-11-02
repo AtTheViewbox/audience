@@ -26,7 +26,7 @@ const VIEWER_STEPS = [
     {
         icon: <Radio className="h-6 w-6" />,
         title: "Share Your Session",
-        description: "Hosts: HOLD the white button (bottom-left) to share. If you joined as a participant, TAP it instead. It turns red while you are broadcasting.",
+        description: "Hosts: click the white button (bottom-left) to open settings, and hold it to share. Participants: hold the bottom-left button to view notes. It turns red while you are broadcasting.",
         arrow: "bottom-left",
     },
     {

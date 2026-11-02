@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const { data, error } = await admin
       .from("playlists")
       .select(
-        "id, name, description, playlist_items ( id, sort_order, label, study_id, studies ( id, name, description, url_params ) )",
+        "id, name, description, indication, playlist_items ( id, sort_order, label, study_id, studies ( id, name, description, indication, url_params ) )",
       )
       .eq("id", playlistId)
       .eq("share_token", token)

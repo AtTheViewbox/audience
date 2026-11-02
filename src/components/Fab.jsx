@@ -40,7 +40,7 @@ function Fab() {
 
   let { longPressProps } = useLongPress({
     accessibilityDescription: isParticipant
-      ? "Hold to open login and share settings"
+      ? "Hold to view notes"
       : "Hold to toggle sharing",
     onLongPress: () => {
       if (isParticipant) openDialog();

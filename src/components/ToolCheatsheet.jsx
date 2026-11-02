@@ -3,6 +3,7 @@ import {
     ArrowDownUp,
     Contrast,
     Crosshair,
+    FileText,
     LocateFixed,
     Maximize2,
     Monitor,
@@ -28,6 +29,7 @@ const ROWS = [
     { icon: Crosshair, name: "Pointer", both: "Hold while sharing" },
     { icon: Maximize2, name: "Fullscreen", desktop: "Double-click", mobile: "Double-tap" },
     { icon: LocateFixed, name: "Share", both: "Lower-left button" },
+    { icon: FileText, name: "Notes", both: "Hold lower-left button" },
 ];
 
 export default function ControlsCard() {

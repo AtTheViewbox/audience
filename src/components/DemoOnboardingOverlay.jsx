@@ -186,7 +186,7 @@ const STEPS = [
     icon: <Radio className="h-6 w-6" />,
     title: "Share your viewport live",
     description:
-      "On your phone, tap the white button to broadcast — it turns red while sharing. Look at the presenter screen: it mirrors your scroll, window, and pointer. Long-hold the image to display the pointer.",
+      "On your phone, tap the white button to broadcast — it turns red while sharing. Hold the bottom-left button to view notes. Look at the presenter screen: it mirrors your scroll, window, and pointer. Long-hold the image to display the pointer.",
     arrow: "bottom-left",
   },
   {

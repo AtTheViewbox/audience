@@ -40,8 +40,8 @@ function StudyPicker({ studies, addedIds, query, onQuery, onAdd }) {
   });
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="relative shrink-0">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
         <Input
           value={query}
@@ -50,7 +50,7 @@ function StudyPicker({ studies, addedIds, query, onQuery, onAdd }) {
           className="pl-8 h-8 bg-slate-900/50 border-slate-800 text-sm"
         />
       </div>
-      <div className="max-h-48 overflow-y-auto rounded-md border border-slate-800">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-800">
         {studies.length ? (
           rows.length ? (
             rows.map((study) => (
@@ -90,6 +90,7 @@ function emptyDraft() {
     id: null,
     name: "",
     description: "",
+    indication: "",
     visibility: Visibility.PRIVATE,
     studyIds: [],
     labels: {},
@@ -106,6 +107,7 @@ function draftFromPlaylist(playlist) {
     id: playlist.id,
     name: playlist.name || "",
     description: playlist.description || "",
+    indication: playlist.indication || "",
     visibility: playlist.visibility || Visibility.PRIVATE,
     studyIds: items.map((item) => item.study_id),
     labels,
@@ -179,6 +181,7 @@ export default function PlaylistsPage({ search = "" }) {
       const hay = [
         playlist.name,
         playlist.description,
+        playlist.indication,
         ...sortedPlaylistItems(playlist).map(playlistItemLabel),
       ]
         .filter(Boolean)
@@ -357,6 +360,7 @@ export default function PlaylistsPage({ search = "" }) {
         await updatePlaylist(supabaseClient, draft.id, {
           name: draft.name,
           description: draft.description,
+          indication: draft.indication,
           visibility: draft.visibility,
           items,
         });
@@ -366,6 +370,7 @@ export default function PlaylistsPage({ search = "" }) {
           ownerId: userData.id,
           name: draft.name,
           description: draft.description,
+          indication: draft.indication,
           visibility: draft.visibility,
           items,
         });
@@ -478,7 +483,7 @@ export default function PlaylistsPage({ search = "" }) {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-100 truncate">{playlist.name}</p>
                           <p className="text-xs text-slate-500 truncate">
-                            {items.length} {items.length === 1 ? "study" : "studies"}{playlist.description ? ` · ${playlist.description}` : ""}
+                            {items.length} {items.length === 1 ? "study" : "studies"}
                           </p>
                         </div>
                         <span className={`justify-self-start text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
@@ -592,7 +597,7 @@ export default function PlaylistsPage({ search = "" }) {
                         {playlist.name}
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-400 line-clamp-2">
-                        {playlist.description || `${items.length} stud${items.length === 1 ? "y" : "ies"}`}
+                        {items.length} {items.length === 1 ? "study" : "studies"}
                       </CardDescription>
                     </CardHeader>
                     <CardFooter className="pt-2 text-xs text-muted-foreground">
@@ -630,6 +635,12 @@ export default function PlaylistsPage({ search = "" }) {
                 <Pencil className="h-4 w-4" />
               </Button>
             </div>
+            {selected.indication ? (
+              <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Indication / history</span>
+                {selected.indication}
+              </p>
+            ) : null}
             <p className="text-sm text-slate-300 whitespace-pre-wrap">
               {selected.description || "No description provided."}
             </p>
@@ -730,14 +741,15 @@ export default function PlaylistsPage({ search = "" }) {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="sm:max-w-3xl bg-slate-950 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] flex-col gap-3 overflow-hidden bg-slate-950 p-5 text-slate-100 sm:max-w-3xl border-slate-800">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{draft.id ? "Edit case" : "New case"}</DialogTitle>
             <DialogDescription className="text-slate-400">
-              Search your studies and add them to this case. The list below is the order in the viewer menu.
+              Add studies in viewer order.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div className="grid min-h-0 flex-1 gap-3 overflow-hidden">
+            <div className="grid shrink-0 gap-3">
             <div className="grid gap-2">
               <Label>Name</Label>
               <Input
@@ -753,10 +765,21 @@ export default function PlaylistsPage({ search = "" }) {
                 value={draft.description}
                 onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder="Optional"
-                className="bg-slate-900/50 border-slate-800 min-h-[80px]"
+                rows={2}
+                className="h-14 min-h-0 max-h-14 resize-none overflow-y-auto bg-slate-900/50 border-slate-800"
               />
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-slate-800 p-3">
+            <div className="grid gap-2">
+              <Label htmlFor="case-indication">Indication / history</Label>
+              <Input
+                id="case-indication"
+                value={draft.indication}
+                onChange={(e) => setDraft((prev) => ({ ...prev, indication: e.target.value }))}
+                placeholder="Shown in the viewer history panel"
+                className="bg-slate-900/50 border-slate-800"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
               <div>
                 <Label>Public case</Label>
                 <p className="text-xs text-slate-500">Others can see this playlist if the studies are public.</p>
@@ -771,9 +794,10 @@ export default function PlaylistsPage({ search = "" }) {
                 }
               />
             </div>
-            <div className="grid gap-4">
-              <div className="grid gap-2 min-w-0">
-                <Label>Add from your studies</Label>
+            </div>
+            <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 overflow-hidden md:grid-cols-2 md:grid-rows-1">
+              <div className="flex min-h-0 min-w-0 flex-col gap-2">
+                <Label className="shrink-0">Add from your studies</Label>
                 <StudyPicker
                   studies={studies}
                   addedIds={new Set(draft.studyIds.map(String))}
@@ -782,12 +806,12 @@ export default function PlaylistsPage({ search = "" }) {
                   onAdd={(studyId) => toggleStudy(studyId, true)}
                 />
               </div>
-              <div className="grid gap-2 min-w-0">
-                <div className="flex items-center justify-between gap-2">
+              <div className="flex min-h-0 min-w-0 flex-col gap-2">
+                <div className="flex shrink-0 items-center justify-between gap-2">
                   <Label>In this case</Label>
                   <span className="text-[11px] text-slate-500 tabular-nums">{draft.studyIds.length} added</span>
                 </div>
-                <div className="max-h-72 overflow-y-auto rounded-md border border-slate-800">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-800">
                   {draft.studyIds.length ? (
                     <ol className="p-2 space-y-2">
                       {draft.studyIds.map((studyId, index) => {
@@ -871,13 +895,13 @@ export default function PlaylistsPage({ search = "" }) {
                       })}
                     </ol>
                   ) : (
-                    <p className="text-xs text-slate-500 p-3">Nothing added yet. Search above and add a study. This list is the viewer order.</p>
+                    <p className="text-xs text-slate-500 p-3">Nothing added yet. Search your studies and add one.</p>
                   )}
                 </div>
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="ghost" onClick={() => setEditorOpen(false)}>Cancel</Button>
             <Button onClick={saveDraft} disabled={saving}>
               {saving ? "Saving…" : "Save case"}

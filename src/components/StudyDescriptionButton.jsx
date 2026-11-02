@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { DataContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
 import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
-import { fetchPlaylist, fetchSharedPlaylist, sortedPlaylistItems } from "../lib/playlist.js";
+import { fetchPlaylist, fetchSharedPlaylist } from "../lib/playlist.js";
 
 const PANEL =
   "dark fixed top-14 right-3 z-[120] w-[min(340px,calc(100vw-1.5rem))] max-h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-xl backdrop-blur-sm";
@@ -16,6 +16,7 @@ function StudyDescriptionButton() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const [isHistory, setIsHistory] = useState(false);
 
   const caseId = studyId || getCaseIdFromSearch(location.search);
 
@@ -29,8 +30,24 @@ function StudyDescriptionButton() {
     const token = getPlaylistTokenFromSearch(location.search);
 
     (async () => {
-      let description = "";
+      if (playlistId) {
+        let playlist = null;
+        try {
+          playlist = await fetchPlaylist(supabaseClient, playlistId);
+        } catch (error) {
+          console.error(error);
+        }
+        if (!playlist?.indication && token) {
+          playlist = await fetchSharedPlaylist(supabaseClient, playlistId, token);
+        }
+        if (!cancelled) {
+          setText(playlist?.indication?.trim() || "");
+          setIsHistory(true);
+        }
+        return;
+      }
 
+      let description = "";
       if (caseId) {
         const { data, error } = await supabaseClient
           .from("studies")
@@ -42,26 +59,10 @@ function StudyDescriptionButton() {
         }
       }
 
-      if (!description && playlistId) {
-        let playlist = null;
-        try {
-          playlist = await fetchPlaylist(supabaseClient, playlistId);
-        } catch (error) {
-          console.error(error);
-        }
-        if (!playlist && token) {
-          playlist = await fetchSharedPlaylist(supabaseClient, playlistId, token);
-        }
-        const current = sortedPlaylistItems(playlist || {}).find(
-          (item) => item.study_id === caseId || item.studies?.id === caseId
-        );
-        description =
-          current?.studies?.description?.trim() ||
-          playlist?.description?.trim() ||
-          "";
+      if (!cancelled) {
+        setText(description);
+        setIsHistory(false);
       }
-
-      if (!cancelled) setText(description);
     })();
 
     return () => {
@@ -71,13 +72,15 @@ function StudyDescriptionButton() {
 
   if (!text) return null;
 
+  const label = isHistory ? "History" : "Description";
+
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        title="Description"
-        aria-label="Description"
+        title={label}
+        aria-label={label}
         className={cn(
           "shrink-0 flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors",
           open
@@ -93,14 +96,14 @@ function StudyDescriptionButton() {
           <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-700">
             <span className="flex items-center gap-2 text-sm font-medium text-slate-100">
               <FileText className="h-4 w-4 text-blue-300 shrink-0" />
-              Description
+              {label}
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
               title="Close"
-              aria-label="Close description"
+              aria-label={`Close ${label.toLowerCase()}`}
             >
               <X className="h-4 w-4" />
             </button>
