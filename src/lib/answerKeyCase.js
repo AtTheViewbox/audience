@@ -21,6 +21,21 @@ export function getCaseCodeFromSearch(search = typeof window !== "undefined" ? w
   return match ? match[1].toUpperCase() : null;
 }
 
+/** A typed case id, either 123456 or case:123456. */
+export function caseCodeFromQuery(value) {
+  const text = String(value ?? "").trim();
+  const labeled = text.match(/^case:\s*([0-9]{6})$/i);
+  if (labeled) return labeled[1];
+  if (/^[0-9]{6}$/.test(text)) return text;
+  return null;
+}
+
+/** True while the search box is being used to look up a case id. */
+export function isCaseLookupQuery(value) {
+  const text = String(value ?? "").trim();
+  return /^case:/i.test(text) || /^[0-9]{1,6}$/.test(text);
+}
+
 /** Drop case:XXXXXX so it does not change which study the viewer opens. */
 export function stripCaseCode(input) {
   return extractSearchString(input)

@@ -25,10 +25,13 @@ function CaseNextArrow() {
     ownerId: sessionMeta?.owner,
     search: location.search,
   });
+  // A case link can be walked study by study with no live session. Someone
+  // who joined another person's session still follows that host.
+  const canStep = Boolean(playlistId) && (isLeader || !sessionId);
   const shareToken = getPlaylistTokenFromSearch(location.search);
 
   useEffect(() => {
-    if (!supabaseClient || !playlistId || !isLeader) {
+    if (!supabaseClient || !canStep) {
       setPlaylist(null);
       return;
     }
@@ -51,9 +54,9 @@ function CaseNextArrow() {
     return () => {
       cancelled = true;
     };
-  }, [supabaseClient, playlistId, isLeader, shareToken]);
+  }, [supabaseClient, canStep, playlistId, shareToken]);
 
-  if (!playlistId || !isLeader) return null;
+  if (!canStep) return null;
 
   const items = sortedPlaylistItems(playlist);
   const currentCaseId = getCaseIdFromSearch(location.search);
@@ -81,7 +84,7 @@ function CaseNextArrow() {
         item,
         playlistId,
         shareToken,
-        isHost: true,
+        isHost: isLeader,
         sessionId,
         userId: userData?.id,
         supabaseClient,
@@ -90,7 +93,7 @@ function CaseNextArrow() {
       });
     } catch (error) {
       console.error(error);
-      toast.error(error?.message || "Could not switch the session.");
+      toast.error(error?.message || (isLeader ? "Could not switch the session." : "Could not open that study."));
     } finally {
       setBusy(false);
     }

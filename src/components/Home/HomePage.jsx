@@ -391,6 +391,7 @@ export default function HomePage() {
             setMobileMenuOpen={setMobileMenuOpen}
             showMenuButton={filter === Filter.BUILDER}
             showJoin={filter === Filter.BUILDER}
+            searchPlaceholder={filter === Filter.PLAYLISTS ? "Search cases or case:123456" : "Search studies or case:123456"}
           />
 
           <div className="flex-1 flex overflow-hidden relative">

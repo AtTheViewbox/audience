@@ -185,10 +185,13 @@ export default function PlaylistsPage({ search = "" }) {
     const q = search.trim().toLowerCase();
     if (!q) return playlists;
     return playlists.filter((playlist) => {
+      const code = playlist.share_code || "";
       const hay = [
         playlist.name,
         playlist.description,
         playlist.indication,
+        code,
+        code && `case:${code}`,
         ...sortedPlaylistItems(playlist).map(playlistItemLabel),
       ]
         .filter(Boolean)
@@ -493,6 +496,7 @@ export default function PlaylistsPage({ search = "" }) {
                           <p className="text-sm font-medium text-slate-100 truncate">{playlist.name}</p>
                           <p className="text-xs text-slate-500 truncate">
                             {items.length} {items.length === 1 ? "study" : "studies"}
+                            {playlist.share_code ? ` · case:${playlist.share_code}` : ""}
                           </p>
                         </div>
                         <span className={`justify-self-start text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
@@ -607,6 +611,7 @@ export default function PlaylistsPage({ search = "" }) {
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-400 line-clamp-2">
                         {items.length} {items.length === 1 ? "study" : "studies"}
+                        {playlist.share_code ? ` · case:${playlist.share_code}` : ""}
                       </CardDescription>
                     </CardHeader>
                     <CardFooter className="pt-2 text-xs text-muted-foreground">
@@ -620,8 +625,12 @@ export default function PlaylistsPage({ search = "" }) {
         ) : (
           <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-8 text-center">
             <Layers className="h-8 w-8 mx-auto text-slate-500 mb-3" />
-            <p className="text-sm text-slate-300">No cases yet.</p>
-            <p className="text-xs text-slate-500 mt-1">Create one and add the XR, CT, or MR studies that belong together.</p>
+            <p className="text-sm text-slate-300">{search.trim() ? "No cases match that search." : "No cases yet."}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {search.trim()
+                ? "Try a case name or its case: number."
+                : "Create one and add the XR, CT, or MR studies that belong together."}
+            </p>
           </div>
         )}
       </div>
