@@ -36,29 +36,14 @@ export async function fetchPlaylist(supabaseClient, playlistId) {
   return data ?? null;
 }
 
-/** Case description, or the open study's description when the case has none. */
-export async function loadViewerDescription(supabaseClient, { playlist, playlistId, caseId, token } = {}) {
+/** The case description / learning point. Study descriptions are not shown in the viewer. */
+export async function loadViewerDescription(supabaseClient, { playlist, playlistId, token } = {}) {
   if (!supabaseClient) return { playlist: playlist || null, description: "" };
   let loaded = playlist || null;
   if (!loaded && playlistId) {
     loaded = await loadViewerPlaylist(supabaseClient, playlistId, token);
   }
-  let description = loaded?.description?.trim() || "";
-  if (!description && loaded) {
-    const current = sortedPlaylistItems(loaded).find(
-      (item) => item.study_id === caseId || item.studies?.id === caseId
-    );
-    description = current?.studies?.description?.trim() || "";
-  }
-  if (!description && caseId) {
-    const { data, error } = await supabaseClient
-      .from("studies")
-      .select("description")
-      .eq("id", caseId)
-      .maybeSingle();
-    if (!error && data) description = data.description?.trim() || "";
-  }
-  return { playlist: loaded, description };
+  return { playlist: loaded, description: loaded?.description?.trim() || "" };
 }
 
 /** Owner read, then the share link when the case or its studies are not visible. */

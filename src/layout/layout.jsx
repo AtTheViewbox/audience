@@ -1,5 +1,5 @@
 import "./layout.css";
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   DataContext,
 } from "../context/DataContext.jsx";
@@ -7,8 +7,33 @@ import Viewport from "../viewport/viewport.jsx";
 import { toast } from "sonner";
 import LoadingPage from "../components/LoadingPage.jsx";
 
+const PORTRAIT_QUERY = "(max-aspect-ratio: 1/1)";
+
+function usePortraitScreen() {
+  const [portrait, setPortrait] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(PORTRAIT_QUERY).matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia(PORTRAIT_QUERY);
+    const update = () => setPortrait(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return portrait;
+}
+
+/** A 3-by-2 grid is too wide on a tall phone. Show the same viewports as 2-by-3. */
+function gridForScreen(rows, cols, portrait) {
+  const r = Number(rows) || 1;
+  const c = Number(cols) || 1;
+  if (portrait && c === 3 && r === 2) return { r: 3, c: 2 };
+  return { r, c };
+}
+
 export default function Layout() {
   const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport } = useContext(DataContext).data;
+  const portrait = usePortraitScreen();
 
   useEffect(() => {
     var urlData = Object.fromEntries(new URLSearchParams(window.location.search));
@@ -39,14 +64,14 @@ export default function Layout() {
     if (renderingEngine && ld) {
       requestAnimationFrame(() => renderingEngine.resize(true));
     }
-  }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport]);
+  }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport, portrait]);
 
   // Guard: ld is undefined while session data is being fetched — return early before destructuring
   if (isRequestLoading || !ld) {
     return <LoadingPage />;
   }
 
-  const { r, c } = ld;
+  const { r, c } = gridForScreen(ld.r, ld.c, portrait);
   const isFullscreen = fullscreenViewport != null && r * c > 1;
 
   const isComparing = compareNormal?.active;

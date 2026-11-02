@@ -11,7 +11,7 @@ const PANEL =
   "dark fixed top-14 right-3 z-[120] w-[min(340px,calc(100vw-1.5rem))] max-h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-xl backdrop-blur-sm";
 
 function StudyDescriptionButton() {
-  const { studyId, playlistId } = useContext(DataContext).data;
+  const { studyId, playlistId, caseNotes } = useContext(DataContext).data;
   const { supabaseClient } = useContext(UserContext).data;
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -70,9 +70,13 @@ function StudyDescriptionButton() {
     };
   }, [supabaseClient, caseId, playlistId, location.search]);
 
-  if (!text) return null;
+  const shared = playlistId
+    ? (caseNotes?.indication || "").trim()
+    : (caseNotes?.description || "").trim();
+  const shown = text || shared;
+  if (!shown) return null;
 
-  const label = isHistory ? "History" : "Description";
+  const label = playlistId || isHistory ? "History" : "Description";
 
   return (
     <>
@@ -109,7 +113,7 @@ function StudyDescriptionButton() {
             </button>
           </div>
           <div className="min-h-0 overflow-y-auto overscroll-contain px-3.5 py-3">
-            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{text}</p>
+            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{shown}</p>
           </div>
         </div>
       )}

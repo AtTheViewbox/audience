@@ -10,7 +10,8 @@ import defaultData from "./defaultData.jsx";
 import { cl } from './SupabaseClient.jsx';
 import { UserContext, UserDispatchContext } from "./UserContext.jsx";
 import { resolveSeriesPrefix } from "../lib/seriesLink.js";
-import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, getPlaylistIdFromSearch } from "../lib/answerKeyCase.js";
+import { findStudyForViewer, findPacsbinStudyForViewer, resolveCaseUrlKey, caseKeyFromLink, buildAnnotationInsert, getPlaylistIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
+import { loadViewerDescription } from "../lib/playlist.js";
 import { resolveViewportIndex } from "../lib/answerKeyBoxes.js";
 import { fetchSessionSubmissions } from "../lib/sessionSubmissions.js";
 import { sameViewerSession, resolvePersistentDemoSession, resolveShareSession, VIEWBOX_SESSION_COLS } from "../lib/shareSession.js";
@@ -104,6 +105,7 @@ initialData.sessionMeta = { mode: "TEAM", owner: "", joinCode: "" }
 // Case identifiers shared by the author so participants can load questions even
 // when they can't resolve the case themselves (RLS / stale URL after transfer).
 initialData.sessionCaseLink = null;
+initialData.caseNotes = null;
 initialData.activeUsers = [];
 initialData.toolSelected = "scroll";
 // Which viewport is maximized to fill the layout (null = normal multi-viewport grid)
@@ -174,6 +176,7 @@ export const DataProvider = ({ children }) => {
     // a transfer. Sharing the author's ids lets participants fetch questions
     // directly (the series_annotations "select questions" policy is world-read).
     const caseLinkRef = useRef({ studyId: null, dicomSeriesId: null, caseUrlKey: null });
+    const caseNotesRef = useRef(null);
     useEffect(() => {
         caseLinkRef.current = {
             studyId: data.studyId || null,
@@ -197,6 +200,32 @@ export const DataProvider = ({ children }) => {
         if (!cl.studyId && !cl.dicomSeriesId && !cl.caseUrlKey) return;
         data.shareController.send({ type: 'broadcast', event: 'case-link', payload: cl });
     }, [data.shareController, data.sessionId, data.sessionMeta?.owner, userData?.id, data.studyId, data.dicomSeriesId, data.caseUrlKey]);
+
+    // Private case notes are not readable by other people in the session.
+    // The host publishes the case description so everyone can read it without an account.
+    useEffect(() => {
+        if (!data.shareController || !supabaseClient || !data.sessionId) return;
+        const presenter = isPresenter({
+            sessionId: data.sessionId,
+            userId: userData?.id,
+            ownerId: data.sessionMeta?.owner,
+        });
+        if (!presenter) return;
+        let cancelled = false;
+        caseNotesRef.current = null;
+        const token = getPlaylistTokenFromSearch(window.location.search);
+        loadViewerDescription(supabaseClient, {
+            playlistId: data.playlistId,
+            token,
+        }).then(({ description }) => {
+            if (cancelled) return;
+            const notes = { description: description || "" };
+            caseNotesRef.current = notes;
+            dispatch({ type: "set_case_notes", payload: notes });
+            data.shareController.send({ type: "broadcast", event: "case-notes", payload: notes });
+        }).catch((error) => console.error(error));
+        return () => { cancelled = true; };
+    }, [data.shareController, data.sessionId, data.sessionMeta?.owner, data.playlistId, supabaseClient, userData?.id]);
 
     // Load persisted submissions for this session+case so answers survive refresh
     // and are available to clients that join after others have submitted. Scoping
@@ -657,6 +686,11 @@ export const DataProvider = ({ children }) => {
                 dispatch({ type: 'set_session_case_link', payload });
             })
 
+            share_controller.on('broadcast', { event: 'case-notes' }, ({ payload }) => {
+                caseNotesRef.current = payload || null;
+                dispatch({ type: 'set_case_notes', payload });
+            })
+
             // Roster channel — Presence + broadcast for initial state sync
             // Workaround for Supabase bug #43561: presence_state never fires,
             // so we use broadcast to let existing users announce themselves to newcomers.
@@ -713,6 +747,10 @@ export const DataProvider = ({ children }) => {
                             if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
                                 share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
                             }
+                            const notes = caseNotesRef.current;
+                            if (notes && (notes.description || notes.indication)) {
+                                share_controller.send({ type: 'broadcast', event: 'case-notes', payload: notes });
+                            }
                         }
                     }
                 })
@@ -730,6 +768,10 @@ export const DataProvider = ({ children }) => {
                             const cl = caseLinkRef.current;
                             if (cl.studyId || cl.dicomSeriesId || cl.caseUrlKey) {
                                 share_controller.send({ type: 'broadcast', event: 'case-link', payload: cl });
+                            }
+                            const notes = caseNotesRef.current;
+                            if (notes && (notes.description || notes.indication)) {
+                                share_controller.send({ type: 'broadcast', event: 'case-notes', payload: notes });
                             }
                         }
                     }
@@ -1118,6 +1160,10 @@ export function dataReducer(data, action) {
             new_data = { ...data, sessionCaseLink: action.payload || null };
             break;
         }
+        case 'set_case_notes': {
+            new_data = { ...data, caseNotes: action.payload || null };
+            break;
+        }
         case 'roster_updated': {
             const list = (action.payload || []).map(u => ({
                 ...u,
@@ -1321,6 +1367,7 @@ export function dataReducer(data, action) {
                 m: next.m ?? data.m,
                 caseUrlParams: next.caseUrlParams ?? null,
                 playlistId: next.playlistId ?? null,
+                caseNotes: null,
                 caseUrlKey: next.caseUrlKey ?? null,
                 studyId: null,
                 studyName: null,

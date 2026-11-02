@@ -23,7 +23,7 @@ import AnnotationTab from "./AnnotationTab.jsx";
 import PlaylistTab from "./PlaylistTab.jsx";
 import DescriptionTab from "./DescriptionTab.jsx";
 import { DataContext } from "../context/DataContext.jsx";
-import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
+import { getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
 import { loadViewerDescription, sortedPlaylistItems } from "../lib/playlist.js";
 
 export const AuthMode = {
@@ -51,7 +51,6 @@ function DialogPage({ open = true }) {
     ownerId: viewer?.sessionMeta?.owner,
     search: location.search,
   });
-  const caseId = viewer?.studyId || getCaseIdFromSearch(location.search);
   const [studyCount, setStudyCount] = useState(null);
   const [description, setDescription] = useState(null);
 
@@ -64,7 +63,6 @@ function DialogPage({ open = true }) {
     (async () => {
       const { playlist, description: text } = await loadViewerDescription(supabaseClient, {
         playlistId,
-        caseId,
         token,
       });
       if (cancelled) return;
@@ -74,9 +72,11 @@ function DialogPage({ open = true }) {
     return () => {
       cancelled = true;
     };
-  }, [supabaseClient, playlistId, caseId, location.search]);
+  }, [supabaseClient, playlistId, location.search]);
 
-  const showDescription = Boolean(description);
+  const sessionDescription = viewer?.caseNotes?.description?.trim() || "";
+  const descriptionText = (description || sessionDescription || "").trim();
+  const showDescription = Boolean(descriptionText);
 
   const showPlaylist = Boolean(playlistId) && !showLogin && studyCount > 1;
 
@@ -85,28 +85,34 @@ function DialogPage({ open = true }) {
   const preferredTab = showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login";
   const [tabValue, setTabValue] = useState(preferredTab);
   const dialogWasOpen = useRef(false);
+  const appliedNotes = useRef(false);
 
   useEffect(() => {
     if (!open) {
       dialogWasOpen.current = false;
+      appliedNotes.current = false;
       return;
     }
     // Starting a session while this dialog is open should leave Share on screen.
-    if (dialogWasOpen.current) return;
-    if (description == null) return;
+    if (dialogWasOpen.current && !(isParticipant && descriptionText && !appliedNotes.current)) return;
+    if (description == null && !sessionDescription) return;
     if (playlistId && studyCount == null) return;
     dialogWasOpen.current = true;
-    if (isParticipant && description) setTabValue("description");
-    else setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
-  }, [open, showPlaylist, inSession, canShare, playlistId, studyCount, description, isParticipant]);
+    if (isParticipant && descriptionText) {
+      appliedNotes.current = true;
+      setTabValue("description");
+    } else if (!appliedNotes.current) {
+      setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
+    }
+  }, [open, showPlaylist, inSession, canShare, playlistId, studyCount, description, sessionDescription, descriptionText, isParticipant]);
 
   useEffect(() => {
     const playlistHidden = tabValue === "playlist" && !showPlaylist && !(playlistId && studyCount == null);
-    const descriptionHidden = tabValue === "description" && description === "";
+    const descriptionHidden = tabValue === "description" && !showDescription;
     if (playlistHidden || descriptionHidden) {
       setTabValue(canShare ? "sharing" : "login");
     }
-  }, [tabValue, showPlaylist, playlistId, studyCount, canShare, description]);
+  }, [tabValue, showPlaylist, playlistId, studyCount, canShare, showDescription]);
 
   const loginTabLabel =
     authMode === AuthMode.SIGN_UP
@@ -166,7 +172,7 @@ function DialogPage({ open = true }) {
 
         {showDescription && (
           <TabsContent value="description" className="mt-2 min-h-0 overflow-y-auto overscroll-contain">
-            <DescriptionTab text={description} />
+            <DescriptionTab text={descriptionText} />
           </TabsContent>
         )}
 

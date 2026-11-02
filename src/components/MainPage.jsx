@@ -15,7 +15,6 @@ import AnswerKeyBoxLoader from './AnswerKeyBoxLoader'
 import HeatmapOverlay from './HeatmapOverlay'
 import QuestionAnswerOverlay from './QuestionAnswerOverlay'
 import OwnerResultsOverlay from './OwnerResultsOverlay'
-import StudyDescriptionButton from './StudyDescriptionButton'
 import { Toaster } from 'sonner';
 import { useLocation } from "react-router-dom";
 import { useContext, useEffect, useState } from 'react';
@@ -94,7 +93,6 @@ function MainPage() {
           <div className="pointer-events-auto flex flex-row items-center gap-2">
             <AtlasOverlayMenu />
             {import.meta.env.BUILD_ENV !== 'main' && showMedGemma ? <MedGemmaButton /> : null}
-            <StudyDescriptionButton />
             <OwnerResultsOverlay />
             {demoMode ? <DemoOnboardingOverlay /> : null}
             <QuestionAnswerOverlay />
