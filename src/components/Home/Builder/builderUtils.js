@@ -1,4 +1,7 @@
 
+import { extractSearchString } from "../../../lib/answerKeyCase.js";
+import { seriesFolderKey, seriesPrefixKey } from "../../../lib/playlist.js";
+
 export const initalValues = {
     thumbnail: "",
     label: "",
@@ -243,6 +246,62 @@ export function buildLocalStack(metadata) {
 
 export function isPlacedOnGrid(metadata) {
     return metadata?.cord?.[0] !== -1 && metadata?.cord?.[1] !== -1;
+}
+
+function finiteNumber(value) {
+    if (value == null || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+/** Grid placement stored on a study, so it can be opened again in the builder. */
+export function layoutFromStudyUrl(urlParams) {
+    const params = new URLSearchParams(extractSearchString(urlParams));
+    const cols = Math.max(1, finiteNumber(params.get("ld.c")) || 1);
+    const rows = Math.max(1, finiteNumber(params.get("ld.r")) || 1);
+    const indexes = [];
+    for (const key of params.keys()) {
+        const match = /^vd\.(\d+)\.s\.pf$/.exec(key);
+        if (match) indexes.push(Number(match[1]));
+    }
+    const viewports = [...new Set(indexes)].sort((a, b) => a - b).map((index) => ({
+        index,
+        cord: [index % cols, Math.floor(index / cols)],
+        prefix: params.get(`vd.${index}.s.pf`) || "",
+        suffix: params.get(`vd.${index}.s.sf`) || "",
+        fileStart: params.get(`vd.${index}.s.s`),
+        fileEnd: params.get(`vd.${index}.s.e`),
+        ww: finiteNumber(params.get(`vd.${index}.ww`)),
+        wc: finiteNumber(params.get(`vd.${index}.wc`)),
+        ci: finiteNumber(params.get(`vd.${index}.ci`)),
+        z: finiteNumber(params.get(`vd.${index}.z`)),
+        px: params.get(`vd.${index}.px`),
+        py: params.get(`vd.${index}.py`),
+        r: finiteNumber(params.get(`vd.${index}.r`)),
+    }));
+    return { rows, cols, viewports };
+}
+
+export function seriesMatchesStudyPrefix(item, prefix) {
+    const folder = seriesFolderKey(prefix);
+    if (folder) {
+        if (item?.folder_name === folder) return true;
+        if (seriesFolderKey(item?.prefix) === folder) return true;
+        if (seriesFolderKey(item?.metadata?.prefix) === folder) return true;
+    }
+    const key = seriesPrefixKey(prefix);
+    if (!key) return false;
+    return seriesPrefixKey(item?.prefix) === key || seriesPrefixKey(item?.metadata?.prefix) === key;
+}
+
+/** Builder slice index from the file number written into a study URL. */
+export function sliceIndexFromFileNumber(fileValue, metadata) {
+    const file = Number(fileValue);
+    if (!Number.isFinite(file)) return null;
+    const step = Number(metadata?.step) > 0 ? Number(metadata.step) : 1;
+    const min = Number(metadata?.min_slice);
+    const base = Number.isFinite(min) ? min : 0;
+    return Math.round((file - base) / step);
 }
 
 export function findFirstEmptyCell(metaDataList, cols, rows) {

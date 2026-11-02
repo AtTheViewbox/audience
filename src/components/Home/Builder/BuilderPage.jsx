@@ -17,7 +17,7 @@ import DragComp from "./DragComp";
 import DropComp from "./DropComp";
 import PropertyPanel from "./PropertyPanel";
 import CustomDragLayer from "./CustomDragLayer";
-import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, findFirstEmptyCell, clampSliceRange } from "./builderUtils";
+import { generateGridURL, initalValues, hasDraftPlacedOnGrid, isPlacedOnGrid, findFirstEmptyCell, clampSliceRange, layoutFromStudyUrl, seriesMatchesStudyPrefix, sliceIndexFromFileNumber } from "./builderUtils";
 
 import { UserContext } from "../../../context/UserContext"
 import { UploaderComp } from "../UploaderComp"
@@ -62,7 +62,28 @@ const mapSeriesToMetaData = (seriesList) => {
 };
 
 
-const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
+const PLACED_FIELDS = ["cord", "start_slice", "end_slice", "ww", "wc", "ci", "z", "px", "py", "r", "excluded_slices", "suffix"];
+
+function withStudyViewport(item, viewport) {
+    const start = sliceIndexFromFileNumber(viewport.fileStart, item);
+    const end = sliceIndexFromFileNumber(viewport.fileEnd, item);
+    return {
+        ...item,
+        cord: viewport.cord,
+        suffix: viewport.suffix || item.suffix,
+        ...(viewport.ww != null ? { ww: viewport.ww } : {}),
+        ...(viewport.wc != null ? { wc: viewport.wc } : {}),
+        ...(viewport.ci != null ? { ci: viewport.ci } : {}),
+        ...(viewport.z != null ? { z: viewport.z } : {}),
+        ...(viewport.px != null ? { px: viewport.px } : {}),
+        ...(viewport.py != null ? { py: viewport.py } : {}),
+        ...(viewport.r != null ? { r: viewport.r } : {}),
+        ...(start != null ? { start_slice: start } : {}),
+        ...(end != null ? { end_slice: end } : {}),
+    };
+}
+
+const BuilderPage = ({ allSeries, filteredSeries, onStudySaved, editStudy = null, libraryReady = false }) => {
     // metaDataList Tracks ALL items available in the system + their grid state
     const [metaDataList, setMetaDataList] = useState([]);
     const metaDataListRef = useRef(metaDataList);
@@ -93,6 +114,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const [uploadProgress, setUploadProgress] = useState(null);
     const [propertyEditTick, setPropertyEditTick] = useState(0);
     const [phiVerified, setPhiVerified] = useState(false);
+    const appliedStudyId = useRef(null);
 
     useEffect(() => {
         initCornerstone();
@@ -381,6 +403,30 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             const parsedUrl = new URL(finalUrl);
             const searchParams = parsedUrl.search.substring(1);
 
+            if (editStudy?.id) {
+                const { data: updated, error } = await supabaseClient
+                    .from("studies")
+                    .update({
+                        name: caseName,
+                        description: caseDescription,
+                        url_params: searchParams,
+                        visibility: caseVisibility,
+                    })
+                    .eq("id", editStudy.id)
+                    .eq("owner", userData.id)
+                    .select("id")
+                    .maybeSingle();
+
+                if (error) throw error;
+                if (!updated) throw new Error("Could not update this study");
+
+                const caseHref = buildCaseViewerHref({ url_params: searchParams, studyId: updated.id });
+                setSavedUrl(caseHref);
+                toast.success("Study updated", { id: "builder-upload", duration: 4000 });
+                if (onStudySaved) onStudySaved();
+                return;
+            }
+
             const { data: inserted, error } = await supabaseClient
                 .from("studies")
                 .insert({
@@ -443,11 +489,68 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
             const existingById = new Map(prev.map((item) => [item.id, item]));
             const mapped = mapSeriesToMetaData(allSeries || []).map((item) => {
                 const existing = existingById.get(item.id);
-                return existing ? { ...item, cord: existing.cord } : item;
+                if (!existing) return item;
+                if (!isPlacedOnGrid(existing)) return { ...item, cord: existing.cord };
+                const kept = {};
+                for (const key of PLACED_FIELDS) {
+                    if (existing[key] !== undefined) kept[key] = existing[key];
+                }
+                return { ...item, ...kept };
             });
             return [...mapped, ...drafts];
         });
     }, [allSeries]);
+
+    useEffect(() => {
+        if (!editStudy?.id || !editStudy.url_params || !libraryReady) return;
+        if (appliedStudyId.current === editStudy.id) return;
+        const seriesRows = (allSeries || []).filter((row) => row.folder_name || row.prefix);
+        if (!seriesRows.length) return;
+
+        const layout = layoutFromStudyUrl(editStudy.url_params);
+        const library = mapSeriesToMetaData(seriesRows);
+        const used = new Set();
+        const placements = [];
+        let missing = 0;
+        for (const viewport of layout.viewports) {
+            const match = library.find((item) => !used.has(item.id) && seriesMatchesStudyPrefix(item, viewport.prefix));
+            if (!match) {
+                missing += 1;
+                continue;
+            }
+            used.add(match.id);
+            placements.push({ id: match.id, viewport });
+        }
+
+        appliedStudyId.current = editStudy.id;
+        setRows(layout.rows);
+        setCols(layout.cols);
+        setSaveForm({
+            name: editStudy.name || "",
+            description: editStudy.description || "",
+            visibility: editStudy.visibility || "PRIVATE",
+        });
+        setRightPanelOpen(true);
+        setMetaDataSelected(placements[0]?.id ?? null);
+        setDrawerState(placements.length > 0);
+        setMetaDataList((prev) => {
+            const prevById = new Map(prev.map((item) => [item.id, item]));
+            return library.map((item) => {
+                const placement = placements.find((entry) => entry.id === item.id);
+                if (placement) return withStudyViewport(item, placement.viewport);
+                const existing = prevById.get(item.id);
+                return existing?.isDraft ? existing : { ...item, cord: [-1, -1] };
+            }).concat(prev.filter((item) => item.isDraft && !library.some((row) => row.id === item.id)));
+        });
+
+        if (!layout.viewports.length) {
+            toast.error("This study has no images to edit");
+        } else if (missing) {
+            toast.error(missing === 1
+                ? "One series from this study is not in the builder"
+                : `${missing} series from this study are not in the builder`);
+        }
+    }, [editStudy, allSeries, libraryReady]);
 
     // Resize Handlers
     useEffect(() => {
@@ -495,8 +598,9 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
     const placedItems = metaDataList.filter(isPlacedOnGrid);
     const hasLeftoverDrafts = metaDataList.some((item) => item.isDraft);
     const hasUploadDrafts = placedItems.some((item) => item.isDraft);
-    const saveLabel = hasUploadDrafts ? "Save & Upload Case" : "Save Combined Case";
-    const saveTitle = hasUploadDrafts ? "Save Case" : "Combine Series";
+    const editingStudy = Boolean(editStudy?.id);
+    const saveLabel = editingStudy ? "Save changes" : hasUploadDrafts ? "Save & Upload Case" : "Save Combined Case";
+    const saveTitle = editingStudy ? "Edit study" : hasUploadDrafts ? "Save Case" : "Combine Series";
 
     useEffect(() => {
         if (hasDraftPlacedOnGrid(metaDataList)) {
@@ -564,7 +668,9 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                     <div className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0 z-10">
                         <div className="flex items-center space-x-6">
                             <div className="flex items-center space-x-2">
-                                <span className="text-sm font-medium text-muted-foreground mr-2">Grid Layout</span>
+                                <span className="text-sm font-medium text-muted-foreground mr-2 truncate max-w-[16rem]">
+                                    {editingStudy ? (editStudy.name || "Edit study") : "Grid Layout"}
+                                </span>
                                 <div className="flex items-center rounded-md border bg-background shadow-sm">
                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-r-none border-r" onClick={minusCol} disabled={cols <= 1}><Minus className="h-3 w-3" /></Button>
                                     <div className="w-12 text-center text-sm font-medium px-2">{cols} <span className="text-xs text-muted-foreground ml-1">Cols</span></div>
@@ -601,7 +707,7 @@ const BuilderPage = ({ allSeries, filteredSeries, onStudySaved }) => {
                         <div className="absolute inset-0 opacity-[0.4]" style={{ backgroundImage: 'radial-gradient(circle, #a1a1aa 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
                         <div
                             className="bg-background rounded-xl border shadow-xl overflow-hidden transition-all duration-300 ease-in-out"
-                            style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: '1px', background: '#e4e4e7', padding: '1px', width: '100%', height: '100%' }}
+                            style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(160px, 1fr))`, gap: '1px', background: '#e4e4e7', padding: '1px', width: '100%', height: '100%', minHeight: '280px' }}
                         >
                             {Array.from(Array(rows).keys()).map((r) => (
                                 Array.from(Array(cols).keys()).map((c) => (

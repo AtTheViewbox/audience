@@ -66,6 +66,8 @@ export default function HomePage() {
   const location = useLocation();
   const [selectedSeries, setSelectedSeries] = useState([])
   const [filter, setFilter] = useState(location.hash === "#cases" ? Filter.PLAYLISTS : Filter.ALL)
+  const [editStudy, setEditStudy] = useState(null)
+  const [builderReady, setBuilderReady] = useState(false)
   const [search, setSearch] = useState("")
   const [seriesList, setSeriesList] = useState([])
   const [displaySeriesList, setdisplaySeriesList] = useState([])
@@ -318,13 +320,31 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    getSeries();
+    let cancelled = false;
+    if (filter === Filter.BUILDER) setBuilderReady(false);
+    getSeries().finally(() => {
+      if (!cancelled && filter === Filter.BUILDER) setBuilderReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [filter]);
+
+  const changeFilter = (next) => {
+    if (next !== Filter.BUILDER) setEditStudy(null);
+    setFilter(next);
+  };
+
+  const openStudyInBuilder = (study) => {
+    setSelectedSeries(study);
+    setEditStudy(study);
+    setFilter(Filter.BUILDER);
+  };
 
   useEffect(() => {
     const results = seriesList.filter(item =>
       Object.values(item).some(value =>
-        value.toString().toLowerCase().includes(search.toLowerCase())
+        value != null && value.toString().toLowerCase().includes(search.toLowerCase())
       )
     );
     setdisplaySeriesList(results);
@@ -362,7 +382,7 @@ export default function HomePage() {
     <>
       <Toaster position="top-right" richColors />
       <div className="flex h-screen bg-background relative text-foreground">
-        <HomeSideBar filter={filter} setFilter={setFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+        <HomeSideBar filter={filter} setFilter={changeFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden w-full">
@@ -379,6 +399,8 @@ export default function HomePage() {
                 allSeries={seriesList}
                 filteredSeries={displaySeriesList}
                 onStudySaved={getSeries}
+                editStudy={editStudy}
+                libraryReady={builderReady}
               />
             ) : filter === Filter.PLAYLISTS ? (
               <PlaylistsPage search={search} />
@@ -427,7 +449,7 @@ export default function HomePage() {
                             <SortHeader label="Description" sortKey="description" sort={sort} onSort={handleSort} />
                             <SortHeader label="Access" sortKey="visibility" sort={sort} onSort={handleSort} className="w-20" />
                             <SortHeader label="Date" sortKey="date" sort={sort} onSort={handleSort} className="w-28" />
-                            {filter === Filter.MYSTUDIES ? <th className="w-16" /> : null}
+                            {filter === Filter.MYSTUDIES ? <th className="w-28" /> : null}
                           </tr>
                         </thead>
                         <tbody>
@@ -463,6 +485,19 @@ export default function HomePage() {
                               {filter === Filter.MYSTUDIES ? (
                                 <td className="px-1 py-2.5">
                                   <div className="flex items-center justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openStudyInBuilder(series);
+                                      }}
+                                      aria-label="Edit in builder"
+                                      title="Edit in builder"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                    </Button>
                                     {canShare ? (
                                       <Button
                                         variant="ghost"
@@ -507,6 +542,19 @@ export default function HomePage() {
                       >
                         {filter === Filter.MYSTUDIES ? (
                           <div className="absolute top-2 right-2 z-10 flex opacity-60 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openStudyInBuilder(series);
+                              }}
+                              aria-label="Edit in builder"
+                              title="Edit in builder"
+                            >
+                              <Pencil className="h-4 w-4 text-slate-400" />
+                            </Button>
                             {canShare ? (
                               <Button
                                 variant="ghost"
@@ -537,7 +585,7 @@ export default function HomePage() {
                         ) : null}
                         <CardHeader className="pb-2">
                           <div className="flex items-start gap-3 min-w-0">
-                            <div className="min-w-0 w-full overflow-hidden pr-16">
+                            <div className={`min-w-0 w-full overflow-hidden ${filter === Filter.MYSTUDIES ? "pr-28" : "pr-16"}`}>
                               <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate" title={series.name}>
                                 {series.name}
                               </CardTitle>
@@ -633,7 +681,14 @@ export default function HomePage() {
                                   </div>
                                 </div>
                                 {filter === Filter.MYSTUDIES && (
-                                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)} className="h-8 w-8 text-slate-400 hover:text-slate-100 hover:bg-slate-800 ml-4 rounded-full">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openStudyInBuilder(selectedSeries)}
+                                    className="h-8 w-8 text-slate-400 hover:text-slate-100 hover:bg-slate-800 ml-4 rounded-full"
+                                    aria-label="Edit in builder"
+                                    title="Edit in builder"
+                                  >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                 )}
@@ -643,6 +698,16 @@ export default function HomePage() {
                         </div>
                         <div className="space-y-4 p-4">
                           <div className="flex gap-2">
+                            {filter === Filter.MYSTUDIES && (
+                              <Button
+                                variant="outline"
+                                className="flex-1 border-slate-800 text-slate-100 hover:bg-slate-900"
+                                onClick={() => openStudyInBuilder(selectedSeries)}
+                              >
+                                <Pencil className="h-4 w-4 mr-1.5" />
+                                Edit
+                              </Button>
+                            )}
                             <Button
                               className="flex-1"
                               onClick={() => {
