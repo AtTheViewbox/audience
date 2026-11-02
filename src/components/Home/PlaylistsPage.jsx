@@ -34,11 +34,13 @@ import {
 
 function StudyPicker({ studies, addedIds, query, onQuery, onAdd }) {
   const q = query.trim().toLowerCase();
-  const rows = studies.filter((study) => {
-    if (addedIds.has(String(study.id))) return false;
-    if (!q) return true;
-    return `${study.name || ""} ${study.description || ""}`.toLowerCase().includes(q);
-  });
+  const rows = studies
+    .filter((study) => {
+      if (addedIds.has(String(study.id))) return false;
+      if (!q) return true;
+      return `${study.name || ""} ${study.description || ""}`.toLowerCase().includes(q);
+    })
+    .sort((a, b) => new Date(b.last_accessed || 0) - new Date(a.last_accessed || 0));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -151,7 +153,10 @@ export default function PlaylistsPage({ search = "" }) {
     }
     const [list, studyRows] = await Promise.all([
       fetchPlaylists(supabaseClient, userData.id),
-      supabaseClient.from("studies").select("id, name, description, url_params, visibility"),
+      supabaseClient
+        .from("studies")
+        .select("id, name, description, url_params, visibility, last_accessed")
+        .order("last_accessed", { ascending: false }),
     ]);
     if (studyRows.error) throw studyRows.error;
     setPlaylists(list);
@@ -746,16 +751,16 @@ export default function PlaylistsPage({ search = "" }) {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] flex-col gap-3 overflow-hidden bg-slate-950 p-5 text-slate-100 sm:max-w-3xl border-slate-800">
+        <DialogContent className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] flex-col gap-3 overflow-hidden bg-slate-950 p-5 text-slate-100 sm:max-w-4xl border-slate-800">
           <DialogHeader className="shrink-0">
             <DialogTitle>{draft.id ? "Edit case" : "New case"}</DialogTitle>
             <DialogDescription className="text-slate-400">
               Add studies in viewer order.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid min-h-0 flex-1 gap-3 overflow-hidden">
-            <div className="grid shrink-0 gap-3">
-            <div className="grid gap-2">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden max-md:grid-rows-[auto_minmax(0,1fr)] md:grid-cols-2">
+            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <div className="grid shrink-0 gap-2">
               <Label>Name</Label>
               <Input
                 value={draft.name}
@@ -764,17 +769,16 @@ export default function PlaylistsPage({ search = "" }) {
                 className="bg-slate-900/50 border-slate-800"
               />
             </div>
-            <div className="grid gap-2">
-              <Label>Description</Label>
+            <div className="flex min-h-32 shrink-0 flex-col gap-2 md:min-h-0 md:flex-1">
+              <Label className="shrink-0">Description</Label>
               <Textarea
                 value={draft.description}
                 onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder={"Markdown works here.\n**bold**, lists, and headings."}
-                rows={8}
-                className="h-40 max-h-64 min-h-40 resize-y overflow-y-auto bg-slate-900/50 border-slate-800"
+                className="min-h-24 flex-1 resize-none overflow-y-auto bg-slate-900/50 border-slate-800"
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid shrink-0 gap-2">
               <Label htmlFor="case-indication">Indication / history</Label>
               <Input
                 id="case-indication"
@@ -784,7 +788,7 @@ export default function PlaylistsPage({ search = "" }) {
                 className="bg-slate-900/50 border-slate-800"
               />
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
+            <div className="flex shrink-0 items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
               <div>
                 <Label>Public case</Label>
                 <p className="text-xs text-slate-500">Others can see this playlist if the studies are public.</p>
@@ -800,7 +804,7 @@ export default function PlaylistsPage({ search = "" }) {
               />
             </div>
             </div>
-            <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 overflow-hidden md:grid-cols-2 md:grid-rows-1">
+            <div className="grid min-h-0 grid-rows-[minmax(12rem,1.4fr)_minmax(0,1fr)] gap-3 overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-col gap-2">
                 <Label className="shrink-0">Add from your studies</Label>
                 <StudyPicker
