@@ -444,8 +444,8 @@ export default function Viewport(props) {
           dy = Math.sign(dy) * pixelsPerSlice;
           dx = Math.sign(dx) * pixelsPerSlice;
         } else if (event.deltaMode === 2) {
-          dy = Math.sign(dy) * pixelsPerSlice * 3;
-          dx = Math.sign(dx) * pixelsPerSlice * 3;
+          dy = Math.sign(dy) * pixelsPerSlice;
+          dx = Math.sign(dx) * pixelsPerSlice;
         }
         const delta = Math.abs(dy) >= Math.abs(dx) ? dy : 0;
         if (!delta) return;
@@ -453,13 +453,17 @@ export default function Viewport(props) {
         wheelAccum += delta;
         const steps = Math.trunc(wheelAccum / pixelsPerSlice);
         if (!steps) return;
-        const capped = Math.max(-4, Math.min(4, steps));
-        wheelAccum -= capped * pixelsPerSlice;
+        // A mouse notch is ~100px, which used to count as several slices and
+        // the view jumped. One event moves one slice; leftover notch distance
+        // is dropped so it cannot queue another jump.
+        const direction = Math.sign(steps);
+        wheelAccum -= direction * pixelsPerSlice;
+        if (Math.abs(wheelAccum) >= pixelsPerSlice) wheelAccum = 0;
 
         const current = Number.isInteger(viewport.targetImageIdIndex)
           ? viewport.targetImageIdIndex
           : viewport.getCurrentImageIdIndex();
-        const next = Math.max(0, Math.min(s.length - 1, current + capped));
+        const next = Math.max(0, Math.min(s.length - 1, current + direction));
         if (next === current) {
           wheelAccum = 0;
           return;
