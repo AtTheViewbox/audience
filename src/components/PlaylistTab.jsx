@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,8 @@ function PlaylistTab() {
   const [playlist, setPlaylist] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [seriesNames, setSeriesNames] = useState({});
+  const [seriesMenu, setSeriesMenu] = useState(null);
+  const seriesMenuRef = useRef(null);
 
   const isHost = isPresenter({
     sessionId,
@@ -114,6 +116,38 @@ function PlaylistTab() {
     return sameViewerStudy(item.studies?.url_params, window.location.search);
   }
 
+  function rememberSeriesMenu(next) {
+    seriesMenuRef.current = next;
+    setSeriesMenu(next);
+  }
+
+  function sameSeries(a, b) {
+    if (a.length !== b.length) return false;
+    const picked = new Set(a);
+    return b.every((index) => picked.has(index));
+  }
+
+  function checkedSeries(choices, { fullStudy, visible, current }) {
+    return choices
+      .filter((choice) => fullStudy || visible.has(choice.prefixKey) || !current)
+      .map((choice) => choice.index);
+  }
+
+  function applySeriesMenu(item, choices) {
+    const pending = seriesMenuRef.current;
+    if (!pending || pending.itemId !== item.id) return;
+    rememberSeriesMenu(null);
+    if (sameSeries(pending.selected, pending.initial)) return;
+    if (!pending.selected.length) {
+      toast.error("Keep at least one series on.");
+      return;
+    }
+    const urlParams = pending.selected.length === choices.length
+      ? undefined
+      : viewerUrlForSeries(item.studies.url_params, pending.selected);
+    openItem(item, urlParams);
+  }
+
   async function openItem(item, urlParams, { keepDialog = false } = {}) {
     const study = item.studies;
     if (!study?.url_params) {
@@ -163,7 +197,12 @@ function PlaylistTab() {
               label: seriesNames[choice.prefixKey] || choice.label || `Series ${order + 1}`,
             }));
             const visible = new Set(current ? visibleSeriesPrefixKeys() : []);
-            const checked = choices.filter((choice) => fullStudy || visible.has(choice.prefixKey));
+            const menuOpen = seriesMenu?.itemId === item.id;
+            const checked = choices.filter((choice) => (
+              menuOpen
+                ? seriesMenu.selected.includes(choice.index)
+                : fullStudy || visible.has(choice.prefixKey)
+            ));
             const showingSeries = current && !fullStudy && checked.length > 0;
             const showSeriesMenu = canChooseSeries && choices.length > 1;
             const rowClass = cn(
@@ -215,7 +254,17 @@ function PlaylistTab() {
                     {status}
                   </span>
                 </Button>
-                <DropdownMenu>
+                <DropdownMenu
+                  open={menuOpen}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      const initial = checkedSeries(choices, { fullStudy, visible, current });
+                      rememberSeriesMenu({ itemId: item.id, selected: initial, initial });
+                      return;
+                    }
+                    applySeriesMenu(item, choices);
+                  }}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
@@ -234,23 +283,24 @@ function PlaylistTab() {
                     onCloseAutoFocus={(event) => event.preventDefault()}
                   >
                   {choices.map((choice) => {
-                    const on = fullStudy || visible.has(choice.prefixKey) || !current;
+                    const on = menuOpen
+                      ? seriesMenu.selected.includes(choice.index)
+                      : fullStudy || visible.has(choice.prefixKey) || !current;
                     return (
                       <DropdownMenuItem
                         key={choice.index}
                         onSelect={(event) => {
                           event.preventDefault();
-                          const selected = choices
-                            .filter((row) => (row.index === choice.index ? !on : (fullStudy || visible.has(row.prefixKey) || !current)))
-                            .map((row) => row.index);
+                          const pending = seriesMenuRef.current;
+                          if (!pending || pending.itemId !== item.id) return;
+                          const selected = pending.selected.includes(choice.index)
+                            ? pending.selected.filter((index) => index !== choice.index)
+                            : [...pending.selected, choice.index];
                           if (!selected.length) {
                             toast.error("Keep at least one series on.");
                             return;
                           }
-                          const urlParams = selected.length === choices.length
-                            ? undefined
-                            : viewerUrlForSeries(item.studies.url_params, selected);
-                          openItem(item, urlParams, { keepDialog: true });
+                          rememberSeriesMenu({ ...pending, selected });
                         }}
                         className="items-start gap-2 whitespace-normal py-2 text-slate-900 focus:bg-slate-100 focus:text-slate-900"
                       >

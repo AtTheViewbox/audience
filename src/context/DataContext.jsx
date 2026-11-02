@@ -311,6 +311,57 @@ export const DataProvider = ({ children }) => {
 
     }, [updateSession, data, supabaseClient, userDispatch])
 
+    // A locked phone drops the realtime socket, so a case switch that happened
+    // while it was asleep never arrives. On wake, read the session row and follow it.
+    useEffect(() => {
+        if (!data.sessionId || !supabaseClient) return;
+        const sessionId = data.sessionId;
+        let cancelled = false;
+        let running = false;
+        let wasHidden = document.visibilityState === "hidden";
+
+        const catchUp = async () => {
+            if (cancelled || running || document.visibilityState === "hidden") return;
+            running = true;
+            try {
+                const socket = supabaseClient.realtime?.conn;
+                const socketOpen = socket && socket.readyState === WebSocket.OPEN;
+                if (!socketOpen) {
+                    try { supabaseClient.realtime.connect(); } catch { /* already connecting */ }
+                }
+                const row = await resolveShareSession(supabaseClient, sessionId);
+                if (cancelled || !row?.url_params) return;
+                if (sameViewerSession(row.url_params, window.location.search)) return;
+                const token = row.join_code || row.session_id;
+                applyViewerUrl(viewerHref(row.url_params, token), dispatch);
+            } catch (error) {
+                console.error("Session catch-up failed", error);
+            } finally {
+                running = false;
+            }
+        };
+
+        const onVisibility = () => {
+            if (document.visibilityState === "hidden") {
+                wasHidden = true;
+                return;
+            }
+            if (!wasHidden) return;
+            wasHidden = false;
+            catchUp();
+        };
+
+        document.addEventListener("visibilitychange", onVisibility);
+        window.addEventListener("pageshow", catchUp);
+        window.addEventListener("online", catchUp);
+        return () => {
+            cancelled = true;
+            document.removeEventListener("visibilitychange", onVisibility);
+            window.removeEventListener("pageshow", catchUp);
+            window.removeEventListener("online", catchUp);
+        };
+    }, [data.sessionId, supabaseClient, dispatch]);
+
     useEffect(() => {
         // use effect to do basic house keeping on initial start
         // 1. Initialize Cornerstone
