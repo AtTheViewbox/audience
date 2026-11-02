@@ -53,6 +53,48 @@ function generateJoinCode(length = JOIN_CODE_LENGTH) {
   return Array.from(bytes, (b) => JOIN_CODE_ALPHABET[b % JOIN_CODE_ALPHABET.length]).join("");
 }
 
+/**
+ * The letter code belongs to the account, not to one live session. Stopping a
+ * session deletes the viewbox row, so the code is stored here and reused.
+ */
+async function ensureUserJoinCode(supabaseClient, userId) {
+  const { data: saved, error } = await supabaseClient
+    .from("user_session_codes")
+    .select("join_code")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (saved?.join_code) return saved.join_code;
+
+  const { data: live, error: liveError } = await supabaseClient
+    .from("viewbox")
+    .select("join_code")
+    .eq("user", userId)
+    .maybeSingle();
+  if (liveError) throw liveError;
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const joinCode = attempt === 0 && live?.join_code ? live.join_code : generateJoinCode();
+    const { error: insertError } = await supabaseClient
+      .from("user_session_codes")
+      .insert({ user_id: userId, join_code: joinCode });
+    if (!insertError) return joinCode;
+    lastError = insertError;
+    if (insertError.code !== "23505") throw insertError;
+
+    const { data: again, error: againError } = await supabaseClient
+      .from("user_session_codes")
+      .select("join_code")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (againError) throw againError;
+    if (again?.join_code) return again.join_code;
+  }
+
+  throw lastError || new Error("createShareSession: could not allocate a join code");
+}
+
 function buildJoinHref(token) {
   if (!token) return "";
   const params = new URLSearchParams();
@@ -116,34 +158,31 @@ export async function createShareSession({
   mode = ShareMode.TEAM,
   chatHistory = [],
 }) {
+  const joinCode = await ensureUserJoinCode(supabaseClient, userId);
+
   const { error: deleteError } = await supabaseClient
     .from("viewbox")
     .delete()
     .eq("user", userId);
   if (deleteError) throw deleteError;
 
-  let lastError = null;
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const { data, error } = await supabaseClient
-      .from("viewbox")
-      .upsert([
-        {
-          user: userId,
-          url_params: currentViewerUrlParams(),
-          visibility,
-          mode,
-          chat_history: chatHistory || [],
-          join_code: generateJoinCode(),
-        },
-      ])
-      .select();
+  const { data, error } = await supabaseClient
+    .from("viewbox")
+    .insert([
+      {
+        user: userId,
+        url_params: currentViewerUrlParams(),
+        visibility,
+        mode,
+        chat_history: chatHistory || [],
+        join_code: joinCode,
+      },
+    ])
+    .select();
 
-    if (!error && data?.[0]) return data[0];
-    lastError = error;
-    if (error?.code !== "23505") throw error;
-  }
-
-  throw lastError || new Error("createShareSession: could not allocate a join code");
+  if (error) throw error;
+  if (!data?.[0]) throw new Error("createShareSession: could not allocate a join code");
+  return data[0];
 }
 
 /**
