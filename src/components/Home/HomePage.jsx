@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useMemo } from "react"
 import { useLocation } from "react-router-dom"
 import { Trash2, Copy, Check, ChevronRight, Pencil, GitFork, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown, Share2 } from "lucide-react"
 import { toast, Toaster } from "sonner"
-import { CASE_ID_PARAM, extractSearchString } from "../../lib/answerKeyCase.js"
+import { CASE_ID_PARAM, extractSearchString, isCaseLookupQuery } from "../../lib/answerKeyCase.js"
 import { duplicateCase } from "../../lib/cloneCase.js"
 import { DEMO_STUDY_ID } from "../../lib/demoCase.js"
 import ShareByEmailDialog from "../ShareByEmailDialog.jsx"
@@ -342,6 +342,10 @@ export default function HomePage() {
   };
 
   useEffect(() => {
+    if (isCaseLookupQuery(search)) {
+      setdisplaySeriesList(seriesList);
+      return;
+    }
     const results = seriesList.filter(item =>
       Object.values(item).some(value =>
         value != null && value.toString().toLowerCase().includes(search.toLowerCase())

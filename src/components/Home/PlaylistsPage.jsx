@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { UserContext } from "../../context/UserContext";
 import { Visibility } from "../../lib/constants";
-import { caseCodeHref } from "../../lib/answerKeyCase.js";
+import { caseCodeHref, caseIdQueryDigits } from "../../lib/answerKeyCase.js";
 import MarkdownText from "../MarkdownText.jsx";
 import ShareByEmailDialog from "../ShareByEmailDialog.jsx";
 import { deliverShare } from "../../lib/shareByEmail.js";
@@ -184,14 +184,16 @@ export default function PlaylistsPage({ search = "" }) {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return playlists;
+    const caseDigits = caseIdQueryDigits(search);
+    if (caseDigits != null) {
+      if (!caseDigits) return playlists;
+      return playlists.filter((playlist) => (playlist.share_code || "").startsWith(caseDigits));
+    }
     return playlists.filter((playlist) => {
-      const code = playlist.share_code || "";
       const hay = [
         playlist.name,
         playlist.description,
         playlist.indication,
-        code,
-        code && `case:${code}`,
         ...sortedPlaylistItems(playlist).map(playlistItemLabel),
       ]
         .filter(Boolean)
@@ -496,7 +498,6 @@ export default function PlaylistsPage({ search = "" }) {
                           <p className="text-sm font-medium text-slate-100 truncate">{playlist.name}</p>
                           <p className="text-xs text-slate-500 truncate">
                             {items.length} {items.length === 1 ? "study" : "studies"}
-                            {playlist.share_code ? ` · case:${playlist.share_code}` : ""}
                           </p>
                         </div>
                         <span className={`justify-self-start text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
@@ -611,7 +612,6 @@ export default function PlaylistsPage({ search = "" }) {
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-400 line-clamp-2">
                         {items.length} {items.length === 1 ? "study" : "studies"}
-                        {playlist.share_code ? ` · case:${playlist.share_code}` : ""}
                       </CardDescription>
                     </CardHeader>
                     <CardFooter className="pt-2 text-xs text-muted-foreground">
