@@ -73,6 +73,15 @@ function quintPlacement(portrait) {
  * single series across the bottom. Landscape stacks the pair and gives the
  * single series the full height beside them.
  */
+function filledViewportIndexes(vd) {
+  if (!Array.isArray(vd)) return [];
+  const indexes = [];
+  for (let i = 0; i < vd.length; i++) {
+    if (Array.isArray(vd[i]?.s) && vd[i].s.length > 0) indexes.push(i);
+  }
+  return indexes;
+}
+
 function pairedPlacement(count, portrait) {
   const pairs = Math.floor(count / 2);
   const cells = [];
@@ -95,8 +104,9 @@ function pairedPlacement(count, portrait) {
 }
 
 export default function Layout() {
-  const { ld, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport, caseLinkError } = useContext(DataContext).data;
+  const { ld, vd, renderingEngine, sessionId, isRequestLoading, compareNormal, fullscreenViewport, caseLinkError } = useContext(DataContext).data;
   const portrait = usePortraitScreen();
+  const filledKey = filledViewportIndexes(vd).join(",");
 
   useEffect(() => {
     var urlData = Object.fromEntries(new URLSearchParams(window.location.search));
@@ -134,7 +144,7 @@ export default function Layout() {
       cancelAnimationFrame(outer);
       if (inner) cancelAnimationFrame(inner);
     };
-  }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport, portrait]);
+  }, [renderingEngine, ld?.r, ld?.c, fullscreenViewport, portrait, filledKey]);
 
   // Guard: ld is undefined while session data is being fetched — return early before destructuring
   if (caseLinkError) {
@@ -152,16 +162,21 @@ export default function Layout() {
   const sourceRows = Number(ld.r) || 1;
   const sourceCols = Number(ld.c) || 1;
   const sourceCount = sourceRows * sourceCols;
-  const paired = sourceCount === 5 ? quintPlacement(portrait) : sourceCount === 3 ? pairedPlacement(sourceCount, portrait) : null;
+  const filled = filledViewportIndexes(vd);
+  // A 2×2 URL can still hold only three series. Show those as two plus one
+  // instead of a grid with an empty cell.
+  const trioOnGrid = sourceRows === 2 && sourceCols === 2 && filled.length === 3;
+  const paired = sourceCount === 5 ? quintPlacement(portrait) : sourceCount === 3 || trioOnGrid ? pairedPlacement(3, portrait) : null;
   const { r, c } = paired ?? gridForScreen(sourceRows, sourceCols, portrait);
-  const isFullscreen = fullscreenViewport != null && sourceCount > 1;
+  const itemIndexes = trioOnGrid ? filled : Array.from({ length: sourceCount }, (_, idx) => idx);
+  const isFullscreen = fullscreenViewport != null && itemIndexes.length > 1;
 
   const isComparing = compareNormal?.active;
-  const items = Array.from({ length: sourceCount }).map((_, idx) => (
+  const items = itemIndexes.map((idx, order) => (
     <div
       key={idx}
       className={`grid-item${isFullscreen && fullscreenViewport === idx ? ' grid-item--fullscreen' : ''}${isFullscreen && fullscreenViewport !== idx ? ' grid-item--hidden' : ''}`}
-      style={{ position: 'relative', ...(paired && !isFullscreen ? paired.cells[idx] : {}) }}
+      style={{ position: 'relative', ...(paired && !isFullscreen ? paired.cells[order] : {}) }}
     >
       <Viewport viewport_idx={idx} rendering_engine={renderingEngine} />
       {isComparing && (
