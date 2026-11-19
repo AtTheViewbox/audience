@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react"
-import { Home, Settings, Monitor, X, Hammer, Layers } from "lucide-react"
+import { Home, Settings, Monitor, X, Hammer, Layers, Eye, EyeOff } from "lucide-react"
 import { Filter } from "../../lib/constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,7 +12,7 @@ import SettingTab from "../SettingTab.jsx"
 import { UserContext } from "../../context/UserContext"
 
 
-function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
+function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen, blurCaseNames, setBlurCaseNames }) {
     const [leftPanelWidth, setLeftPanelWidth] = useState(200)
     const [open, setOpen] = useState(false)
     const { userData } = useContext(UserContext).data;
@@ -121,17 +121,34 @@ function HomeSideBar({ filter, setFilter, mobileMenuOpen, setMobileMenuOpen }) {
                                     <span className="truncate">Studies</span>
                                 </Button>
 
-                                <Button
-                                    onClick={() => setFilter(Filter.PLAYLISTS)}
-                                    variant="ghost"
-                                    className={cn("w-full justify-start text-xs font-medium transition-all",
-                                        filter === Filter.PLAYLISTS
-                                            ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
-                                            : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
-                                    )}>
-                                    <Layers className="mr-2.5 h-4 w-4 shrink-0" />
-                                    Cases
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        onClick={() => setFilter(Filter.PLAYLISTS)}
+                                        variant="ghost"
+                                        className={cn("min-w-0 flex-1 justify-start text-xs font-medium transition-all",
+                                            filter === Filter.PLAYLISTS
+                                                ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                                                : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/50",
+                                        )}>
+                                        <Layers className="mr-2.5 h-4 w-4 shrink-0" />
+                                        <span className="truncate">Cases</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                            "h-8 w-8 shrink-0",
+                                            blurCaseNames ? "text-blue-400" : "text-slate-400 hover:text-slate-100"
+                                        )}
+                                        onClick={() => setBlurCaseNames((on) => !on)}
+                                        aria-pressed={blurCaseNames}
+                                        aria-label={blurCaseNames ? "Show case names" : "Blur case names"}
+                                        title={blurCaseNames ? "Show case names" : "Blur case names"}
+                                    >
+                                        {blurCaseNames ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
 
                                 <Button
                                     onClick={() => setFilter(Filter.BUILDER)}

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { DataContext, DataDispatchContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext";
 import { isPresenter } from "../lib/demoCase.js";
@@ -180,7 +180,6 @@ function PlaylistTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{playlist?.name || "Case playlist"}</CardTitle>
         <CardDescription>
           {isHost && sessionId
             ? "Switch the live session to another study in this case."

@@ -118,7 +118,7 @@ function draftFromPlaylist(playlist) {
   };
 }
 
-export default function PlaylistsPage({ search = "" }) {
+export default function PlaylistsPage({ search = "", blurCaseNames = false }) {
   const { supabaseClient, userData } = useContext(UserContext).data;
   const [playlists, setPlaylists] = useState([]);
   const playlistsRef = useRef([]);
@@ -495,7 +495,7 @@ export default function PlaylistsPage({ search = "" }) {
                           {index + 1}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-100 truncate">{playlist.name}</p>
+                          <p className={`text-sm font-medium text-slate-100 truncate${blurCaseNames ? " blur-md select-none" : ""}`}>{playlist.name}</p>
                           <p className="text-xs text-slate-500 truncate">
                             {items.length} {items.length === 1 ? "study" : "studies"}
                           </p>
@@ -607,7 +607,7 @@ export default function PlaylistsPage({ search = "" }) {
                       </Button>
                     </div>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base text-slate-100 font-semibold mb-1 truncate pr-16" title={playlist.name}>
+                      <CardTitle className={`text-base text-slate-100 font-semibold mb-1 truncate pr-16${blurCaseNames ? " blur-md select-none" : ""}`} title={blurCaseNames ? undefined : playlist.name}>
                         {playlist.name}
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-400 line-clamp-2">
@@ -640,7 +640,7 @@ export default function PlaylistsPage({ search = "" }) {
           <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-lg font-bold tracking-tight text-slate-100 break-words">{selected.name}</h3>
+                <h3 className={`text-lg font-bold tracking-tight text-slate-100 break-words${blurCaseNames ? " blur-md select-none" : ""}`}>{selected.name}</h3>
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-2">
                   {selected.visibility === "PUBLIC" ? (
                     <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">PUBLIC</span>

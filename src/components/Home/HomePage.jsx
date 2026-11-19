@@ -66,6 +66,7 @@ export default function HomePage() {
   const location = useLocation();
   const [selectedSeries, setSelectedSeries] = useState([])
   const [filter, setFilter] = useState(location.hash === "#cases" ? Filter.PLAYLISTS : Filter.ALL)
+  const [blurCaseNames, setBlurCaseNames] = useState(false)
   const [editStudy, setEditStudy] = useState(null)
   const [builderReady, setBuilderReady] = useState(false)
   const [search, setSearch] = useState("")
@@ -386,7 +387,7 @@ export default function HomePage() {
     <>
       <Toaster position="top-right" richColors />
       <div className="flex h-screen bg-background relative text-foreground">
-        <HomeSideBar filter={filter} setFilter={changeFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+        <HomeSideBar filter={filter} setFilter={changeFilter} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} blurCaseNames={blurCaseNames} setBlurCaseNames={setBlurCaseNames} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden w-full">
@@ -408,7 +409,7 @@ export default function HomePage() {
                 libraryReady={builderReady}
               />
             ) : filter === Filter.PLAYLISTS ? (
-              <PlaylistsPage search={search} />
+              <PlaylistsPage search={search} blurCaseNames={blurCaseNames} />
             ) : (
               <>
                 <div className="flex-1 overflow-auto p-6 w-full bg-slate-950/20">
