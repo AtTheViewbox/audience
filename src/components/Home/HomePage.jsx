@@ -66,7 +66,22 @@ export default function HomePage() {
   const location = useLocation();
   const [selectedSeries, setSelectedSeries] = useState([])
   const [filter, setFilter] = useState(location.hash === "#cases" ? Filter.PLAYLISTS : Filter.ALL)
-  const [blurCaseNames, setBlurCaseNames] = useState(false)
+  const [blurCaseNames, setBlurCaseNamesState] = useState(() => {
+    try {
+      return localStorage.getItem("atvb-blur-case-names") === "1";
+    } catch {
+      return false;
+    }
+  })
+  function setBlurCaseNames(next) {
+    setBlurCaseNamesState((current) => {
+      const value = typeof next === "function" ? next(current) : next;
+      try {
+        localStorage.setItem("atvb-blur-case-names", value ? "1" : "0");
+      } catch {}
+      return value;
+    });
+  }
   const [editStudy, setEditStudy] = useState(null)
   const [builderReady, setBuilderReady] = useState(false)
   const [search, setSearch] = useState("")
