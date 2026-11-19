@@ -4,87 +4,60 @@ import { FileText, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataContext } from "../context/DataContext.jsx";
 import { UserContext } from "../context/UserContext.jsx";
-import { getCaseIdFromSearch, getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
+import { getPlaylistTokenFromSearch } from "../lib/answerKeyCase.js";
 import { fetchPlaylist, fetchSharedPlaylist } from "../lib/playlist.js";
 
 const PANEL =
   "dark fixed top-14 right-3 z-[120] w-[min(340px,calc(100vw-1.5rem))] max-h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-xl backdrop-blur-sm";
 
 function StudyDescriptionButton() {
-  const { studyId, playlistId, caseNotes } = useContext(DataContext).data;
+  const { playlistId, caseNotes } = useContext(DataContext).data;
   const { supabaseClient } = useContext(UserContext).data;
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [isHistory, setIsHistory] = useState(false);
-
-  const caseId = studyId || getCaseIdFromSearch(location.search);
+  const [history, setHistory] = useState("");
 
   useEffect(() => {
     setOpen(false);
-  }, [caseId, playlistId]);
+  }, [playlistId]);
 
   useEffect(() => {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !playlistId) {
+      setHistory("");
+      return undefined;
+    }
     let cancelled = false;
     const token = getPlaylistTokenFromSearch(location.search);
 
     (async () => {
-      if (playlistId) {
-        let playlist = null;
-        try {
-          playlist = await fetchPlaylist(supabaseClient, playlistId);
-        } catch (error) {
-          console.error(error);
-        }
-        if (!playlist?.indication && token) {
-          playlist = await fetchSharedPlaylist(supabaseClient, playlistId, token);
-        }
-        if (!cancelled) {
-          setText(playlist?.indication?.trim() || "");
-          setIsHistory(true);
-        }
-        return;
+      let playlist = null;
+      try {
+        playlist = await fetchPlaylist(supabaseClient, playlistId);
+      } catch (error) {
+        console.error(error);
       }
-
-      let description = "";
-      if (caseId) {
-        const { data, error } = await supabaseClient
-          .from("studies")
-          .select("description")
-          .eq("id", caseId)
-          .maybeSingle();
-        if (!error && data) {
-          description = data.description?.trim() || "";
-        }
+      if (token && !playlist?.indication) {
+        const shared = await fetchSharedPlaylist(supabaseClient, playlistId, token);
+        if (shared?.indication) playlist = shared;
       }
-
-      if (!cancelled) {
-        setText(description);
-        setIsHistory(false);
-      }
+      if (!cancelled) setHistory(playlist?.indication?.trim() || "");
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [supabaseClient, caseId, playlistId, location.search]);
+  }, [supabaseClient, playlistId, location.search]);
 
-  const shared = playlistId
-    ? (caseNotes?.indication || "").trim()
-    : (caseNotes?.description || "").trim();
-  const shown = text || shared;
-  if (!shown) return null;
-
-  const label = playlistId || isHistory ? "History" : "Description";
+  const historyText = (history || caseNotes?.indication || "").trim();
+  if (!historyText) return null;
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        title={label}
-        aria-label={label}
+        title="History"
+        aria-label="History"
         className={cn(
           "shrink-0 flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors",
           open
@@ -100,20 +73,20 @@ function StudyDescriptionButton() {
           <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-700">
             <span className="flex items-center gap-2 text-sm font-medium text-slate-100">
               <FileText className="h-4 w-4 text-blue-300 shrink-0" />
-              {label}
+              History
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
               title="Close"
-              aria-label={`Close ${label.toLowerCase()}`}
+              aria-label="Close history"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           <div className="min-h-0 overflow-y-auto overscroll-contain px-3.5 py-3">
-            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{shown}</p>
+            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{historyText}</p>
           </div>
         </div>
       )}

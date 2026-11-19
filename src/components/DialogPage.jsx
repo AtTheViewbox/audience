@@ -86,6 +86,8 @@ function DialogPage({ open = true }) {
   const [tabValue, setTabValue] = useState(preferredTab);
   const dialogWasOpen = useRef(false);
   const appliedNotes = useRef(false);
+  const openDescription = Boolean(descriptionText) && (isParticipant || showLogin);
+  const waitingForNotes = Boolean(playlistId) && description == null && !sessionDescription;
 
   useEffect(() => {
     if (!open) {
@@ -94,17 +96,17 @@ function DialogPage({ open = true }) {
       return;
     }
     // Starting a session while this dialog is open should leave Share on screen.
-    if (dialogWasOpen.current && !(isParticipant && descriptionText && !appliedNotes.current)) return;
-    if (description == null && !sessionDescription) return;
+    if (dialogWasOpen.current && !(openDescription && !appliedNotes.current)) return;
+    if (waitingForNotes) return;
     if (playlistId && studyCount == null) return;
     dialogWasOpen.current = true;
-    if (isParticipant && descriptionText) {
+    if (openDescription) {
       appliedNotes.current = true;
       setTabValue("description");
     } else if (!appliedNotes.current) {
       setTabValue(showPlaylist && inSession ? "playlist" : canShare ? "sharing" : "login");
     }
-  }, [open, showPlaylist, inSession, canShare, playlistId, studyCount, description, sessionDescription, descriptionText, isParticipant]);
+  }, [open, openDescription, waitingForNotes, showPlaylist, inSession, canShare, playlistId, studyCount]);
 
   useEffect(() => {
     const playlistHidden = tabValue === "playlist" && !showPlaylist && !(playlistId && studyCount == null);
@@ -134,18 +136,34 @@ function DialogPage({ open = true }) {
   return (
     <>
       <DialogHeader className="shrink-0">
-        <DialogTitle>{canShare ? "Share" : "Account"}</DialogTitle>
+        <DialogTitle>
+          {waitingForNotes
+            ? "Case"
+            : tabValue === "description" && showDescription
+              ? "Description"
+              : canShare
+                ? "Share"
+                : "Account"}
+        </DialogTitle>
         <DialogDescription>
-          {canShare
-            ? "Manage your sharing settings and application preferences."
-            : "Log in, create an account, or reset your password."}
+          {waitingForNotes
+            ? "Loading the case notes."
+            : tabValue === "description" && showDescription
+              ? "Case description."
+              : canShare
+                ? "Manage your sharing settings and application preferences."
+                : "Log in, create an account, or reset your password."}
         </DialogDescription>
       </DialogHeader>
+
+      {waitingForNotes ? (
+        <p className="px-1 py-6 text-sm text-slate-400">Loading...</p>
+      ) : null}
 
       <Tabs
         value={tabValue}
         onValueChange={setTabValue}
-        className="min-h-0 flex-1 overflow-hidden flex flex-col"
+        className={`min-h-0 flex-1 overflow-hidden flex flex-col${waitingForNotes ? " hidden" : ""}`}
       >
         {tabCount > 1 && (
           <TabsList className={`grid w-full shrink-0 ${tabsClass}`}>

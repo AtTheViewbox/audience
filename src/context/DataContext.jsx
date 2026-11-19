@@ -244,9 +244,9 @@ export const DataProvider = ({ children }) => {
         loadViewerDescription(supabaseClient, {
             playlistId: data.playlistId,
             token,
-        }).then(({ description }) => {
+        }).then(({ description, indication }) => {
             if (cancelled) return;
-            const notes = { description: description || "" };
+            const notes = { description: description || "", indication: indication || "" };
             caseNotesRef.current = notes;
             dispatch({ type: "set_case_notes", payload: notes });
             data.shareController.send({ type: "broadcast", event: "case-notes", payload: notes });

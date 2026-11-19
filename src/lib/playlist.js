@@ -48,7 +48,11 @@ export async function loadViewerDescription(supabaseClient, { playlist, playlist
   if (!loaded && playlistId) {
     loaded = await loadViewerPlaylist(supabaseClient, playlistId, token);
   }
-  return { playlist: loaded, description: loaded?.description?.trim() || "" };
+  return {
+    playlist: loaded,
+    description: loaded?.description?.trim() || "",
+    indication: loaded?.indication?.trim() || "",
+  };
 }
 
 /** Owner read, then the share link when the case or its studies are not visible. */
